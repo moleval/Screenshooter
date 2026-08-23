@@ -1,0 +1,22 @@
+Third-Party Notices
+===================
+
+PyQt5
+-----
+License: GNU General Public License v3 (GPLv3) or Commercial License
+Website: https://www.riverbankcomputing.com/software/pyqt/
+
+keyboard
+--------
+License: MIT License
+Website: https://github.com/boppreh/keyboard
+
+pywin32
+-------
+License: Python Software Foundation License
+Website: https://github.com/mhammond/pywin32
+
+pygetwindow (optional)
+----------------------
+License: BSD 3-Clause License
+Website: https://github.com/asweigart/pygetwindow
