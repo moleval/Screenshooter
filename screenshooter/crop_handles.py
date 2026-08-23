@@ -14,9 +14,10 @@ class CropHandles:
     HANDLE_RADIUS = 5
     HIT_RADIUS = 7
 
-    def __init__(self, view, fill_color=QColor(0, 120, 215)):
+    def __init__(self, view, fill_color=QColor(0, 120, 215), show_midpoints=True):
         self.view = view
         self.fill_color = fill_color
+        self.show_midpoints = show_midpoints
         self.handle_items = {}
         self.positions = {}
 
@@ -75,13 +76,31 @@ class CropHandles:
 
     @staticmethod
     def _ids_positions(rect: QRectF):
-        return {
+        ids_positions = {
             'tl': rect.topLeft(),
             'tr': rect.topRight(),
             'bl': rect.bottomLeft(),
             'br': rect.bottomRight(),
-            'tm': QPointF(rect.center().x(), rect.top()),
-            'bm': QPointF(rect.center().x(), rect.bottom()),
-            'lm': QPointF(rect.left(), rect.center().y()),
-            'rm': QPointF(rect.right(), rect.center().y()),
         }
+        # Добавляем средние только если show_midpoints=True
+        # Но у нас нет доступа к self в статическом методе, поэтому добавим их всегда,
+        # а фильтрацию сделаем в create_handles.
+        # Проще: изменим на нестатический метод _ids_positions.
+        return ids_positions
+
+    # Перепишем _ids_positions как обычный метод, чтобы использовать self.show_midpoints
+    def _ids_positions(self, rect: QRectF):
+        positions = {
+            'tl': rect.topLeft(),
+            'tr': rect.topRight(),
+            'bl': rect.bottomLeft(),
+            'br': rect.bottomRight(),
+        }
+        if self.show_midpoints:
+            positions.update({
+                'tm': QPointF(rect.center().x(), rect.top()),
+                'bm': QPointF(rect.center().x(), rect.bottom()),
+                'lm': QPointF(rect.left(), rect.center().y()),
+                'rm': QPointF(rect.right(), rect.center().y()),
+            })
+        return positions

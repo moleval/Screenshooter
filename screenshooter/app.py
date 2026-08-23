@@ -27,7 +27,7 @@ from .widgets.tool_icons import (
 
 
 class ScreenshotApp(QMainWindow):
-    TOOL_BUTTON_WIDTH = 59   # ширина кнопок аннотаций и редактирования скриншота
+    TOOL_BUTTON_WIDTH = 59
 
     capture_monitor_requested = pyqtSignal()
     capture_window_requested = pyqtSignal()
@@ -93,6 +93,8 @@ class ScreenshotApp(QMainWindow):
         self.undo_shortcut.activated.connect(self._on_undo_shortcut)
         self.redo_shortcut = QShortcut(QKeySequence("Ctrl+Y"), self)
         self.redo_shortcut.activated.connect(self._on_redo_shortcut)
+        self.paste_shortcut = QShortcut(QKeySequence("Ctrl+V"), self)
+        self.paste_shortcut.activated.connect(self._on_paste_shortcut)
 
         self.crop_buttons_widget = QWidget()
         crop_buttons_layout = QHBoxLayout(self.crop_buttons_widget)
@@ -131,6 +133,14 @@ class ScreenshotApp(QMainWindow):
         self.copy_btn = QPushButton("В буфер")
         self.copy_btn.clicked.connect(self.copy_to_clipboard)
         right_group_layout.addWidget(self.copy_btn)
+
+        self.insert_file_btn = QPushButton("Вставить файл")
+        self.insert_file_btn.clicked.connect(self.insert_image_from_file)
+        right_group_layout.addWidget(self.insert_file_btn)
+
+        self.insert_clipboard_btn = QPushButton("Из буфера")
+        self.insert_clipboard_btn.clicked.connect(self.insert_image_from_clipboard)
+        right_group_layout.addWidget(self.insert_clipboard_btn)
 
         self.save_as_btn = QPushButton(" Сохранить как ")
         self.save_as_btn.clicked.connect(self.save_image)
@@ -311,6 +321,43 @@ class ScreenshotApp(QMainWindow):
         self.view.setFocus()
 
     # --------------------------------------------------------------
+    # Вставка изображений
+    # --------------------------------------------------------------
+    def insert_image_from_file(self):
+        path, _ = QFileDialog.getOpenFileName(self, "Вставить изображение", "",
+                                             "Изображения (*.png *.jpg *.jpeg *.bmp)")
+        if path:
+            pixmap = QPixmap(path)
+            if not pixmap.isNull():
+                self.view.add_pasted_image(pixmap)
+
+    def insert_image_from_clipboard(self):
+        clipboard = QApplication.clipboard()
+        mime = clipboard.mimeData()
+
+        # 1. Проверяем наличие изображения в буфере
+        if mime.hasImage():
+            image = clipboard.image()
+            if not image.isNull():
+                pixmap = QPixmap.fromImage(image)
+                if not pixmap.isNull():
+                    self.view.add_pasted_image(pixmap)
+                    return
+
+        # 2. Проверяем файлы (например, скопированный файл .png в проводнике)
+        if mime.hasUrls():
+            for url in mime.urls():
+                local_path = url.toLocalFile()
+                if local_path and os.path.isfile(local_path):
+                    pixmap = QPixmap(local_path)
+                    if not pixmap.isNull():
+                        self.view.add_pasted_image(pixmap)
+                        return
+
+        # Если ничего не удалось вставить
+        self.view.show_status_message("Не удалось вставить изображение из буфера.", 5000)
+
+    # --------------------------------------------------------------
     # Активация кнопок тулбара изображения
     # --------------------------------------------------------------
     def _update_image_actions_enabled(self):
@@ -364,7 +411,7 @@ class ScreenshotApp(QMainWindow):
         self.view.viewport().update()
 
     # --------------------------------------------------------------
-    # Undo/Redo
+    # Undo/Redo и горячие клавиши
     # --------------------------------------------------------------
     def _on_undo_shortcut(self):
         from PyQt5.QtWidgets import QLineEdit, QTextEdit, QPlainTextEdit
@@ -383,6 +430,15 @@ class ScreenshotApp(QMainWindow):
         if self.view.active_text_item and self.view.active_text_item._editable:
             return
         self.redo_action()
+
+    def _on_paste_shortcut(self):
+        from PyQt5.QtWidgets import QLineEdit, QTextEdit, QPlainTextEdit
+        widget = QApplication.focusWidget()
+        if isinstance(widget, (QLineEdit, QTextEdit, QPlainTextEdit)):
+            return
+        if self.view.active_text_item and self.view.active_text_item._editable:
+            return
+        self.insert_image_from_clipboard()
 
     def undo_action(self):
         self.view.undo()
@@ -573,6 +629,7 @@ class ScreenshotApp(QMainWindow):
             self.display_screenshot()
 
     def display_screenshot(self):
+        self.view.clear_pasted_images()
         self.scene.clear()
         self.view.active_text_item = None
         self.view.history.clear()
@@ -612,6 +669,7 @@ class ScreenshotApp(QMainWindow):
             return None
 
         self.view.image_editor.hide_blur_regions_for_render()
+        self.view.hide_pasted_image_handles_for_render()
 
         target = bg_pixmap.rect()
         img = QImage(target.size(), QImage.Format_ARGB32)
@@ -623,6 +681,7 @@ class ScreenshotApp(QMainWindow):
         p.end()
 
         self.view.image_editor.show_blur_regions_after_render()
+        self.view.show_pasted_image_handles_after_render()
         return img
 
     def save_image(self):

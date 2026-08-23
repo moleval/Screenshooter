@@ -31,8 +31,7 @@ class BlurRegionItem(QGraphicsRectItem):
         self.setZValue(500)  # ниже аннотаций, чтобы не мешать им
         self.setAcceptedMouseButtons(Qt.LeftButton)
         self.setFlag(QGraphicsRectItem.ItemIsMovable, False)
-        self.setFlag(QGraphicsRectItem.ItemIsSelectable, False)
-
+        self.setFlag(QGraphicsRectItem.ItemIsSelectable, True)   # ИЗМЕНЕНО: разрешаем выделение
         self._apply_mode()
 
     def _apply_mode(self):

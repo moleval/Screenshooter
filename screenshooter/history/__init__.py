@@ -35,6 +35,7 @@ class HistoryManager:
         return self.stack.canRedo()
 
 
+# --- Команды для обычных элементов сцены ---
 class AddItemCommand(QUndoCommand):
     """Команда добавления элемента в сцену."""
 
@@ -175,7 +176,6 @@ class CropCommand(QUndoCommand):
         self.controller = controller
         self.crop_rect = crop_rect
 
-        # Сохраняем состояние зон размытия до удаления
         if controller is not None:
             self.blur_state = controller._get_blur_state()
         else:
@@ -284,7 +284,7 @@ class BlurCommand(QUndoCommand):
 
 
 # --------------------------------------------------------------
-# Команды для зон размытия (множественные)
+# Команды для зон размытия
 # --------------------------------------------------------------
 
 class AddBlurRegionCommand(QUndoCommand):
@@ -317,6 +317,7 @@ class RemoveBlurRegionCommand(QUndoCommand):
     def undo(self):
         if self.rect is not None:
             self.controller._insert_blur_region_at(self.index, self.rect)
+            self.controller._set_active_blur(self.index)
 
 
 class MoveBlurRegionCommand(QUndoCommand):
@@ -351,3 +352,207 @@ class ResizeBlurRegionCommand(QUndoCommand):
 
     def undo(self):
         self.controller._update_blur_region_rect(self.index, self.old_rect)
+
+
+# --------------------------------------------------------------
+# Команды для вставленных изображений (с исправлением синхронизации маркеров)
+# --------------------------------------------------------------
+
+class AddPastedImageCommand(QUndoCommand):
+    """Команда добавления вставленного изображения."""
+
+    def __init__(self, scene, item, view):
+        super().__init__("Вставить изображение")
+        self.scene = scene
+        self.item = item
+        self.view = view
+
+    def redo(self):
+        if self.item.scene() is not self.scene:
+            self.scene.addItem(self.item)
+        if self.item not in self.view.pasted_images:
+            self.view.pasted_images.append(self.item)
+        self.item.setVisible(True)
+        self.item.update_handles()
+
+    def undo(self):
+        if self.item.scene() is self.scene:
+            self.scene.removeItem(self.item)
+        if self.item in self.view.pasted_images:
+            self.view.pasted_images.remove(self.item)
+        self.item.hide_handles()
+
+
+class RemovePastedImageCommand(QUndoCommand):
+    """Команда удаления вставленного изображения."""
+
+    def __init__(self, scene, item, view):
+        super().__init__("Удалить изображение")
+        self.scene = scene
+        self.item = item
+        self.view = view
+
+    def redo(self):
+        if self.item.scene() is self.scene:
+            self.scene.removeItem(self.item)
+        if self.item in self.view.pasted_images:
+            self.view.pasted_images.remove(self.item)
+        self.item.hide_handles()
+
+    def undo(self):
+        if self.item.scene() is not self.scene:
+            self.scene.addItem(self.item)
+        if self.item not in self.view.pasted_images:
+            self.view.pasted_images.append(self.item)
+        self.item.setVisible(True)
+        self.item.show_handles()  # показываем маркеры, если элемент был выделен
+        self.item.update_handles()
+
+
+class ResizePastedImageCommand(QUndoCommand):
+    """Команда изменения размера вставленного изображения."""
+
+    def __init__(self, item, old_scale, new_scale):
+        super().__init__("Изменить размер изображения")
+        self.item = item
+        self.old_scale = old_scale
+        self.new_scale = new_scale
+
+    def redo(self):
+        self.item.set_image_scale(self.new_scale)
+        self.item.update_handles()
+
+    def undo(self):
+        self.item.set_image_scale(self.old_scale)
+        self.item.update_handles()
+
+
+class CropPastedImageCommand(QUndoCommand):
+    """Команда обрезки вставленного изображения."""
+
+    def __init__(self, item, old_original, new_original, old_pos, old_scale, crop_scene_pos):
+        super().__init__("Обрезать изображение")
+        self.item = item
+        self.old_original = old_original
+        self.new_original = new_original
+        self.old_pos = old_pos
+        self.old_scale = old_scale
+        self.crop_scene_pos = crop_scene_pos
+
+    def redo(self):
+        self.item.setPos(self.crop_scene_pos)
+        self.item.original_pixmap = self.new_original
+        self.item.scale = 1.0
+        self.item.setPixmap(self.new_original)
+        self.item.update_handles()
+
+    def undo(self):
+        self.item.setPos(self.old_pos)
+        self.item.original_pixmap = self.old_original
+        self.item.scale = self.old_scale
+        self.item.set_image_scale(self.old_scale)
+        self.item.update_handles()
+
+
+class RotatePastedImageCommand(QUndoCommand):
+    """Команда поворота вставленного изображения."""
+
+    def __init__(self, item, old_original, new_original, old_pos, old_scale):
+        super().__init__("Повернуть изображение")
+        self.item = item
+        self.old_original = old_original
+        self.new_original = new_original
+        self.old_pos = old_pos
+        self.old_scale = old_scale
+
+    def redo(self):
+        self.item.original_pixmap = self.new_original
+        self.item.scale = 1.0
+        self.item.setPixmap(self.new_original)
+        self.item.update_handles()
+
+    def undo(self):
+        self.item.setPos(self.old_pos)
+        self.item.original_pixmap = self.old_original
+        self.item.scale = self.old_scale
+        self.item.set_image_scale(self.old_scale)
+        self.item.update_handles()
+
+
+# --------------------------------------------------------------
+# Команда массового удаления выбранных элементов
+# --------------------------------------------------------------
+
+class RemoveSelectedItemsCommand(QUndoCommand):
+    """
+    Команда группового удаления выбранных элементов.
+    Удаляет одновременно обычные аннотации, вставленные изображения и зоны размытия.
+    Откат возвращает всё сразу.
+    """
+    def __init__(self, scene, items, pasted_items, blur_indices, view):
+        super().__init__("Удалить объекты")
+        self.scene = scene
+        self.items = items
+        self.pasted_items = pasted_items
+        self.blur_indices = sorted(blur_indices)
+        self.view = view
+        self.removed_items = []
+        self.removed_pasted = []
+        self.removed_blur_rects = []
+        self.removed_blur_was_active = []
+        self.active_text_removed = None
+
+    def redo(self):
+        # Удаляем обычные элементы
+        for item in self.items:
+            if item.scene() is self.scene:
+                self.scene.removeItem(item)
+                self.removed_items.append(item)
+
+        # Удаляем вставленные изображения
+        for item in self.pasted_items:
+            if item.scene() is self.scene:
+                self.scene.removeItem(item)
+            if item in self.view.pasted_images:
+                self.view.pasted_images.remove(item)
+            item.hide_handles()
+            self.removed_pasted.append(item)
+
+        # Удаляем зоны размытия
+        for idx in reversed(self.blur_indices):
+            self.removed_blur_rects.append(QRectF(self.view.image_editor.blur_regions[idx]))
+            self.removed_blur_was_active.append(self.view.image_editor.active_blur_index == idx)
+            self.view.image_editor._remove_blur_region_at(idx)
+
+        if self.view.active_text_item in self.items + self.pasted_items:
+            self.active_text_removed = self.view.active_text_item
+            self.view.active_text_item = None
+
+    def undo(self):
+        # Возвращаем обычные элементы
+        for item in self.removed_items:
+            if item.scene() is not self.scene:
+                self.scene.addItem(item)
+            item.setVisible(True)
+
+        # Возвращаем вставленные изображения
+        for item in self.removed_pasted:
+            if item.scene() is not self.scene:
+                self.scene.addItem(item)
+            if item not in self.view.pasted_images:
+                self.view.pasted_images.append(item)
+            item.setVisible(True)
+            item.show_handles()  # восстановить маркеры, если были
+            item.update_handles()
+
+        # Возвращаем зоны размытия
+        for rect, was_active, idx in zip(reversed(self.removed_blur_rects),
+                                          reversed(self.removed_blur_was_active),
+                                          self.blur_indices):
+            self.view.image_editor._insert_blur_region_at(idx, rect)
+            if was_active:
+                self.view.image_editor._set_active_blur(idx)
+
+        if self.active_text_removed is not None:
+            self.view.active_text_item = self.active_text_removed
+            self.active_text_removed = None

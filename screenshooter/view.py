@@ -17,8 +17,13 @@ from .widgets.info_widget import InfoWidget
 from .widgets.mode_widgets import (ShapeModeWidget, ShapeModeWidgetEllipse,
                                    ShapeModeWidgetArrow, LineModeWidget)
 from .history import (HistoryManager, AddItemCommand, RemoveItemCommand,
-                      MoveItemCommand, MoveItemsCommand, ChangePenCommand)
+                      MoveItemCommand, MoveItemsCommand, ChangePenCommand,
+                      AddPastedImageCommand, RemovePastedImageCommand,
+                      ResizePastedImageCommand, CropPastedImageCommand,
+                      RotatePastedImageCommand, RemoveSelectedItemsCommand)
 from .image_edit_controller import ImageEditController
+from .pasted_image_item import PastedImageItem
+from .blur_region_item import BlurRegionItem
 
 
 class EditorView(QGraphicsView):
@@ -66,6 +71,13 @@ class EditorView(QGraphicsView):
         self._pan_active = False
         self._pan_start_pos = QPoint()
         self._pan_start_scroll = QPoint()
+
+        # Вставленные изображения
+        self.pasted_images = []
+        self._resizing_pasted_item = None
+        self._resize_handle = None
+        self._resize_start_rect = None
+        self._resize_start_scale = 1.0
 
         self.history = HistoryManager()
         self.image_editor = ImageEditController(self)
@@ -163,6 +175,7 @@ class EditorView(QGraphicsView):
             self.setSceneRect(QRectF(self.image_editor.background_item.pixmap().rect()))
             self.update_resolution_from_background()
         self._update_floating_widgets_visibility()
+        self._update_pasted_image_handles()  # <-- ДОБАВЛЕНО
 
     def update_resolution_from_background(self):
         if (self.image_editor.background_item and
@@ -201,6 +214,11 @@ class EditorView(QGraphicsView):
         self.image_editor.set_background_item(item)
 
     def start_crop_mode(self):
+        selected_pasted = [it for it in self.scene().selectedItems() if isinstance(it, PastedImageItem)]
+        if selected_pasted:
+            self.image_editor.crop_target_item = selected_pasted[0]
+        else:
+            self.image_editor.crop_target_item = self.image_editor.background_item
         self.image_editor.start_crop_mode()
 
     def cancel_crop_mode(self):
@@ -217,6 +235,92 @@ class EditorView(QGraphicsView):
 
     def rotate_image(self, angle):
         self.image_editor.rotate_image(angle)
+
+    # --------------------------------------------------------------
+    # Вставленные изображения
+    # --------------------------------------------------------------
+    def add_pasted_image(self, pixmap):
+        """Добавляет изображение на сцену."""
+        item = PastedImageItem(pixmap, self)
+        self.pasted_images.append(item)
+        self.scene().addItem(item)
+
+        center = self.mapToScene(self.viewport().rect().center())
+        item.setPos(center - QPointF(pixmap.width() / 2, pixmap.height() / 2))
+
+        viewport_rect = self.viewport().rect()
+        max_w = viewport_rect.width() * 0.8
+        max_h = viewport_rect.height() * 0.8
+        if pixmap.width() > max_w or pixmap.height() > max_h:
+            scale = min(max_w / pixmap.width(), max_h / pixmap.height())
+            item.set_image_scale(scale)
+
+        self.history.push(AddPastedImageCommand(self.scene(), item, self))
+        self.scene().clearSelection()
+        item.setSelected(True)
+        item.show_handles()
+        return item
+
+    def remove_pasted_image(self, item):
+        """Удаляет вставленное изображение (через команду undo/redo)."""
+        if item in self.pasted_images:
+            self.history.push(RemovePastedImageCommand(self.scene(), item, self))
+
+    def clear_pasted_images(self):
+        """Удаляет все вставленные изображения (при новом скриншоте)."""
+        for item in self.pasted_images[:]:
+            item.hide_handles()
+            self.scene().removeItem(item)
+        self.pasted_images.clear()
+
+    def _update_pasted_image_handles(self):
+        """Обновляет маркеры в зависимости от выделения."""
+        selected_ids = {id(it) for it in self.scene().selectedItems()
+                        if isinstance(it, PastedImageItem)}
+        for item in self.pasted_images:
+            if id(item) in selected_ids:
+                item.show_handles()
+            else:
+                item.hide_handles()
+
+    def hide_pasted_image_handles_for_render(self):
+        for item in self.pasted_images:
+            item.hide_handles()
+
+    def show_pasted_image_handles_after_render(self):
+        for item in self.pasted_images:
+            if item.isSelected():
+                item.show_handles()
+
+    # --------------------------------------------------------------
+    # Drag & Drop
+    # --------------------------------------------------------------
+    def dragEnterEvent(self, e):
+        if e.mimeData().hasUrls():
+            for url in e.mimeData().urls():
+                if url.isLocalFile() and url.toLocalFile().lower().endswith(
+                    ('.png', '.jpg', '.jpeg', '.bmp')):
+                    e.acceptProposedAction()
+                    return
+        e.ignore()
+
+    def dragMoveEvent(self, e):
+        if e.mimeData().hasUrls():
+            e.acceptProposedAction()
+        else:
+            e.ignore()
+
+    def dropEvent(self, e):
+        if e.mimeData().hasUrls():
+            for url in e.mimeData().urls():
+                if url.isLocalFile():
+                    path = url.toLocalFile()
+                    pixmap = QPixmap(path)
+                    if not pixmap.isNull():
+                        self.add_pasted_image(pixmap)
+            e.acceptProposedAction()
+        else:
+            e.ignore()
 
     # --------------------------------------------------------------
     # Плавающий статусный виджет
@@ -264,7 +368,34 @@ class EditorView(QGraphicsView):
             e.accept()
             return
 
-        # Режим "Выбор": клики по зонам размытия обрабатываются контроллером
+        # Вставленные изображения: проверяем попадание в маркеры
+        if e.button() == Qt.LeftButton:
+            for item in self.pasted_images:
+                if item.isSelected() and item.handles:
+                    handle_id = item.handles.hit_test(e.pos())
+                    if handle_id:
+                        self._resizing_pasted_item = item
+                        self._resize_handle = handle_id
+                        # Сохраняем прямоугольник в координатах сцены
+                        self._resize_start_rect = item.mapRectToScene(item.boundingRect())
+                        self._resize_start_scale = item.scale
+                        e.accept()
+                        return
+
+            # Если клик внутри картинки – начинаем перетаскивание
+            sp = self.mapToScene(e.pos())
+            for item in self.pasted_images:
+                if item.contains(item.mapFromScene(sp)):
+                    self.scene().clearSelection()
+                    item.setSelected(True)
+                    item.show_handles()
+                    self._drag_item = item
+                    self._drag_old_pos = item.pos()
+                    self._drag_offset = item.scenePos() - sp
+                    e.accept()
+                    return
+
+        # Зоны размытия (вне режима)
         if (e.button() == Qt.LeftButton and
             not self.image_editor.crop_mode and
             not self.image_editor.blur_mode):
@@ -439,6 +570,49 @@ class EditorView(QGraphicsView):
             e.accept()
             return
 
+        # Изменение размера вставленного изображения
+        if self._resizing_pasted_item is not None:
+            sp = self.mapToScene(e.pos())
+            item = self._resizing_pasted_item
+            start_rect = self._resize_start_rect  # уже в сцене
+            handle_id = self._resize_handle
+            left, top, right, bottom = start_rect.left(), start_rect.top(), start_rect.right(), start_rect.bottom()
+            min_size = PastedImageItem.MIN_SIZE
+
+            # Разрешаем выходить за пределы исходного прямоугольника (для увеличения)
+            if handle_id == 'tl':
+                left = min(sp.x(), right - min_size)
+                top = min(sp.y(), bottom - min_size)
+            elif handle_id == 'tr':
+                right = max(sp.x(), left + min_size)
+                top = min(sp.y(), bottom - min_size)
+            elif handle_id == 'bl':
+                left = min(sp.x(), right - min_size)
+                bottom = max(sp.y(), top + min_size)
+            elif handle_id == 'br':
+                right = max(sp.x(), left + min_size)
+                bottom = max(sp.y(), top + min_size)
+            elif handle_id == 'tm':
+                top = min(sp.y(), bottom - min_size)
+            elif handle_id == 'bm':
+                bottom = max(sp.y(), top + min_size)
+            elif handle_id == 'lm':
+                left = min(sp.x(), right - min_size)
+            elif handle_id == 'rm':
+                right = max(sp.x(), left + min_size)
+
+            new_rect = QRectF(left, top, right - left, bottom - top).normalized()
+
+            # Преобразуем новый прямоугольник в локальные координаты элемента
+            local_rect = item.mapRectFromScene(new_rect)
+            # Вычисляем масштаб относительно исходного изображения
+            scale_x = local_rect.width() / item.original_pixmap.width()
+            scale_y = local_rect.height() / item.original_pixmap.height()
+            scale = min(scale_x, scale_y)
+            item.set_image_scale(scale)
+            e.accept()
+            return
+
         if (not self.image_editor.crop_mode and not self.image_editor.blur_mode):
             if self.image_editor.handle_blur_region_move_outside(e):
                 e.accept()
@@ -484,6 +658,8 @@ class EditorView(QGraphicsView):
                     new_pos.setY(new_pos.y() - (proposed_rect.bottom() - image_rect.bottom()))
 
             self._drag_item.setPos(new_pos)
+            if isinstance(self._drag_item, PastedImageItem):
+                self._drag_item.update_handles()
             self.scene().update()
             e.accept()
             return
@@ -565,6 +741,20 @@ class EditorView(QGraphicsView):
 
     def mouseReleaseEvent(self, e):
         if self.image_editor.handle_mouse_release(e):
+            e.accept()
+            return
+
+        # Завершение изменения размера вставленного изображения
+        if self._resizing_pasted_item is not None:
+            item = self._resizing_pasted_item
+            old_scale = self._resize_start_scale
+            new_scale = item.scale
+            if old_scale != new_scale:
+                self.history.push(ResizePastedImageCommand(item, old_scale, new_scale))
+            self._resizing_pasted_item = None
+            self._resize_handle = None
+            self._resize_start_rect = None
+            self._resize_start_scale = 1.0
             e.accept()
             return
 
@@ -689,7 +879,7 @@ class EditorView(QGraphicsView):
         super().mouseReleaseEvent(e)
 
     # --------------------------------------------------------------
-    # Остальные методы (управление инструментами, клавиши)
+    # Остальные методы
     # --------------------------------------------------------------
     def set_text_bg(self, bg):
         self.current_text_bg = bg
@@ -845,15 +1035,32 @@ class EditorView(QGraphicsView):
             self._update_floating_widgets_visibility()
 
     def delete_selected(self):
-        if self.image_editor.blur_mode and self.image_editor.active_blur_index is not None:
+        """Массовое удаление выбранных элементов через одну команду."""
+        if self.image_editor.active_blur_index is not None:
             self.image_editor.delete_active_blur_region()
             return
-        for item in self.scene().selectedItems():
-            if isinstance(item, QGraphicsPixmapItem):
-                continue
-            self.history.push(RemoveItemCommand(self.scene(), item))
-            if item is self.active_text_item:
-                self.active_text_item = None
+
+        items = self.scene().selectedItems()
+        if not items:
+            return
+
+        pasted_items = [it for it in items if isinstance(it, PastedImageItem)]
+        blur_items = [it for it in items if isinstance(it, BlurRegionItem)]
+        other_items = [it for it in items
+                       if not isinstance(it, PastedImageItem) and not isinstance(it, BlurRegionItem)
+                       and not isinstance(it, QGraphicsPixmapItem)]
+
+        blur_indices = []
+        for idx, blur_item in enumerate(self.image_editor.blur_region_items):
+            if blur_item.scene() is self.scene() and blur_item.isSelected():
+                blur_indices.append(idx)
+
+        if pasted_items or other_items or blur_indices:
+            command = RemoveSelectedItemsCommand(
+                self.scene(), other_items, pasted_items, blur_indices, self
+            )
+            self.history.push(command)
+
         self.scene().clearSelection()
         self._restore_tool_if_needed()
 
@@ -929,13 +1136,11 @@ class EditorView(QGraphicsView):
             e.accept()
             return
 
-        # Перемещение выделенных объектов стрелками
         if e.key() in (Qt.Key_Left, Qt.Key_Right, Qt.Key_Up, Qt.Key_Down):
             if self.active_text_item and self.active_text_item._editable:
                 super().keyPressEvent(e)
                 return
 
-            # Перемещение активной зоны размытия
             if self.image_editor.active_blur_index is not None:
                 idx = self.image_editor.active_blur_index
                 old_rect = self.image_editor.blur_regions[idx]
@@ -955,14 +1160,12 @@ class EditorView(QGraphicsView):
                     self.image_editor.blur_regions[idx] = new_rect
                     self.image_editor.blur_region_items[idx].update_rect(new_rect)
                     self.image_editor._recompute_blurred_pixmap()
-                    # Добавляем команду в историю
                     from .history import MoveBlurRegionCommand
                     self.history.push(MoveBlurRegionCommand(
                         self.image_editor, idx, old_rect, new_rect))
                 e.accept()
                 return
 
-            # Перемещение обычных аннотаций
             selected = self.scene().selectedItems()
             items = [it for it in selected if not isinstance(it, QGraphicsPixmapItem)]
             if items:
@@ -1008,7 +1211,7 @@ class EditorView(QGraphicsView):
     def select_all_items(self):
         self.scene().clearSelection()
         for item in self.scene().items():
-            if item.parentItem() is None and not isinstance(item, QGraphicsPixmapItem):
+            if item.parentItem() is None and item is not self.image_editor.background_item:
                 item.setSelected(True)
 
     def keyReleaseEvent(self, e):
@@ -1080,9 +1283,9 @@ class EditorView(QGraphicsView):
         self._update_line_mode_widget_position()
         self._update_info_widget_position()
         self._update_status_label_position()
-        if self.auto_fit and self.scene() and self.scene().items():
-            bg = self.scene().items()[0]
-            if isinstance(bg, QGraphicsPixmapItem):
+        if self.auto_fit:
+            bg = self.image_editor.background_item
+            if bg is not None and not sip.isdeleted(bg) and bg.scene() is self.scene():
                 self.fitInView(bg, Qt.KeepAspectRatio)
 
     def showEvent(self, e):
@@ -1174,6 +1377,8 @@ class EditorView(QGraphicsView):
             self.arrow_mode_widget.setVisible(True)
         elif self.current_tool == 'line':
             self.line_mode_widget.setVisible(True)
+
+        self._update_pasted_image_handles()
 
     def _update_info_widget_position(self):
         if not self.info_widget:
@@ -1304,16 +1509,11 @@ class EditorView(QGraphicsView):
         self.zoomChangedByWheel.emit(p)
 
     def _fit_to_view(self):
-        if self.scene() and self.scene().items():
-            bg = None
-            for item in self.scene().items():
-                if isinstance(item, QGraphicsPixmapItem):
-                    bg = item
-                    break
-            if bg:
-                self.fitInView(bg, Qt.KeepAspectRatio)
-            else:
-                self.fitInView(self.scene().itemsBoundingRect(), Qt.KeepAspectRatio)
+        bg = self.image_editor.background_item
+        if bg is not None and not sip.isdeleted(bg) and bg.scene() is self.scene():
+            self.fitInView(bg, Qt.KeepAspectRatio)
+        elif self.scene() and self.scene().items():
+            self.fitInView(self.scene().itemsBoundingRect(), Qt.KeepAspectRatio)
         else:
             self.resetTransform()
         self.auto_fit = False
@@ -1352,6 +1552,14 @@ class EditorView(QGraphicsView):
 
     def _update_cursor(self, pos):
         sp = self.mapToScene(pos)
+        # Проверяем попадание в маркеры выделенных вставленных изображений
+        for item in self.pasted_images:
+            if item.isSelected() and item.handles:
+                handle_id = item.handles.hit_test(pos)
+                if handle_id:
+                    self.viewport().setCursor(item.handles.get_cursor_for_handle(handle_id))
+                    return
+
         item = self.scene().itemAt(sp, self.transform())
         if self.active_text_item and item is self.active_text_item and self.active_text_item._editable:
             self.viewport().setCursor(Qt.IBeamCursor)
@@ -1361,6 +1569,9 @@ class EditorView(QGraphicsView):
             if li.flags() & QGraphicsItem.ItemIsMovable:
                 self.viewport().setCursor(Qt.SizeAllCursor)
                 return
+        if item and isinstance(item, PastedImageItem):
+            self.viewport().setCursor(Qt.SizeAllCursor)
+            return
         if self.current_tool in ('rect', 'ellipse', 'arrow', 'line', 'text'):
             self.viewport().setCursor(Qt.CrossCursor)
         else:

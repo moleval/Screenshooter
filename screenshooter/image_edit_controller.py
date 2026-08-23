@@ -8,15 +8,18 @@ from PyQt5.QtWidgets import QGraphicsRectItem
 from .constants import MIN_RECT_SIZE
 from .history import (CropCommand, RotateCommand, BlurCommand,
                       AddBlurRegionCommand, RemoveBlurRegionCommand,
-                      MoveBlurRegionCommand, ResizeBlurRegionCommand)
+                      MoveBlurRegionCommand, ResizeBlurRegionCommand,
+                      CropPastedImageCommand, RotatePastedImageCommand)
 from .image_processing import crop_pixmap, rotate_pixmap, blur_region
 from .crop_handles import CropHandles
 from .blur_region_item import BlurRegionItem
+from .pasted_image_item import PastedImageItem
 
 
 class ImageEditController:
     """
     Управляет операциями с фоновым изображением (crop, blur, rotate).
+    Также поддерживает операции с вставленными изображениями.
     """
 
     def __init__(self, view):
@@ -24,6 +27,7 @@ class ImageEditController:
 
         # Обрезка
         self.background_item = None
+        self.crop_target_item = None  # может быть фоновым или вставленным изображением
         self.crop_mode = False
         self.blur_mode = False
         self.crop_rect_item = None
@@ -54,6 +58,7 @@ class ImageEditController:
     # --------------------------------------------------------------
     def set_background_item(self, item):
         self.background_item = item
+        self.crop_target_item = item
         self.reset_state()
 
     def reset_state(self):
@@ -266,7 +271,7 @@ class ImageEditController:
             item.setVisible(True)
 
     # --------------------------------------------------------------
-    # Режим обрезки
+    # Режим обрезки (обобщённый)
     # --------------------------------------------------------------
     def start_crop_mode(self):
         if self.crop_mode:
@@ -280,8 +285,11 @@ class ImageEditController:
         self.view.setCursor(Qt.CrossCursor)
         self.view.setBackgroundBrush(QColor(90, 90, 90))
 
-        if self.background_item:
-            self.crop_rect = QRectF(self.background_item.pixmap().rect())
+        if self.crop_target_item is None:
+            self.crop_target_item = self.background_item
+        if self.crop_target_item:
+            # Преобразуем локальный прямоугольник изображения в координаты сцены
+            self.crop_rect = self.crop_target_item.mapRectToScene(QRectF(self.crop_target_item.pixmap().rect()))
         else:
             self.crop_rect = self.view.sceneRect()
 
@@ -306,6 +314,7 @@ class ImageEditController:
         self.view.setBackgroundBrush(self.view.normal_background_color)
         self.view.crop_mode_changed.emit(False)
         self.view._update_floating_widgets_visibility()
+        self.crop_target_item = None  # сбрасываем цель
 
     def _clear_crop_preview(self):
         if self.crop_rect_item is not None and not self._is_deleted(self.crop_rect_item):
@@ -364,7 +373,8 @@ class ImageEditController:
     def _apply_handle_drag(self, handle_id, new_scene_pos):
         rect = self.crop_rect.normalized()
         left, top, right, bottom = rect.left(), rect.top(), rect.right(), rect.bottom()
-        image_rect = QRectF(self.background_item.pixmap().rect())
+        # Преобразуем границы изображения в координаты сцены
+        image_rect = self.crop_target_item.mapRectToScene(QRectF(self.crop_target_item.pixmap().rect()))
         min_size = MIN_RECT_SIZE
 
         x = max(image_rect.left(), min(image_rect.right(), new_scene_pos.x()))
@@ -394,47 +404,87 @@ class ImageEditController:
         return QRectF(left, top, right - left, bottom - top).normalized()
 
     def apply_crop(self):
-        if not self.crop_mode or not self.crop_rect or not self.background_item:
+        if not self.crop_mode or not self.crop_rect or not self.crop_target_item:
             return
 
-        items_to_remove = []
         crop = self.crop_rect.normalized()
-        for item in self.view.scene().items():
-            if item is self.background_item:
-                continue
-            if item in self.crop_overlay_items or item is self.crop_rect_item:
-                continue
-            if self.handles and item in self.handles.handle_items.values():
-                continue
-            br = item.sceneBoundingRect()
-            if not crop.contains(br):
-                items_to_remove.append(item)
+        # Если цель – фон, используем старую логику
+        if self.crop_target_item is self.background_item:
+            items_to_remove = []
+            for item in self.view.scene().items():
+                if item is self.background_item:
+                    continue
+                if item in self.crop_overlay_items or item is self.crop_rect_item:
+                    continue
+                if self.handles and item in self.handles.handle_items.values():
+                    continue
+                br = item.sceneBoundingRect()
+                if not crop.contains(br):
+                    items_to_remove.append(item)
 
-        old_pixmap = self.background_item.pixmap()
-        new_pixmap = crop_pixmap(old_pixmap, crop)
-        if new_pixmap.isNull():
+            old_pixmap = self.background_item.pixmap()
+            new_pixmap = crop_pixmap(old_pixmap, crop)
+            if new_pixmap.isNull():
+                self._clear_crop_preview()
+                return
+
+            # Создаём команду, которая сама управляет зонами размытия
+            command = CropCommand(
+                self.view.scene(), self.background_item,
+                old_pixmap, new_pixmap, items_to_remove,
+                controller=self,
+                crop_rect=crop
+            )
+            self.view.history.push(command)
+
             self._clear_crop_preview()
-            return
+            self._remove_handles()
+            self.crop_rect = None
+            self.temp_crop_start = None
+            self.active_handle = None
+            self.crop_mode = False
+            self.view.setCursor(Qt.CrossCursor)
+            self.view.setBackgroundBrush(self.view.normal_background_color)
+            self.view.crop_mode_changed.emit(False)
+            self.view._update_floating_widgets_visibility()
+            self.crop_target_item = None
+        else:
+            # Цель – вставленное изображение
+            old_original = self.crop_target_item.original_pixmap  # немасштабированный оригинал
+            # Отображаемый pixmap (с учётом масштаба)
+            displayed_pixmap = self.crop_target_item.pixmap()
+            # Преобразуем прямоугольник из сцены в локальные координаты отображаемого
+            local_crop = self.crop_target_item.mapRectFromScene(crop)
+            # Обрезаем отображаемый pixmap – это будет новый немасштабированный оригинал
+            new_original = crop_pixmap(displayed_pixmap, local_crop)
+            if new_original.isNull():
+                self._clear_crop_preview()
+                return
 
-        # Создаём команду, которая сама управляет зонами размытия
-        command = CropCommand(
-            self.view.scene(), self.background_item,
-            old_pixmap, new_pixmap, items_to_remove,
-            controller=self,
-            crop_rect=crop
-        )
-        self.view.history.push(command)
+            old_pos = self.crop_target_item.pos()
+            old_scale = self.crop_target_item.scale
+            crop_scene_pos = crop.topLeft()
+            command = CropPastedImageCommand(
+                self.crop_target_item,
+                old_original,
+                new_original,
+                old_pos,
+                old_scale,
+                crop_scene_pos
+            )
+            self.view.history.push(command)
 
-        self._clear_crop_preview()
-        self._remove_handles()
-        self.crop_rect = None
-        self.temp_crop_start = None
-        self.active_handle = None
-        self.crop_mode = False
-        self.view.setCursor(Qt.CrossCursor)
-        self.view.setBackgroundBrush(self.view.normal_background_color)
-        self.view.crop_mode_changed.emit(False)
-        self.view._update_floating_widgets_visibility()
+            self._clear_crop_preview()
+            self._remove_handles()
+            self.crop_rect = None
+            self.temp_crop_start = None
+            self.active_handle = None
+            self.crop_mode = False
+            self.view.setCursor(Qt.CrossCursor)
+            self.view.setBackgroundBrush(self.view.normal_background_color)
+            self.view.crop_mode_changed.emit(False)
+            self.view._update_floating_widgets_visibility()
+            self.crop_target_item = None
 
     # --------------------------------------------------------------
     # Режим размытия
@@ -494,9 +544,23 @@ class ImageEditController:
         self.view.history.push(command)
 
     # --------------------------------------------------------------
-    # Поворот
+    # Поворот (обобщённый)
     # --------------------------------------------------------------
     def rotate_image(self, angle: float):
+        # Проверяем, есть ли выделенные вставленные изображения
+        selected_pasted = [it for it in self.view.scene().selectedItems() if isinstance(it, PastedImageItem)]
+        if selected_pasted:
+            for item in selected_pasted:
+                old_original = item.original_pixmap  # немасштабированный оригинал
+                displayed_pixmap = item.pixmap()     # отображаемый pixmap
+                new_original = rotate_pixmap(displayed_pixmap, angle)
+                old_pos = item.pos()
+                old_scale = item.scale
+                command = RotatePastedImageCommand(item, old_original, new_original, old_pos, old_scale)
+                self.view.history.push(command)
+            return
+
+        # Иначе поворачиваем фон
         if not self.background_item:
             return
 
@@ -674,7 +738,12 @@ class ImageEditController:
                 sp = self.view.mapToScene(event.pos())
                 self.crop_rect = QRectF(self.temp_crop_start, sp).normalized()
                 if self.crop_rect.width() < MIN_RECT_SIZE or self.crop_rect.height() < MIN_RECT_SIZE:
-                    self.crop_rect = QRectF(self.background_item.pixmap().rect())
+                    # Сброс к исходному прямоугольнику
+                    if self.crop_target_item:
+                        self.crop_rect = self.crop_target_item.mapRectToScene(
+                            QRectF(self.crop_target_item.pixmap().rect()))
+                    else:
+                        self.crop_rect = self.view.sceneRect()
                     self._clear_crop_preview()
                     self._remove_handles()
                     self._create_handles_for_rect(self.crop_rect)
