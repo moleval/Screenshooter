@@ -5,8 +5,8 @@
           взаимодействие с зонами размытия, вставленными изображениями,
           а также управление масштабом и плавающими виджетами.
           Подключён к истории undo/redo.
-          После рефакторинга (Шаг 1) позиционирование плавающих виджетов
-          делегируется LayoutManager.
+          После рефакторинга (Шаг 2) логика рисования вынесена в классы инструментов.
+          TextTool также интегрирован.
 """
 
 import math
@@ -34,6 +34,7 @@ from .image_edit_controller import ImageEditController
 from .pasted_image_item import PastedImageItem
 from .blur_region_item import BlurRegionItem
 from .ui.layout_manager import LayoutManager
+from .tools import RectTool, EllipseTool, LineTool, ArrowTool, TextTool
 
 
 class EditorView(QGraphicsView):
@@ -138,6 +139,9 @@ class EditorView(QGraphicsView):
 
         # --- Теперь создаём LayoutManager (все виджеты уже есть) ---
         self.layout_manager = LayoutManager(self)
+
+        # --- Инициализация инструментов ---
+        self._tool = None  # текущий активный инструмент рисования
 
         # --- Теперь можно вызывать методы, использующие layout_manager ---
         self._update_info_widget_content(self.current_pen_color, self.pen_width)
@@ -370,7 +374,6 @@ class EditorView(QGraphicsView):
                     if handle_id:
                         self._resizing_pasted_item = item
                         self._resize_handle = handle_id
-                        # Сохраняем прямоугольник в координатах сцены
                         self._resize_start_rect = item.mapRectToScene(item.boundingRect())
                         self._resize_start_scale = item.scale
                         e.accept()
@@ -466,41 +469,32 @@ class EditorView(QGraphicsView):
                     e.accept()
                     return
 
+            # ============================================================
+            #  Логика для текстового инструмента
+            # ============================================================
             if self.current_tool == 'text':
-                if isinstance(item, TextItem):
-                    self.scene().clearSelection()
-                    item.setSelected(True)
-                    if self.active_text_item is not None and self.active_text_item is not item:
-                        old = self.active_text_item
-                        self.active_text_item = None
-                        old.setEditable(False)
-                    self._first_click_after_activation = False
-                    e.accept()
-                    return
-                else:
-                    if self.active_text_item:
-                        old = self.active_text_item
-                        self.active_text_item = None
-                        old.setEditable(False)
+                if self._tool is not None:
+                    item_at = self.scene().itemAt(sp, self.transform())
+                    if isinstance(item_at, TextItem):
+                        # Клик по тексту – активируем редактирование
+                        if self.active_text_item is not None and self.active_text_item is not item_at:
+                            self.active_text_item.setEditable(False)
+                        self.active_text_item = item_at
+                        item_at.setSelected(True)
+                        item_at.setEditable(True)
+                        self._first_click_after_activation = False
                         e.accept()
                         return
                     else:
-                        if self._first_click_after_activation:
-                            ti = TextItem(self, bg_color=self.current_text_bg)
-                            ti.setDefaultTextColor(self.current_pen_color)
-                            font = QFont()
-                            font.setPointSize(self.text_size * 4)
-                            ti.setFont(font)
-                            ti.setPos(sp)
-                            self.scene().addItem(ti)
-                            self.active_text_item = ti
-                            ti.setSelected(True)
-                            ti.setEditable(True)
-                            self._first_click_after_activation = False
+                        # Клик по свободному полю
+                        if self.active_text_item and self.active_text_item._editable:
+                            # Завершаем редактирование активного текста (потеря фокуса)
+                            self.active_text_item.clearFocus()
+                            # focusOutEvent сам вызовет _text_editing_finished
                             e.accept()
                             return
                         else:
-                            self.scene().clearSelection()
+                            # Нет активного текста – ничего не делаем (новый текст только по двойному клику)
                             e.accept()
                             return
 
@@ -519,37 +513,15 @@ class EditorView(QGraphicsView):
                     e.accept()
                     return
 
+            # ============================================================
+            #  Рисование с использованием инструментов (кроме текста)
+            # ============================================================
             if self.current_tool in ('rect', 'ellipse', 'arrow', 'line'):
-                self.start_point = sp
-                pen = QPen(self.current_pen_color, self.pen_width)
-                if self.current_tool == 'rect':
-                    if self.shape_mode == 'filled':
-                        self.temp_item = FilledRectItem(QRectF(sp, sp), self.current_pen_color)
-                    else:
-                        self.temp_item = RectangleItem(QRectF(sp, sp), pen)
-                elif self.current_tool == 'ellipse':
-                    if self.ellipse_mode == 'cloud':
-                        self.temp_item = CloudItem(QRectF(sp, sp), pen)
-                    else:
-                        self.temp_item = EllipseItem(QRectF(sp, sp), pen)
-                elif self.current_tool == 'arrow':
-                    if self.arrow_mode == 'straight':
-                        self.temp_item = ArrowItem(sp, sp, pen)
-                    elif self.arrow_mode == 'curved':
-                        self.temp_item = CurvedArrowItem(sp, sp, (sp + sp) / 2, pen)
-                    elif self.arrow_mode == 'dimension':
-                        self.temp_item = DimensionItem(sp, sp, pen, self.current_pen_color)
-                elif self.current_tool == 'line':
-                    if self.line_mode == 'straight':
-                        self.temp_item = LineItem(sp.x(), sp.y(), sp.x(), sp.y(), pen)
-                    elif self.line_mode == 'dashed':
-                        dpen = QPen(pen)
-                        dpen.setStyle(Qt.DashLine)
-                        self.temp_item = LineItem(sp.x(), sp.y(), sp.x(), sp.y(), dpen)
-                    elif self.line_mode == 'wavy':
-                        self.temp_item = WavyLineItem(sp.x(), sp.y(), sp.x(), sp.y(), pen)
-                if self.temp_item:
-                    self.scene().addItem(self.temp_item)
+                if self._tool is not None:
+                    self.start_point = sp
+                    self.temp_item = self._tool.start_draw(sp)
+                    if self.temp_item:
+                        self.scene().addItem(self.temp_item)
                 e.accept()
                 return
 
@@ -568,12 +540,11 @@ class EditorView(QGraphicsView):
         if self._resizing_pasted_item is not None:
             sp = self.mapToScene(e.pos())
             item = self._resizing_pasted_item
-            start_rect = self._resize_start_rect  # уже в сцене
+            start_rect = self._resize_start_rect
             handle_id = self._resize_handle
             left, top, right, bottom = start_rect.left(), start_rect.top(), start_rect.right(), start_rect.bottom()
             min_size = PastedImageItem.MIN_SIZE
 
-            # Разрешаем выходить за пределы исходного прямоугольника (для увеличения)
             if handle_id == 'tl':
                 left = min(sp.x(), right - min_size)
                 top = min(sp.y(), bottom - min_size)
@@ -596,10 +567,7 @@ class EditorView(QGraphicsView):
                 right = max(sp.x(), left + min_size)
 
             new_rect = QRectF(left, top, right - left, bottom - top).normalized()
-
-            # Преобразуем новый прямоугольник в локальные координаты элемента
             local_rect = item.mapRectFromScene(new_rect)
-            # Вычисляем масштаб относительно исходного изображения
             scale_x = local_rect.width() / item.original_pixmap.width()
             scale_y = local_rect.height() / item.original_pixmap.height()
             scale = min(scale_x, scale_y)
@@ -626,7 +594,6 @@ class EditorView(QGraphicsView):
             sp = self.mapToScene(e.pos())
             new_pos = sp + self._drag_offset
 
-            # Ограничение по осям при зажатом Shift
             if e.modifiers() & Qt.ShiftModifier:
                 delta = new_pos - self._drag_old_pos
                 if abs(delta.x()) > abs(delta.y()):
@@ -634,17 +601,14 @@ class EditorView(QGraphicsView):
                 else:
                     new_pos.setX(self._drag_old_pos.x())
 
-            # Ограничение перемещения в пределах скриншота
             if self.image_editor.background_item is not None:
                 image_rect = QRectF(self.image_editor.background_item.pixmap().rect())
                 item_rect = self._drag_item.boundingRect()
-
                 proposed_rect = QRectF(new_pos + item_rect.topLeft(), new_pos + item_rect.bottomRight())
                 if proposed_rect.left() < image_rect.left():
                     new_pos.setX(new_pos.x() + (image_rect.left() - proposed_rect.left()))
                 elif proposed_rect.right() > image_rect.right():
                     new_pos.setX(new_pos.x() - (proposed_rect.right() - image_rect.right()))
-
                 proposed_rect = QRectF(new_pos + item_rect.topLeft(), new_pos + item_rect.bottomRight())
                 if proposed_rect.top() < image_rect.top():
                     new_pos.setY(new_pos.y() + (image_rect.top() - proposed_rect.top()))
@@ -660,68 +624,12 @@ class EditorView(QGraphicsView):
 
         self._update_cursor(e.pos())
 
-        if self.temp_item:
-            cp = self.mapToScene(e.pos())
-            if e.modifiers() & Qt.ShiftModifier:
-                dx = cp.x() - self.start_point.x()
-                dy = cp.y() - self.start_point.y()
-                if abs(dx) > abs(dy):
-                    cp.setY(self.start_point.y())
-                else:
-                    cp.setX(self.start_point.x())
-
-            if isinstance(self.temp_item, QGraphicsRectItem):
-                dx = cp.x() - self.start_point.x()
-                dy = cp.y() - self.start_point.y()
-                if self.current_tool == 'rect' and self.shape_mode == 'square':
-                    side = max(abs(dx), abs(dy))
-                    x = self.start_point.x() if dx >= 0 else self.start_point.x() - side
-                    y = self.start_point.y() if dy >= 0 else self.start_point.y() - side
-                    rect = QRectF(x, y, side, side)
-                else:
-                    rect = QRectF(self.start_point, cp).normalized()
-                self.temp_item.setRect(rect)
-            elif isinstance(self.temp_item, QGraphicsEllipseItem):
-                dx = cp.x() - self.start_point.x()
-                dy = cp.y() - self.start_point.y()
-                if self.current_tool == 'ellipse' and self.ellipse_mode == 'circle':
-                    r = max(abs(dx), abs(dy))
-                    x = self.start_point.x() if dx >= 0 else self.start_point.x() - r
-                    y = self.start_point.y() if dy >= 0 else self.start_point.y() - r
-                    rect = QRectF(x, y, r, r)
-                else:
-                    rect = QRectF(self.start_point, cp).normalized()
-                self.temp_item.setRect(rect)
-            elif isinstance(self.temp_item, CloudItem):
-                self.temp_item.setRect(QRectF(self.start_point, cp).normalized())
-            elif isinstance(self.temp_item, ArrowItem):
-                self.temp_item.set_line(self.start_point, cp)
-            elif isinstance(self.temp_item, CurvedArrowItem):
-                start = self.start_point
-                end = cp
-                mid = (start + end) / 2
-                dx = end.x() - start.x()
-                dy = end.y() - start.y()
-                if math.hypot(dx, dy) > 0:
-                    perp_x = -dy
-                    perp_y = dx
-                    norm = math.hypot(perp_x, perp_y)
-                    if norm > 0:
-                        perp_x /= norm
-                        perp_y /= norm
-                        length = math.hypot(dx, dy)
-                        bend = 0.3
-                        ctrl = mid + QPointF(perp_x * length * bend, perp_y * length * bend)
-                        cross = dx * (cp.y() - start.y()) - dy * (cp.x() - start.x())
-                        if cross < 0:
-                            ctrl = mid - QPointF(perp_x * length * bend, perp_y * length * bend)
-                        self.temp_item.set_curve(start, end, ctrl)
-            elif isinstance(self.temp_item, DimensionItem):
-                self.temp_item.setRect(self.start_point, cp)
-            elif isinstance(self.temp_item, LineItem):
-                self.temp_item.setLine(self.start_point.x(), self.start_point.y(), cp.x(), cp.y())
-            elif isinstance(self.temp_item, WavyLineItem):
-                self.temp_item.set_points(self.start_point.x(), self.start_point.y(), cp.x(), cp.y())
+        # ============================================================
+        #  Обновление временного элемента через инструмент (кроме текста)
+        # ============================================================
+        if self.temp_item and self._tool is not None and self.current_tool not in ('text',):
+            sp = self.mapToScene(e.pos())
+            self._tool.update_draw(self.temp_item, sp, e.modifiers())
             e.accept()
             return
 
@@ -789,82 +697,17 @@ class EditorView(QGraphicsView):
             e.accept()
             return
 
-        if self.temp_item and e.button() == Qt.LeftButton:
-            should_remove = False
-            if isinstance(self.temp_item, (RectangleItem, FilledRectItem, EllipseItem, CloudItem)):
-                r = self.temp_item.rect()
-                if r.width() < MIN_RECT_SIZE or r.height() < MIN_RECT_SIZE:
-                    should_remove = True
-            elif isinstance(self.temp_item, (LineItem, WavyLineItem)):
-                if isinstance(self.temp_item, LineItem):
-                    line = self.temp_item.line()
-                    length = math.hypot(line.x2() - line.x1(), line.y2() - line.y1())
-                else:
-                    length = math.hypot(self.temp_item._x2 - self.temp_item._x1, self.temp_item._y2 - self.temp_item._y1)
-                if length < MIN_ARROW_LENGTH:
-                    should_remove = True
-            elif isinstance(self.temp_item, (ArrowItem, CurvedArrowItem, DimensionItem)):
-                start = self.temp_item._start
-                end = self.temp_item._end
-                length = math.hypot(end.x() - start.x(), end.y() - start.y())
-                if length < MIN_ARROW_LENGTH:
-                    should_remove = True
-
-            if should_remove:
+        # ============================================================
+        #  Завершение рисования через инструмент (кроме текста)
+        # ============================================================
+        if self.temp_item and e.button() == Qt.LeftButton and self._tool is not None and self.current_tool not in ('text',):
+            if self._tool.finish_draw(self.temp_item):
+                self.scene().clearSelection()
+                self.temp_item.setSelected(True)
+                self.history.push(AddItemCommand(self.scene(), self.temp_item))
+            else:
                 self.scene().removeItem(self.temp_item)
-                self.temp_item = None
-                self.start_point = None
-                e.accept()
-                return
 
-            if isinstance(self.temp_item, CurvedArrowItem) and self.temp_item.isEmpty():
-                self.scene().removeItem(self.temp_item)
-                self.temp_item = None
-                self.start_point = None
-                e.accept()
-                return
-
-            self.scene().clearSelection()
-            self.temp_item.setSelected(True)
-
-            if isinstance(self.temp_item, DimensionItem):
-                start = self.start_point
-                end = self.temp_item._end
-                dx = end.x() - start.x()
-                dy = end.y() - start.y()
-                length = math.hypot(dx, dy)
-                if length > 0:
-                    mid = QPointF((start.x() + end.x()) / 2, (start.y() + end.y()) / 2)
-                    angle_deg = math.degrees(math.atan2(dy, dx))
-                    if angle_deg > 90 or angle_deg < -90:
-                        angle_deg += 180
-                    angle_deg = (angle_deg + 180) % 360 - 180
-                    rad = math.radians(angle_deg)
-                    normal = QPointF(math.sin(rad), -math.cos(rad))
-
-                    ti = TextItem(self, bg_color=self.current_text_bg)
-                    ti.setDefaultTextColor(self.current_pen_color)
-                    font = QFont()
-                    font.setPointSize(self.text_size * 4)
-                    ti.setFont(font)
-                    self.scene().addItem(ti)
-
-                    def update_text_pos():
-                        rect = ti.boundingRect()
-                        gap = 8
-                        center = mid + normal * (gap + rect.height() / 2)
-                        ti.setPos(center - rect.center())
-                        ti.setTransformOriginPoint(rect.center())
-                        ti.setRotation(angle_deg)
-
-                    ti.document().contentsChanged.connect(update_text_pos)
-                    update_text_pos()
-                    ti.setSelected(True)
-                    ti.setEditable(True)
-                    self.active_text_item = ti
-                    self._update_floating_widgets_visibility()
-
-            self.history.push(AddItemCommand(self.scene(), self.temp_item))
             self.temp_item = None
             self.start_point = None
             e.accept()
@@ -967,6 +810,20 @@ class EditorView(QGraphicsView):
 
         self._apply_tool(t)
         self._first_click_after_activation = (t == 'text')
+
+        # Создаём соответствующий инструмент
+        if t == 'rect':
+            self._tool = RectTool(self)
+        elif t == 'ellipse':
+            self._tool = EllipseTool(self)
+        elif t == 'line':
+            self._tool = LineTool(self)
+        elif t == 'arrow':
+            self._tool = ArrowTool(self)
+        elif t == 'text':
+            self._tool = TextTool(self)
+        else:
+            self._tool = None
 
         if t == 'rect':
             self.shape_mode = 'rect'
@@ -1236,6 +1093,12 @@ class EditorView(QGraphicsView):
         super().wheelEvent(e)
 
     def mouseDoubleClickEvent(self, e):
+        if self.current_tool == 'text' and self._tool is not None:
+            sp = self.mapToScene(e.pos())
+            if self._tool.handle_double_click(sp):
+                e.accept()
+                return
+        # Обычная обработка двойного клика (для других случаев)
         sp = self.mapToScene(e.pos())
         item = self.scene().itemAt(sp, self.transform())
         if isinstance(item, TextItem):
@@ -1244,24 +1107,6 @@ class EditorView(QGraphicsView):
             self.active_text_item = item
             item.setEditable(True)
             if self.current_tool == 'text':
-                self._first_click_after_activation = False
-            e.accept()
-            return
-        if self.current_tool == 'text' and (item is None or isinstance(item, QGraphicsPixmapItem)):
-            if self.active_text_item:
-                self.active_text_item.setEditable(False)
-                self.active_text_item = None
-            else:
-                ti = TextItem(self, bg_color=self.current_text_bg)
-                ti.setDefaultTextColor(self.current_pen_color)
-                font = QFont()
-                font.setPointSize(self.text_size * 4)
-                ti.setFont(font)
-                ti.setPos(sp)
-                self.scene().addItem(ti)
-                self.active_text_item = ti
-                ti.setSelected(True)
-                ti.setEditable(True)
                 self._first_click_after_activation = False
             e.accept()
             return
@@ -1364,7 +1209,7 @@ class EditorView(QGraphicsView):
         self.layout_manager.update_all()
 
     # --------------------------------------------------------------
-    # Обработчики событий виджетов (остаются без изменений)
+    # Обработчики событий виджетов
     # --------------------------------------------------------------
     def _on_zoom_widget_changed(self, p):
         self.zoomChangedByWheel.emit(p)
@@ -1413,7 +1258,6 @@ class EditorView(QGraphicsView):
 
     def _update_cursor(self, pos):
         sp = self.mapToScene(pos)
-        # Проверяем попадание в маркеры выделенных вставленных изображений
         for item in self.pasted_images:
             if item.isSelected() and item.handles:
                 handle_id = item.handles.hit_test(pos)

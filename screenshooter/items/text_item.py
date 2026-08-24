@@ -2,7 +2,8 @@
 Модуль: items/text_item.py
 Описание: Текстовые элементы.
           TextItem — обычный текст с возможностью редактирования и фоновой подложкой.
-          DimensionTextItem — текст размерной линии, связанный с родительским DimensionItem.
+          DimensionTextItem — текст размерной линии (устаревший, не используется в новой логике,
+                               оставлен для совместимости).
 """
 
 from PyQt5.QtCore import Qt, QTimer
@@ -12,6 +13,12 @@ from ..constants import HIT_AREA_PADDING
 
 
 class TextItem(QGraphicsTextItem):
+    """
+    Текстовый элемент с возможностью редактирования.
+    Поддерживает фон (белый/чёрный/прозрачный).
+    При пустом тексте и потере фокуса удаляется автоматически.
+    """
+
     PADDING_LEFT, PADDING_TOP, PADDING_RIGHT, PADDING_BOTTOM = -16, 0, 16, 0
 
     def __init__(self, view, bg=None, *args, **kwargs):
@@ -26,6 +33,9 @@ class TextItem(QGraphicsTextItem):
         self.setTextInteractionFlags(Qt.NoTextInteraction)
 
     def setEditable(self, editable):
+        """
+        Включает/выключает режим редактирования текста.
+        """
         if editable == self._editable:
             return
         self._editable = editable
@@ -43,10 +53,12 @@ class TextItem(QGraphicsTextItem):
         super().mousePressEvent(event)
 
     def contextMenuEvent(self, event):
+        # Отключаем контекстное меню для простоты
         event.accept()
         return
 
     def keyPressEvent(self, event):
+        # Ctrl+Enter завершает редактирование
         if event.key() in (Qt.Key_Enter, Qt.Key_Return):
             if event.modifiers() & Qt.ControlModifier:
                 self.clearFocus()
@@ -57,9 +69,16 @@ class TextItem(QGraphicsTextItem):
         super().keyPressEvent(event)
 
     def focusOutEvent(self, event):
+        """
+        При потере фокуса:
+        - Если текст пустой — удаляем элемент.
+        - Если не пустой — завершаем редактирование и оставляем выделенным.
+        """
         cursor = self.textCursor()
         cursor.clearSelection()
         self.setTextCursor(cursor)
+
+        # Проверка на пустой текст
         if self.toPlainText().strip() == "":
             if not self._deleting:
                 self._deleting = True
@@ -71,6 +90,7 @@ class TextItem(QGraphicsTextItem):
         super().focusOutEvent(event)
 
     def _delete_self(self):
+        """Удаляет элемент со сцены и уведомляет view."""
         if self.scene():
             self.scene().removeItem(self)
         if self.view:
@@ -78,6 +98,9 @@ class TextItem(QGraphicsTextItem):
         self._deleting = False
 
     def paint(self, painter, option, widget):
+        """
+        Отрисовывает фон (если задан) и сам текст.
+        """
         if self.bg_color is not None:
             rect = self.boundingRect().adjusted(
                 self.PADDING_LEFT, self.PADDING_TOP, self.PADDING_RIGHT, self.PADDING_BOTTOM
@@ -90,6 +113,9 @@ class TextItem(QGraphicsTextItem):
         super().paint(painter, option, widget)
 
     def shape(self):
+        """
+        Расширяет область захвата для удобства выделения.
+        """
         path = QPainterPath()
         path.addRect(self.boundingRect().adjusted(
             -HIT_AREA_PADDING, -HIT_AREA_PADDING, HIT_AREA_PADDING, HIT_AREA_PADDING
@@ -98,11 +124,15 @@ class TextItem(QGraphicsTextItem):
 
 
 class DimensionTextItem(QGraphicsTextItem):
+    """
+    Устаревший класс для текста размерной линии.
+    Оставлен для обратной совместимости, но не используется в текущей логике.
+    """
     def __init__(self, parent_item, text, *args, **kwargs):
         super().__init__(text, *args, **kwargs)
         self.parent_dimension = parent_item
         self.setFlag(QGraphicsItem.ItemIsMovable, False)
-        self.setFlag(QGraphicsItem.ItemIsSelectable, True)   # Разрешаем выделение
+        self.setFlag(QGraphicsItem.ItemIsSelectable, True)
         self.setFlag(QGraphicsItem.ItemIsFocusable, True)
         self.setTextInteractionFlags(Qt.NoTextInteraction)
 
@@ -114,14 +144,11 @@ class DimensionTextItem(QGraphicsTextItem):
         self.setFocus(Qt.MouseFocusReason)
         if self.scene():
             self.scene().setFocusItem(self)
-
-        # Выделяем весь текст, чтобы сразу можно было вводить новое значение
         cursor = self.textCursor()
         cursor.select(cursor.Document)
         self.setTextCursor(cursor)
 
     def mousePressEvent(self, event):
-        # Одиночный клик по тексту запускает редактирование
         if event.button() == Qt.LeftButton and self.textInteractionFlags() == Qt.NoTextInteraction:
             self.begin_editing()
             event.accept()
@@ -139,7 +166,7 @@ class DimensionTextItem(QGraphicsTextItem):
         super().focusOutEvent(event)
         self.setTextInteractionFlags(Qt.NoTextInteraction)
         if self.parent_dimension:
-            self.parent_dimension.update_text_position()
+            self.parent_dimension.update_text_position(self)
 
     def keyPressEvent(self, event):
         if event.key() in (Qt.Key_Enter, Qt.Key_Return):
@@ -151,7 +178,7 @@ class DimensionTextItem(QGraphicsTextItem):
             cursor.insertText("\n")
             self.setTextCursor(cursor)
             if self.parent_dimension:
-                self.parent_dimension.update_text_position()
+                self.parent_dimension.update_text_position(self)
             event.accept()
             return
         super().keyPressEvent(event)

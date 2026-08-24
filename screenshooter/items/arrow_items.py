@@ -3,18 +3,17 @@
 Описание: Элементы стрелок.
           ArrowItem — прямая стрелка с наконечником.
           CurvedArrowItem — изогнутая стрелка (квадратичная кривая Безье).
-          DimensionItem — размерная линия с засечками и стрелками.
-          Все элементы поддерживают перемещение и выделение.
+          DimensionItem — размерная линия с засечками и стрелками (без текста).
 """
 
 import math
 from PyQt5.QtCore import Qt, QRectF, QPointF
 from PyQt5.QtGui import QPen, QColor, QPolygonF, QPainterPath, QPainterPathStroker
-from PyQt5.QtWidgets import (QGraphicsItem, QGraphicsPathItem, QGraphicsItemGroup,
-                             QGraphicsLineItem, QStyle)
+from PyQt5.QtWidgets import QGraphicsItem, QGraphicsPathItem, QStyle
 from ..constants import HIT_AREA_PADDING
 
 
+# ==================== ArrowItem ====================
 class ArrowItem(QGraphicsItem):
     """Прямая стрелка с наконечником."""
 
@@ -48,6 +47,10 @@ class ArrowItem(QGraphicsItem):
         self._brush = QColor(pen.color())
         self._update_geometry()
         self.update()
+
+    def pen(self):
+        """Возвращает текущее перо."""
+        return self._pen
 
     def _update_geometry(self):
         start, end = self._start, self._end
@@ -117,6 +120,7 @@ class ArrowItem(QGraphicsItem):
             painter.drawRect(self.boundingRect().adjusted(2, 2, -2, -2))
 
 
+# ==================== CurvedArrowItem ====================
 class CurvedArrowItem(QGraphicsPathItem):
     """Изогнутая стрелка (квадратичная кривая Безье)."""
 
@@ -145,6 +149,10 @@ class CurvedArrowItem(QGraphicsPathItem):
     def setPen(self, pen):
         self._pen = QPen(pen)
         super().setPen(pen)
+
+    def pen(self):
+        """Возвращает текущее перо."""
+        return self._pen
 
     def paint(self, painter, option, widget):
         super().paint(painter, option, widget)
@@ -185,111 +193,118 @@ class CurvedArrowItem(QGraphicsPathItem):
         return math.hypot(self._end.x() - self._start.x(), self._end.y() - self._start.y()) < 1
 
 
-class DimensionItem(QGraphicsItemGroup):
-    """Размерная линия (без текста)."""
+# ==================== DimensionItem (исправленный с коэффициентом зазора) ====================
+class DimensionItem(QGraphicsItem):
+    """
+    Размерная линия с засечками и стрелками.
+    Текст создаётся отдельно и не входит в состав.
+    Засечка симметрична относительно линии, центр смещён на величину,
+    пропорциональную толщине пера (pen_width * TICK_GAP_FACTOR).
+    """
+
+    # ------ НАСТРАИВАЕМЫЕ ПАРАМЕТРЫ ЗАСЕЧЕК ------
+    TICK_LENGTH_FACTOR = 1.2   # длина засечки = arrow_size * TICK_LENGTH_FACTOR
+    TICK_GAP_FACTOR = -0.5     # зазор = pen_width * TICK_GAP_FACTOR (отрицательное значение смещает засечку внутрь)
+    # ----------------------------------------------
 
     def __init__(self, start, end, pen, text_color=None):
         super().__init__()
         self._start = start
         self._end = end
         self._pen = QPen(pen)
-        self._text_color = text_color
-        self._rotation = 0
-        self.build_items(start, end)
+        self.setFlags(QGraphicsItem.ItemIsMovable | QGraphicsItem.ItemIsSelectable)
+        self.setZValue(10)
 
-    def build_items(self, start, end):
+    def setRect(self, start, end):
         self.prepareGeometryChange()
-        for child in self.childItems():
-            self.removeFromGroup(child)
+        self._start = start
+        self._end = end
+        self.update()
+
+    def setPen(self, pen):
+        self._pen = QPen(pen)
+        self.update()
+
+    def pen(self):
+        """Возвращает текущее перо."""
+        return self._pen
+
+    def boundingRect(self):
+        start = self._start
+        end = self._end
+        if start == end:
+            return QRectF(start, QPointF(1, 1))
+        margin = max(30, self._pen.widthF() * 5 + 20)
+        return QRectF(start, end).normalized().adjusted(-margin, -margin, margin, margin)
+
+    def shape(self):
+        path = QPainterPath()
+        path.addRect(self.boundingRect().adjusted(-HIT_AREA_PADDING, -HIT_AREA_PADDING,
+                                                  HIT_AREA_PADDING, HIT_AREA_PADDING))
+        return path
+
+    def paint(self, painter, option, widget):
+        start = self._start
+        end = self._end
         dx = end.x() - start.x()
         dy = end.y() - start.y()
         length = math.hypot(dx, dy)
         if length == 0:
             return
         angle = math.atan2(dy, dx)
-        self._rotation = math.degrees(angle)
 
-        pen = QPen(QColor(160, 0, 0), self._pen.widthF())
-        pen.setCapStyle(Qt.RoundCap)
-        pen.setJoinStyle(Qt.RoundJoin)
-
-        # Основная линия
-        line = QGraphicsLineItem(start.x(), start.y(), end.x(), end.y())
-        line.setPen(pen)
-        self.addToGroup(line)
-        line.setFlag(QGraphicsItem.ItemIsMovable, False)
-        line.setFlag(QGraphicsItem.ItemIsSelectable, False)
-
-        asz = max(8, 8 + self._pen.widthF() * 3)
+        pen_width = self._pen.widthF()
+        arrow_size = max(8, 8 + pen_width * 3)
         ar = math.radians(20)
 
-        # Стрелка в конце
-        p1 = end
-        p2 = end - QPointF(asz * math.cos(angle - ar), asz * math.sin(angle - ar))
-        p3 = end - QPointF(asz * math.cos(angle + ar), asz * math.sin(angle + ar))
-        hp = QPainterPath()
-        hp.moveTo(p2)
-        hp.lineTo(p1)
-        hp.lineTo(p3)
-        hp.closeSubpath()
-        h1 = QGraphicsPathItem(hp)
-        h1.setPen(QPen(QColor(160, 0, 0), 1))
-        h1.setBrush(QColor(160, 0, 0))
-        self.addToGroup(h1)
-        h1.setFlag(QGraphicsItem.ItemIsMovable, False)
-        h1.setFlag(QGraphicsItem.ItemIsSelectable, False)
+        # ----- Единичные векторы -----
+        e = QPointF(math.cos(angle), math.sin(angle))   # вдоль линии
+        perp = QPointF(-math.sin(angle), math.cos(angle))  # перпендикуляр (поворот на 90°)
 
-        # Стрелка в начале
-        p1 = start
-        p2 = start + QPointF(asz * math.cos(angle - ar), asz * math.sin(angle - ar))
-        p3 = start + QPointF(asz * math.cos(angle + ar), asz * math.sin(angle + ar))
-        hp2 = QPainterPath()
-        hp2.moveTo(p2)
-        hp2.lineTo(p1)
-        hp2.lineTo(p3)
-        hp2.closeSubpath()
-        h2 = QGraphicsPathItem(hp2)
-        h2.setPen(QPen(QColor(160, 0, 0), 1))
-        h2.setBrush(QColor(160, 0, 0))
-        self.addToGroup(h2)
-        h2.setFlag(QGraphicsItem.ItemIsMovable, False)
-        h2.setFlag(QGraphicsItem.ItemIsSelectable, False)
+        # ----- 1. Расчёт точек стрелок -----
+        back_offset = arrow_size * math.cos(ar)
+        base_end = end - e * back_offset
+        p2_end = end - QPointF(arrow_size * math.cos(angle - ar), arrow_size * math.sin(angle - ar))
+        p3_end = end - QPointF(arrow_size * math.cos(angle + ar), arrow_size * math.sin(angle + ar))
 
-        # Засечки
-        perp = angle + math.pi / 2
-        plen = asz * 0.9
-        su = start + QPointF(plen * 0.3 * math.cos(perp), plen * 0.3 * math.sin(perp))
-        sd = start - QPointF(plen * 0.5 * math.cos(perp), plen * 0.5 * math.sin(perp))
-        t1 = QGraphicsLineItem(su.x(), su.y(), sd.x(), sd.y())
-        t1.setPen(pen)
-        self.addToGroup(t1)
-        t1.setFlag(QGraphicsItem.ItemIsMovable, False)
-        t1.setFlag(QGraphicsItem.ItemIsSelectable, False)
+        base_start = start + e * back_offset
+        p2_start = start + QPointF(arrow_size * math.cos(angle - ar), arrow_size * math.sin(angle - ar))
+        p3_start = start + QPointF(arrow_size * math.cos(angle + ar), arrow_size * math.sin(angle + ar))
 
-        eu = end + QPointF(plen * 0.3 * math.cos(perp), plen * 0.3 * math.sin(perp))
-        ed = end - QPointF(plen * 0.5 * math.cos(perp), plen * 0.5 * math.sin(perp))
-        t2 = QGraphicsLineItem(eu.x(), eu.y(), ed.x(), ed.y())
-        t2.setPen(pen)
-        self.addToGroup(t2)
-        t2.setFlag(QGraphicsItem.ItemIsMovable, False)
-        t2.setFlag(QGraphicsItem.ItemIsSelectable, False)
+        # ----- 2. Основная линия (от основания до основания) -----
+        pen = QPen(QColor(160, 0, 0), pen_width)
+        pen.setCapStyle(Qt.RoundCap)
+        pen.setJoinStyle(Qt.RoundJoin)
+        painter.setPen(pen)
+        painter.drawLine(base_start, base_end)
 
-        self.setFlags(QGraphicsItem.ItemIsMovable | QGraphicsItem.ItemIsSelectable)
+        # ----- 3. Засечки (симметричные, с зазором, пропорциональным толщине) -----
+        tick_length = arrow_size * self.TICK_LENGTH_FACTOR
+        half_tick = tick_length / 2.0
+        tick_gap = pen_width * self.TICK_GAP_FACTOR   # зазор зависит от толщины
 
-    def setPen(self, pen):
-        self._pen = pen
-        self.build_items(self._start, self._end)
+        # Засечка у начала
+        tick_center_start = start + e * tick_gap
+        tick_start1 = tick_center_start - perp * half_tick
+        tick_end1 = tick_center_start + perp * half_tick
+        painter.setPen(QPen(QColor(160, 0, 0), pen_width))
+        painter.drawLine(tick_start1, tick_end1)
 
-    def setRect(self, start, end):
-        self._start = start
-        self._end = end
-        self.build_items(start, end)
+        # Засечка у конца
+        tick_center_end = end - e * tick_gap
+        tick_start2 = tick_center_end - perp * half_tick
+        tick_end2 = tick_center_end + perp * half_tick
+        painter.drawLine(tick_start2, tick_end2)
 
-    def boundingRect(self):
-        return self.childrenBoundingRect()
+        # ----- 4. Заливка стрелок -----
+        painter.setBrush(QColor(160, 0, 0))
+        painter.setPen(QPen(QColor(160, 0, 0), 1))
+        painter.drawPolygon(QPolygonF([p2_end, end, p3_end]))
+        painter.drawPolygon(QPolygonF([p2_start, start, p3_start]))
 
-    def shape(self):
-        path = QPainterPath()
-        for child in self.childItems():
-            path.addPath(child.shape())
-        return path
+        # ----- 5. Рамка выделения -----
+        if option.state & QStyle.State_Selected:
+            pen = QPen(QColor(0, 120, 215), 1, Qt.DashLine)
+            painter.setPen(pen)
+            painter.setBrush(Qt.NoBrush)
+            painter.drawRect(self.boundingRect().adjusted(2, 2, -2, -2))

@@ -11,7 +11,7 @@ import sys
 import os
 import time
 import keyboard
-from PyQt5 import sip
+from PyQt5 import sip  # <-- ДОБАВЛЕНО
 from PyQt5.QtCore import Qt, QRectF, QSize, QTimer, pyqtSignal, QDir, QSettings
 from PyQt5.QtGui import QPixmap, QPainter, QImage, QColor, QIcon, QKeySequence
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
@@ -514,6 +514,9 @@ class ScreenshotApp(QMainWindow):
             self.view.show_status_message("Не удалось сохранить файл.", 15000)
 
     def _on_scene_selection_changed(self):
+        # Защита от обращения к удалённой сцене
+        if sip.isdeleted(self.scene):
+            return
         self.view.update_text_format_widget_visibility()
         sel = self.scene.selectedItems()
         if not sel:
@@ -581,6 +584,11 @@ class ScreenshotApp(QMainWindow):
             self._ctrl_printscreen_hotkey = None
 
     def closeEvent(self, e):
+        # Отключаем сигналы сцены перед закрытием
+        try:
+            self.scene.selectionChanged.disconnect(self._on_scene_selection_changed)
+        except (TypeError, RuntimeError):
+            pass
         try:
             self._remove_keyboard_hooks()
         except Exception:
