@@ -1,4 +1,9 @@
-"""Оверлей для выделения области (Alt+PrintScreen)."""
+"""
+Модуль: capture/region_overlay.py
+Описание: Оверлей для выделения прямоугольной области экрана (Ctrl+PrintScreen).
+          Позволяет нарисовать рамку, отображает координаты и размер выделения.
+          После отпускания кнопки мыши захватывает область.
+"""
 
 from PyQt5.QtCore import Qt, QRect, QPoint, pyqtSignal
 from PyQt5.QtGui import QPainter, QPen, QColor, QFont

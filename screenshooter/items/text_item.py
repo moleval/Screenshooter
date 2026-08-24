@@ -1,4 +1,9 @@
-"""Текстовые элементы: обычный текст и текст размерной линии."""
+"""
+Модуль: items/text_item.py
+Описание: Текстовые элементы.
+          TextItem — обычный текст с возможностью редактирования и фоновой подложкой.
+          DimensionTextItem — текст размерной линии, связанный с родительским DimensionItem.
+"""
 
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QPainter, QPen, QColor, QPainterPath

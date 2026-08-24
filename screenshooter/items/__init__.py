@@ -1,4 +1,9 @@
-"""Графические элементы аннотаций."""
+"""
+Модуль: items/__init__.py
+Описание: Пакет графических элементов аннотаций.
+          Реэкспортирует классы текстовых элементов, фигур, линий и стрелок
+          для удобного импорта.
+"""
 
 from .text_item import TextItem, DimensionTextItem
 from .shape_items import RectangleItem, EllipseItem, FilledRectItem, CloudItem

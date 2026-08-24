@@ -1,4 +1,9 @@
-"""Оверлей для выбора монитора (PrintScreen)."""
+"""
+Модуль: capture/screen_overlay.py
+Описание: Оверлей для выбора монитора при захвате (PrintScreen).
+          Показывает номера экранов при мультимониторной конфигурации.
+          При клике на экран скрывает оверлей и делает скриншот выбранного монитора.
+"""
 
 from PyQt5.QtCore import Qt, QRect, pyqtSignal
 from PyQt5.QtGui import (QPainter, QPen, QColor, QFont, QGuiApplication,

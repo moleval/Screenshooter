@@ -1,4 +1,9 @@
-"""Функции обработки изображений (обрезка, поворот, размытие)."""
+"""
+Модуль: image_processing/__init__.py
+Описание: Функции обработки изображений.
+          Реализует обрезку (crop_pixmap), поворот (rotate_pixmap) и
+          размытие прямоугольной области (blur_region) для QPixmap.
+"""
 
 from PyQt5.QtCore import Qt, QRectF, QRect
 from PyQt5.QtGui import QPixmap, QImage, QPainter, QTransform

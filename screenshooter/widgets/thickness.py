@@ -1,4 +1,10 @@
-"""Виджеты управления толщиной линии."""
+"""
+Модуль: widgets/thickness.py
+Описание: Виджеты управления толщиной линии.
+          Содержит ThicknessSlider с поддержкой правого клика/двойного клика
+          для ввода произвольного значения, и ThicknessWidget с пресетами,
+          слайдером и полем ввода.
+"""
 
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QPushButton, QSlider, QLineEdit,

@@ -1,4 +1,8 @@
-"""Плавающий информационный виджет (цвет, толщина)."""
+"""
+Модуль: widgets/info_widget.py
+Описание: Плавающий информационный виджет.
+          Отображает текущий цвет (круглый индикатор) и толщину линии (например, "x2").
+"""
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QFrame, QHBoxLayout, QLabel, QSizePolicy

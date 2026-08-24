@@ -1,4 +1,9 @@
-"""Виджет палитры цветов."""
+"""
+Модуль: widgets/color_palette.py
+Описание: Виджет палитры цветов.
+          Предоставляет 11 предустановленных цветов и кнопку для выбора
+          произвольного цвета через диалог QColorDialog.
+"""
 
 from PyQt5.QtCore import Qt, pyqtSignal, QSize
 from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QPushButton, QColorDialog,

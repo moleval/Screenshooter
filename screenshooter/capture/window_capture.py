@@ -1,4 +1,9 @@
-"""Захват активного окна (Ctrl+PrintScreen)."""
+"""
+Модуль: capture/window_capture.py
+Описание: Захват активного окна (Alt+PrintScreen) через win32gui.
+          Определяет клиентскую область окна и вырезает её из виртуального
+          скриншота.
+"""
 
 import win32gui
 import win32con

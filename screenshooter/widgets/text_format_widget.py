@@ -1,4 +1,8 @@
-"""Тулбар выбора фона текста."""
+"""
+Модуль: widgets/text_format_widget.py
+Описание: Плавающий тулбар выбора фона текста.
+          Позволяет переключать фон текста: белый, чёрный или без фона.
+"""
 
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import QFrame, QHBoxLayout, QPushButton, QButtonGroup

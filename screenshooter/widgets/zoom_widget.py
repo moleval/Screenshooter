@@ -1,4 +1,9 @@
-"""Виджет управления масштабом."""
+"""
+Модуль: widgets/zoom_widget.py
+Описание: Виджет управления масштабом.
+          Содержит кнопки вписать, увеличения/уменьшения, слайдер и поле ввода
+          процента масштабирования. Поддерживает колесо мыши для изменения масштаба.
+"""
 
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import QWidget, QHBoxLayout, QPushButton, QSlider

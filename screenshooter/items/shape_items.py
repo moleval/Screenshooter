@@ -1,4 +1,11 @@
-"""Прямоугольник, эллипс, заливка, облако."""
+"""
+Модуль: items/shape_items.py
+Описание: Элементы фигур.
+          RectangleItem — прямоугольник.
+          EllipseItem — эллипс.
+          FilledRectItem — прямоугольник с полупрозрачной заливкой.
+          CloudItem — пометочное облако (замкнутый волнистый контур).
+"""
 
 from PyQt5.QtCore import Qt, QRectF
 from PyQt5.QtGui import QPen, QColor, QPainterPath, QPainterPathStroker
