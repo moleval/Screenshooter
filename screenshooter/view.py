@@ -5,6 +5,8 @@
           взаимодействие с зонами размытия, вставленными изображениями,
           а также управление масштабом и плавающими виджетами.
           Подключён к истории undo/redo.
+          После рефакторинга (Шаг 1) позиционирование плавающих виджетов
+          делегируется LayoutManager.
 """
 
 import math
@@ -31,6 +33,7 @@ from .history import (HistoryManager, AddItemCommand, RemoveItemCommand,
 from .image_edit_controller import ImageEditController
 from .pasted_image_item import PastedImageItem
 from .blur_region_item import BlurRegionItem
+from .ui.layout_manager import LayoutManager
 
 
 class EditorView(QGraphicsView):
@@ -89,40 +92,33 @@ class EditorView(QGraphicsView):
         self.history = HistoryManager()
         self.image_editor = ImageEditController(self)
 
+        # --- Создаём ВСЕ виджеты ДО LayoutManager ---
         self.zoom_widget = ZoomWidget(self)
         self.zoom_widget.zoomChanged.connect(self._on_zoom_widget_changed)
         self.zoom_widget.fitRequested.connect(self._fit_to_view)
-        self._update_zoom_widget_position()
 
         self.text_format_widget = TextFormatWidget(self)
         self.text_format_widget.bgChanged.connect(self._on_text_bg_changed)
         self.text_format_widget.setVisible(False)
-        self._update_text_format_widget_position()
 
         self.shape_mode_widget = ShapeModeWidget(self)
         self.shape_mode_widget.modeChanged.connect(self._on_shape_mode_changed)
         self.shape_mode_widget.setVisible(False)
-        self._update_shape_mode_widget_position()
 
         self.ellipse_mode_widget = ShapeModeWidgetEllipse(self)
         self.ellipse_mode_widget.modeChanged.connect(self._on_ellipse_mode_changed)
         self.ellipse_mode_widget.setVisible(False)
-        self._update_ellipse_mode_widget_position()
 
         self.arrow_mode_widget = ShapeModeWidgetArrow(self)
         self.arrow_mode_widget.modeChanged.connect(self._on_arrow_mode_changed)
         self.arrow_mode_widget.setVisible(False)
-        self._update_arrow_mode_widget_position()
 
         self.line_mode_widget = LineModeWidget(self)
         self.line_mode_widget.modeChanged.connect(self._on_line_mode_changed)
         self.line_mode_widget.setVisible(False)
-        self._update_line_mode_widget_position()
 
         self.info_widget = InfoWidget(self)
         self.info_widget.setVisible(True)
-        self._update_info_widget_content(self.current_pen_color, self.pen_width)
-        self._update_info_widget_position()
 
         self.status_label = QLabel(self)
         self.status_label.setAttribute(Qt.WA_TranslucentBackground)
@@ -139,8 +135,14 @@ class EditorView(QGraphicsView):
         self._status_timer.timeout.connect(self._restore_status_label)
 
         self._resolution_text = ""
-        self._update_status_label_position()
 
+        # --- Теперь создаём LayoutManager (все виджеты уже есть) ---
+        self.layout_manager = LayoutManager(self)
+
+        # --- Теперь можно вызывать методы, использующие layout_manager ---
+        self._update_info_widget_content(self.current_pen_color, self.pen_width)
+
+        # --- Устанавливаем курсоры для виджетов ---
         for w in (self.zoom_widget, self.text_format_widget, self.shape_mode_widget,
                   self.ellipse_mode_widget, self.arrow_mode_widget, self.line_mode_widget,
                   self.info_widget, self.status_label):
@@ -182,7 +184,7 @@ class EditorView(QGraphicsView):
             self.setSceneRect(QRectF(self.image_editor.background_item.pixmap().rect()))
             self.update_resolution_from_background()
         self._update_floating_widgets_visibility()
-        self._update_pasted_image_handles()  # <-- ДОБАВЛЕНО
+        self._update_pasted_image_handles()
 
     def update_resolution_from_background(self):
         if (self.image_editor.background_item and
@@ -337,13 +339,13 @@ class EditorView(QGraphicsView):
         self.status_label.setText(text)
         self.status_label.setToolTip(text if text else "")
         self.status_label.setVisible(bool(text))
-        self._update_status_label_position()
+        self.layout_manager.update_status_label_position()
 
     def show_status_message(self, message, duration=15000):
         self.status_label.setText(message)
         self.status_label.setToolTip(message)
         self.status_label.setVisible(True)
-        self._update_status_label_position()
+        self.layout_manager.update_status_label_position()
         self._status_timer.start(duration)
 
     def _restore_status_label(self):
@@ -351,21 +353,6 @@ class EditorView(QGraphicsView):
             self.status_label.setText(self._resolution_text)
         else:
             self.status_label.setVisible(False)
-
-    def _update_status_label_position(self):
-        if not hasattr(self, 'status_label'):
-            return
-        vp = self.viewport()
-        if not vp:
-            return
-        max_width = vp.width() - 8
-        self.status_label.setMaximumWidth(max_width)
-        self.status_label.adjustSize()
-        sh = self.horizontalScrollBar().height() if self.horizontalScrollBar().isVisible() else 0
-        x = 4
-        y = vp.height() - self.status_label.sizeHint().height() - sh - 4
-        self.status_label.move(x, y)
-        self.status_label.raise_()
 
     # --------------------------------------------------------------
     # Обработчики мыши
@@ -1282,14 +1269,7 @@ class EditorView(QGraphicsView):
 
     def resizeEvent(self, e):
         super().resizeEvent(e)
-        self._update_zoom_widget_position()
-        self._update_text_format_widget_position()
-        self._update_shape_mode_widget_position()
-        self._update_ellipse_mode_widget_position()
-        self._update_arrow_mode_widget_position()
-        self._update_line_mode_widget_position()
-        self._update_info_widget_position()
-        self._update_status_label_position()
+        self.layout_manager.update_all()
         if self.auto_fit:
             bg = self.image_editor.background_item
             if bg is not None and not sip.isdeleted(bg) and bg.scene() is self.scene():
@@ -1297,21 +1277,14 @@ class EditorView(QGraphicsView):
 
     def showEvent(self, e):
         super().showEvent(e)
-        QTimer.singleShot(0, self._update_zoom_widget_position)
-        QTimer.singleShot(0, self._update_text_format_widget_position)
-        QTimer.singleShot(0, self._update_shape_mode_widget_position)
-        QTimer.singleShot(0, self._update_ellipse_mode_widget_position)
-        QTimer.singleShot(0, self._update_arrow_mode_widget_position)
-        QTimer.singleShot(0, self._update_line_mode_widget_position)
-        QTimer.singleShot(0, self._update_info_widget_position)
-        QTimer.singleShot(0, self._update_status_label_position)
+        QTimer.singleShot(0, self.layout_manager.update_all)
 
     # --------------------------------------------------------------
-    # Вспомогательные методы
+    # Вспомогательные методы (позиционирование виджетов вынесено в LayoutManager)
     # --------------------------------------------------------------
     def _update_info_widget_content(self, color, thickness):
         self.info_widget.set_info(color, thickness)
-        QTimer.singleShot(0, self._update_info_widget_position)
+        QTimer.singleShot(0, self.layout_manager.update_info_widget_position)
 
     def _sync_selection_properties(self):
         sel = self.scene().selectedItems()
@@ -1355,16 +1328,17 @@ class EditorView(QGraphicsView):
         self.text_format_widget.setVisible(False)
 
         if self.image_editor.crop_mode or self.image_editor.blur_mode:
+            self.layout_manager.update_all()
             return
 
         if self.active_text_item is not None:
             self.text_format_widget.setVisible(True)
-            self._update_text_format_widget_position()
+            self.layout_manager.update_all()
             return
 
         if self.current_tool == 'text':
             self.text_format_widget.setVisible(True)
-            self._update_text_format_widget_position()
+            self.layout_manager.update_all()
             return
 
         selected = self.scene().selectedItems()
@@ -1372,8 +1346,9 @@ class EditorView(QGraphicsView):
             all_text = all(isinstance(item, TextItem) for item in selected)
             if all_text:
                 self.text_format_widget.setVisible(True)
-                self._update_text_format_widget_position()
+                self.layout_manager.update_all()
                 return
+            self.layout_manager.update_all()
             return
 
         if self.current_tool == 'rect':
@@ -1386,132 +1361,11 @@ class EditorView(QGraphicsView):
             self.line_mode_widget.setVisible(True)
 
         self._update_pasted_image_handles()
+        self.layout_manager.update_all()
 
-    def _update_info_widget_position(self):
-        if not self.info_widget:
-            return
-        vp = self.viewport()
-        if not vp:
-            return
-        vw, vh = vp.width(), vp.height()
-        sw = self.verticalScrollBar().width() if self.verticalScrollBar().isVisible() else 0
-        sh = self.horizontalScrollBar().height() if self.horizontalScrollBar().isVisible() else 0
-        iw = self.info_widget
-        zw = self.zoom_widget
-
-        percent_edit = zw.percent_edit
-        zoom_right = zw.x() + percent_edit.x() + percent_edit.width()
-        zy = zw.y()
-
-        x = zoom_right - iw.width()
-        y = zy - iw.height() - 4
-        x = max(0, x)
-        y = max(0, y)
-        iw.move(x, y)
-        iw.raise_()
-
-    def _update_zoom_widget_position(self):
-        if not self.zoom_widget:
-            return
-        vp = self.viewport()
-        if not vp:
-            return
-        vw, vh = vp.width(), vp.height()
-        sw = self.verticalScrollBar().width() if self.verticalScrollBar().isVisible() else 0
-        sh = self.horizontalScrollBar().height() if self.horizontalScrollBar().isVisible() else 0
-        zw = self.zoom_widget
-        x = vw - zw.width() - sw - 4
-        y = vh - zw.height() - sh - 4
-        x = max(0, x)
-        y = max(0, y)
-        zw.move(x, y)
-        zw.raise_()
-
-    def _update_text_format_widget_position(self):
-        if not self.text_format_widget:
-            return
-        vp = self.viewport()
-        if not vp:
-            return
-        vw, vh = vp.width(), vp.height()
-        sw = self.verticalScrollBar().width() if self.verticalScrollBar().isVisible() else 0
-        sh = self.horizontalScrollBar().height() if self.horizontalScrollBar().isVisible() else 0
-        tfw = self.text_format_widget
-        x = vw - tfw.width() - sw - self.TEXT_FORMAT_RIGHT_OFFSET
-        y = self.TEXT_FORMAT_TOP_OFFSET
-        x = max(0, x)
-        y = max(0, y)
-        tfw.move(x, y)
-        tfw.raise_()
-
-    def _update_shape_mode_widget_position(self):
-        if not self.shape_mode_widget:
-            return
-        vp = self.viewport()
-        if not vp:
-            return
-        vw, vh = vp.width(), vp.height()
-        sw = self.verticalScrollBar().width() if self.verticalScrollBar().isVisible() else 0
-        sh = self.horizontalScrollBar().height() if self.horizontalScrollBar().isVisible() else 0
-        smw = self.shape_mode_widget
-        x = vw - smw.width() - sw - self.TEXT_FORMAT_RIGHT_OFFSET
-        y = self.TEXT_FORMAT_TOP_OFFSET
-        x = max(0, x)
-        y = max(0, y)
-        smw.move(x, y)
-        smw.raise_()
-
-    def _update_ellipse_mode_widget_position(self):
-        if not self.ellipse_mode_widget:
-            return
-        vp = self.viewport()
-        if not vp:
-            return
-        vw, vh = vp.width(), vp.height()
-        sw = self.verticalScrollBar().width() if self.verticalScrollBar().isVisible() else 0
-        sh = self.horizontalScrollBar().height() if self.horizontalScrollBar().isVisible() else 0
-        emw = self.ellipse_mode_widget
-        x = vw - emw.width() - sw - self.TEXT_FORMAT_RIGHT_OFFSET
-        y = self.TEXT_FORMAT_TOP_OFFSET
-        x = max(0, x)
-        y = max(0, y)
-        emw.move(x, y)
-        emw.raise_()
-
-    def _update_arrow_mode_widget_position(self):
-        if not self.arrow_mode_widget:
-            return
-        vp = self.viewport()
-        if not vp:
-            return
-        vw, vh = vp.width(), vp.height()
-        sw = self.verticalScrollBar().width() if self.verticalScrollBar().isVisible() else 0
-        sh = self.horizontalScrollBar().height() if self.horizontalScrollBar().isVisible() else 0
-        amw = self.arrow_mode_widget
-        x = vw - amw.width() - sw - self.TEXT_FORMAT_RIGHT_OFFSET
-        y = self.TEXT_FORMAT_TOP_OFFSET
-        x = max(0, x)
-        y = max(0, y)
-        amw.move(x, y)
-        amw.raise_()
-
-    def _update_line_mode_widget_position(self):
-        if not self.line_mode_widget:
-            return
-        vp = self.viewport()
-        if not vp:
-            return
-        vw, vh = vp.width(), vp.height()
-        sw = self.verticalScrollBar().width() if self.verticalScrollBar().isVisible() else 0
-        sh = self.horizontalScrollBar().height() if self.horizontalScrollBar().isVisible() else 0
-        lmw = self.line_mode_widget
-        x = vw - lmw.width() - sw - self.TEXT_FORMAT_RIGHT_OFFSET
-        y = self.TEXT_FORMAT_TOP_OFFSET
-        x = max(0, x)
-        y = max(0, y)
-        lmw.move(x, y)
-        lmw.raise_()
-
+    # --------------------------------------------------------------
+    # Обработчики событий виджетов (остаются без изменений)
+    # --------------------------------------------------------------
     def _on_zoom_widget_changed(self, p):
         self.zoomChangedByWheel.emit(p)
 
