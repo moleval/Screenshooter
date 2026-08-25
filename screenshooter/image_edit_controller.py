@@ -7,7 +7,7 @@
 """
 
 from PyQt5 import sip
-from PyQt5.QtCore import Qt, QRectF, QPointF
+from PyQt5.QtCore import Qt, QRectF, QPointF, QTimer
 from PyQt5.QtGui import QPen, QColor, QBrush, QImage, QPainter, QPixmap
 from PyQt5.QtWidgets import QGraphicsRectItem
 
@@ -17,9 +17,9 @@ from .history import (CropCommand, RotateCommand, BlurCommand,
                       MoveBlurRegionCommand, ResizeBlurRegionCommand,
                       CropPastedImageCommand, RotatePastedImageCommand)
 from .image_processing import crop_pixmap, rotate_pixmap, blur_region
-from .crop_handles import CropHandles
-from .blur_region_item import BlurRegionItem
-from .pasted_image_item import PastedImageItem
+from .items.crop_handles import CropHandles
+from .items.pasted_image_item import PastedImageItem
+from .items.blur_region_item import BlurRegionItem
 
 
 class ImageEditController:
@@ -31,9 +31,8 @@ class ImageEditController:
     def __init__(self, view):
         self.view = view
 
-        # Обрезка
         self.background_item = None
-        self.crop_target_item = None  # может быть фоновым или вставленным изображением
+        self.crop_target_item = None
         self.crop_mode = False
         self.blur_mode = False
         self.crop_rect_item = None
@@ -43,21 +42,24 @@ class ImageEditController:
         self.handles = None
         self.active_handle = None
 
-        # Размытие
         self.blur_base_pixmap = None
-        self.blur_regions = []                  # список QRectF
-        self.blur_region_items = []             # список BlurRegionItem (постоянные объекты)
+        self.blur_regions = []
+        self.blur_region_items = []
         self.active_blur_index = None
-        self.blur_interaction = None            # 'drawing', 'moving', 'resizing', None
+        self.blur_interaction = None
         self.blur_temp_item = None
         self.blur_start_point = None
         self.blur_move_start = None
         self.blur_resize_handle = None
         self.blur_old_rect = None
 
-        # Для работы вне режима размытия (когда инструмент неактивен)
         self.blur_outside_mode = False
-        self.blur_outside_interaction = None    # 'moving' или 'resizing'
+        self.blur_outside_interaction = None
+
+        # Таймер троттлинга перерисовки размытия при перетаскивании
+        self._blur_recompute_timer = QTimer()
+        self._blur_recompute_timer.setInterval(50)
+        self._blur_recompute_timer.timeout.connect(self._recompute_blurred_pixmap)
 
     # --------------------------------------------------------------
     # Установка фонового элемента и сброс
@@ -103,11 +105,9 @@ class ImageEditController:
     # Внутренние методы размытия
     # --------------------------------------------------------------
     def _clear_all_blur_regions(self):
-        """Полная очистка зон размытия (используется при новом скриншоте)."""
         for item in self.blur_region_items:
             if not self._is_deleted(item):
                 item.remove()
-        # Удаляем возможные осиротевшие элементы BlurRegionItem
         for it in self.view.scene().items():
             if isinstance(it, BlurRegionItem):
                 it.remove()
@@ -119,13 +119,12 @@ class ImageEditController:
         self.blur_base_pixmap = None
         self.blur_outside_mode = False
         self.blur_outside_interaction = None
+        self._blur_recompute_timer.stop()
 
     def _clear_blur_regions(self):
-        """Удаляет все зоны размытия (используется при обрезке и повороте)."""
         self._clear_all_blur_regions()
 
     def _get_blur_state(self):
-        """Возвращает состояние зон размытия для сохранения в команде."""
         return {
             'rects': [QRectF(r) for r in self.blur_regions],
             'base_pixmap': self.blur_base_pixmap.copy() if self.blur_base_pixmap else None,
@@ -133,7 +132,6 @@ class ImageEditController:
         }
 
     def _restore_blur_state(self, state):
-        """Восстанавливает зоны размытия из сохранённого состояния."""
         self._clear_all_blur_regions()
         self.blur_regions = state['rects']
         self.blur_base_pixmap = state['base_pixmap']
@@ -143,22 +141,15 @@ class ImageEditController:
             item = BlurRegionItem(rect, self.view, mode='inactive')
             self.view.scene().addItem(item)
             self.blur_region_items.append(item)
-        # Удаляем возможные осиротевшие элементы
         for it in self.view.scene().items():
             if isinstance(it, BlurRegionItem) and it not in self.blur_region_items:
                 it.remove()
 
     def _apply_crop_to_blur_regions(self, crop_rect: QRectF):
-        """
-        Обрезает существующие зоны размытия: оставляет только части,
-        попадающие в crop_rect, и сдвигает их в новое начало координат.
-        """
         if self.blur_base_pixmap is not None:
             self.blur_base_pixmap = crop_pixmap(self.blur_base_pixmap, crop_rect)
 
         new_regions = []
-        new_items = []
-
         for item in self.blur_region_items:
             if not self._is_deleted(item):
                 item.remove()
@@ -197,7 +188,6 @@ class ImageEditController:
             if self.blur_region_items:
                 item = self.blur_region_items.pop()
                 item.remove()
-            # Страховка: удаляем все BlurRegionItem, не входящие в список
             for it in self.view.scene().items():
                 if isinstance(it, BlurRegionItem) and it not in self.blur_region_items:
                     it.remove()
@@ -214,7 +204,6 @@ class ImageEditController:
                     self.active_blur_index = None
                 elif self.active_blur_index > index:
                     self.active_blur_index -= 1
-            # Страховка: удаляем возможные осиротевшие элементы
             for it in self.view.scene().items():
                 if isinstance(it, BlurRegionItem) and it not in self.blur_region_items:
                     it.remove()
@@ -235,7 +224,8 @@ class ImageEditController:
             item = self.blur_region_items[index]
             item.update_rect(rect)
             if self.active_blur_index == index and item.mode == 'active':
-                item.handles.update_handles(rect)
+                if item.handles:
+                    item.handles.update_handles(rect)
             self._recompute_blurred_pixmap()
 
     def _recompute_blurred_pixmap(self):
@@ -246,6 +236,16 @@ class ImageEditController:
             pixmap = blur_region(pixmap, rect, radius=10.0)
         self.background_item.setPixmap(pixmap)
         self.background_item.update()
+
+    def _schedule_blur_recompute(self):
+        """Запускает отложенную перерисовку размытия (троттлинг ~20 fps)."""
+        if not self._blur_recompute_timer.isActive():
+            self._blur_recompute_timer.start()
+
+    def _force_blur_recompute(self):
+        """Останавливает таймер и немедленно перерисовывает размытие."""
+        self._blur_recompute_timer.stop()
+        self._recompute_blurred_pixmap()
 
     def _set_active_blur(self, index):
         self._clear_active_blur()
@@ -266,7 +266,7 @@ class ImageEditController:
             self.view.history.push(command)
 
     # --------------------------------------------------------------
-    # Скрытие зон для рендера (не попадают в сохранённое изображение)
+    # Скрытие зон для рендера
     # --------------------------------------------------------------
     def hide_blur_regions_for_render(self):
         for item in self.blur_region_items:
@@ -277,7 +277,7 @@ class ImageEditController:
             item.setVisible(True)
 
     # --------------------------------------------------------------
-    # Режим обрезки (обобщённый)
+    # Режим обрезки
     # --------------------------------------------------------------
     def start_crop_mode(self):
         if self.crop_mode:
@@ -294,8 +294,8 @@ class ImageEditController:
         if self.crop_target_item is None:
             self.crop_target_item = self.background_item
         if self.crop_target_item:
-            # Преобразуем локальный прямоугольник изображения в координаты сцены
-            self.crop_rect = self.crop_target_item.mapRectToScene(QRectF(self.crop_target_item.pixmap().rect()))
+            self.crop_rect = self.crop_target_item.mapRectToScene(
+                QRectF(self.crop_target_item.pixmap().rect()))
         else:
             self.crop_rect = self.view.sceneRect()
 
@@ -320,7 +320,7 @@ class ImageEditController:
         self.view.setBackgroundBrush(self.view.normal_background_color)
         self.view.crop_mode_changed.emit(False)
         self.view._update_floating_widgets_visibility()
-        self.crop_target_item = None  # сбрасываем цель
+        self.crop_target_item = None
 
     def _clear_crop_preview(self):
         if self.crop_rect_item is not None and not self._is_deleted(self.crop_rect_item):
@@ -379,8 +379,8 @@ class ImageEditController:
     def _apply_handle_drag(self, handle_id, new_scene_pos):
         rect = self.crop_rect.normalized()
         left, top, right, bottom = rect.left(), rect.top(), rect.right(), rect.bottom()
-        # Преобразуем границы изображения в координаты сцены
-        image_rect = self.crop_target_item.mapRectToScene(QRectF(self.crop_target_item.pixmap().rect()))
+        image_rect = self.crop_target_item.mapRectToScene(
+            QRectF(self.crop_target_item.pixmap().rect()))
         min_size = MIN_RECT_SIZE
 
         x = max(image_rect.left(), min(image_rect.right(), new_scene_pos.x()))
@@ -414,7 +414,6 @@ class ImageEditController:
             return
 
         crop = self.crop_rect.normalized()
-        # Если цель – фон, используем старую логику
         if self.crop_target_item is self.background_item:
             items_to_remove = []
             for item in self.view.scene().items():
@@ -434,12 +433,10 @@ class ImageEditController:
                 self._clear_crop_preview()
                 return
 
-            # Создаём команду, которая сама управляет зонами размытия
             command = CropCommand(
                 self.view.scene(), self.background_item,
                 old_pixmap, new_pixmap, items_to_remove,
-                controller=self,
-                crop_rect=crop
+                controller=self, crop_rect=crop
             )
             self.view.history.push(command)
 
@@ -455,13 +452,9 @@ class ImageEditController:
             self.view._update_floating_widgets_visibility()
             self.crop_target_item = None
         else:
-            # Цель – вставленное изображение
-            old_original = self.crop_target_item.original_pixmap  # немасштабированный оригинал
-            # Отображаемый pixmap (с учётом масштаба)
+            old_original = self.crop_target_item.original_pixmap
             displayed_pixmap = self.crop_target_item.pixmap()
-            # Преобразуем прямоугольник из сцены в локальные координаты отображаемого
             local_crop = self.crop_target_item.mapRectFromScene(crop)
-            # Обрезаем отображаемый pixmap – это будет новый немасштабированный оригинал
             new_original = crop_pixmap(displayed_pixmap, local_crop)
             if new_original.isNull():
                 self._clear_crop_preview()
@@ -471,12 +464,8 @@ class ImageEditController:
             old_scale = self.crop_target_item.scale
             crop_scene_pos = crop.topLeft()
             command = CropPastedImageCommand(
-                self.crop_target_item,
-                old_original,
-                new_original,
-                old_pos,
-                old_scale,
-                crop_scene_pos
+                self.crop_target_item, old_original, new_original,
+                old_pos, old_scale, crop_scene_pos
             )
             self.view.history.push(command)
 
@@ -506,7 +495,6 @@ class ImageEditController:
         self.active_handle = None
         self.blur_interaction = None
         self.active_blur_index = None
-        # Все зоны переводим в неактивное состояние (без маркеров)
         for item in self.blur_region_items:
             item.set_mode('inactive')
         self.view.setCursor(Qt.CrossCursor)
@@ -521,7 +509,7 @@ class ImageEditController:
         self._clear_active_blur()
         self.blur_interaction = None
         self.blur_temp_item = None
-        # Зоны остаются видимыми и редактируемыми
+        self._blur_recompute_timer.stop()
         self.view.setCursor(Qt.CrossCursor)
         self.view.blur_mode_changed.emit(False)
         self.view._update_floating_widgets_visibility()
@@ -550,23 +538,23 @@ class ImageEditController:
         self.view.history.push(command)
 
     # --------------------------------------------------------------
-    # Поворот (обобщённый)
+    # Поворот
     # --------------------------------------------------------------
     def rotate_image(self, angle: float):
-        # Проверяем, есть ли выделенные вставленные изображения
-        selected_pasted = [it for it in self.view.scene().selectedItems() if isinstance(it, PastedImageItem)]
+        selected_pasted = [it for it in self.view.scene().selectedItems()
+                           if isinstance(it, PastedImageItem)]
         if selected_pasted:
             for item in selected_pasted:
-                old_original = item.original_pixmap  # немасштабированный оригинал
-                displayed_pixmap = item.pixmap()     # отображаемый pixmap
+                old_original = item.original_pixmap
+                displayed_pixmap = item.pixmap()
                 new_original = rotate_pixmap(displayed_pixmap, angle)
                 old_pos = item.pos()
                 old_scale = item.scale
-                command = RotatePastedImageCommand(item, old_original, new_original, old_pos, old_scale)
+                command = RotatePastedImageCommand(
+                    item, old_original, new_original, old_pos, old_scale)
                 self.view.history.push(command)
             return
 
-        # Иначе поворачиваем фон
         if not self.background_item:
             return
 
@@ -624,11 +612,18 @@ class ImageEditController:
                     self.blur_interaction = 'resizing'
                     self.blur_resize_handle = handle_id
                     self.blur_old_rect = QRectF(item.rect())
+                    # Убеждаемся что зона выделена в Qt-смысле
+                    if not item.isSelected():
+                        self.view.scene().clearSelection()
+                        item.setSelected(True)
                     return True
                 if item.rect().contains(sp):
                     self.blur_interaction = 'moving'
                     self.blur_move_start = sp
                     self.blur_old_rect = QRectF(item.rect())
+                    if not item.isSelected():
+                        self.view.scene().clearSelection()
+                        item.setSelected(True)
                     return True
 
             for idx, rect in enumerate(self.blur_regions):
@@ -639,9 +634,12 @@ class ImageEditController:
                     self.blur_interaction = 'moving'
                     self.blur_move_start = sp
                     self.blur_old_rect = QRectF(rect)
+                    # Выделяем зону
+                    item = self.blur_region_items[idx]
+                    self.view.scene().clearSelection()
+                    item.setSelected(True)
                     return True
 
-            # Начало рисования новой зоны — снимаем старое выделение
             self._clear_active_blur()
             self.blur_interaction = 'drawing'
             self.blur_start_point = sp
@@ -666,7 +664,8 @@ class ImageEditController:
             if self.handles:
                 handle_id = self.handles.hit_test(QPointF(event.pos()))
                 if handle_id:
-                    self.view.viewport().setCursor(self.handles.get_cursor_for_handle(handle_id))
+                    self.view.viewport().setCursor(
+                        self.handles.get_cursor_for_handle(handle_id))
                 else:
                     self.view.viewport().setCursor(Qt.CrossCursor)
             else:
@@ -678,11 +677,12 @@ class ImageEditController:
 
             if self.blur_interaction == 'resizing':
                 if self.active_blur_index is not None:
+                    new_rect = self._apply_blur_resize(
+                        self.active_blur_index, self.blur_resize_handle, sp)
                     item = self.blur_region_items[self.active_blur_index]
-                    new_rect = self._apply_blur_resize(self.active_blur_index, self.blur_resize_handle, sp)
                     item.update_rect(new_rect)
                     self.blur_regions[self.active_blur_index] = new_rect
-                    self._recompute_blurred_pixmap()
+                    self._schedule_blur_recompute()
                 return True
 
             if self.blur_interaction == 'moving':
@@ -690,34 +690,32 @@ class ImageEditController:
                     item = self.blur_region_items[self.active_blur_index]
                     delta = sp - self.blur_move_start
 
-                    # Ограничение по осям при зажатом Shift
                     if event.modifiers() & Qt.ShiftModifier:
                         if abs(delta.x()) > abs(delta.y()):
                             delta.setY(0.0)
                         else:
                             delta.setX(0.0)
 
-                    old_rect = self.blur_old_rect
-                    new_rect = self._constrain_move(old_rect, delta)
+                    new_rect = self._constrain_move(self.blur_old_rect, delta)
                     if not new_rect.isEmpty():
                         item.update_rect(new_rect)
                         self.blur_regions[self.active_blur_index] = new_rect
-                        self._recompute_blurred_pixmap()
+                        self._schedule_blur_recompute()
                 return True
 
             if self.blur_interaction == 'drawing':
                 if self.blur_temp_item:
-                    current = sp
-                    rect = QRectF(self.blur_start_point, current).normalized()
+                    rect = QRectF(self.blur_start_point, sp).normalized()
                     self.blur_temp_item.setRect(rect)
                 return True
 
-            # Наведение курсора
+            # Нет активного взаимодействия — только курсор, НЕ перехватываем
             if self.active_blur_index is not None:
                 item = self.blur_region_items[self.active_blur_index]
                 handle_id = item.handles.hit_test(QPointF(event.pos()))
                 if handle_id:
-                    self.view.viewport().setCursor(item.handles.get_cursor_for_handle(handle_id))
+                    self.view.viewport().setCursor(
+                        item.handles.get_cursor_for_handle(handle_id))
                 elif item.rect().contains(sp):
                     self.view.viewport().setCursor(Qt.SizeAllCursor)
                 else:
@@ -731,7 +729,7 @@ class ImageEditController:
                         break
                 if not cursor_changed:
                     self.view.viewport().setCursor(Qt.CrossCursor)
-            return True
+            return False
 
         return False
 
@@ -743,8 +741,8 @@ class ImageEditController:
             if self.temp_crop_start is not None:
                 sp = self.view.mapToScene(event.pos())
                 self.crop_rect = QRectF(self.temp_crop_start, sp).normalized()
-                if self.crop_rect.width() < MIN_RECT_SIZE or self.crop_rect.height() < MIN_RECT_SIZE:
-                    # Сброс к исходному прямоугольнику
+                if (self.crop_rect.width() < MIN_RECT_SIZE or
+                        self.crop_rect.height() < MIN_RECT_SIZE):
                     if self.crop_target_item:
                         self.crop_rect = self.crop_target_item.mapRectToScene(
                             QRectF(self.crop_target_item.pixmap().rect()))
@@ -766,8 +764,10 @@ class ImageEditController:
                 if self.active_blur_index is not None:
                     old_rect = self.blur_old_rect
                     new_rect = self.blur_regions[self.active_blur_index]
+                    self._force_blur_recompute()
                     if new_rect != old_rect:
-                        command = ResizeBlurRegionCommand(self, self.active_blur_index, old_rect, new_rect)
+                        command = ResizeBlurRegionCommand(
+                            self, self.active_blur_index, old_rect, new_rect)
                         self.view.history.push(command)
                 self.blur_interaction = None
                 self.blur_resize_handle = None
@@ -778,8 +778,10 @@ class ImageEditController:
                 if self.active_blur_index is not None:
                     old_rect = self.blur_old_rect
                     new_rect = self.blur_regions[self.active_blur_index]
+                    self._force_blur_recompute()
                     if new_rect != old_rect:
-                        command = MoveBlurRegionCommand(self, self.active_blur_index, old_rect, new_rect)
+                        command = MoveBlurRegionCommand(
+                            self, self.active_blur_index, old_rect, new_rect)
                         self.view.history.push(command)
                 self.blur_interaction = None
                 self.blur_move_start = None
@@ -804,10 +806,9 @@ class ImageEditController:
         return False
 
     # --------------------------------------------------------------
-    # Обработка зон размытия вне режима "Размыть" (всегда доступны)
+    # Обработка зон размытия вне режима "Размыть"
     # --------------------------------------------------------------
     def handle_blur_region_press_outside(self, event):
-        """Вызывается из EditorView при любом инструменте, кроме crop/blur."""
         if event.button() != Qt.LeftButton:
             return False
 
@@ -821,12 +822,19 @@ class ImageEditController:
                 self.blur_outside_interaction = 'resizing'
                 self.blur_resize_handle = handle_id
                 self.blur_old_rect = QRectF(item.rect())
+                # Убеждаемся что зона выделена в Qt-смысле
+                if not item.isSelected():
+                    self.view.scene().clearSelection()
+                    item.setSelected(True)
                 return True
             if item.rect().contains(sp):
                 self.blur_outside_mode = True
                 self.blur_outside_interaction = 'moving'
                 self.blur_move_start = sp
                 self.blur_old_rect = QRectF(item.rect())
+                if not item.isSelected():
+                    self.view.scene().clearSelection()
+                    item.setSelected(True)
                 return True
 
         for idx, rect in enumerate(self.blur_regions):
@@ -838,6 +846,10 @@ class ImageEditController:
                 self.blur_outside_interaction = 'moving'
                 self.blur_move_start = sp
                 self.blur_old_rect = QRectF(rect)
+                # Выделяем зону
+                item = self.blur_region_items[idx]
+                self.view.scene().clearSelection()
+                item.setSelected(True)
                 return True
 
         self._clear_active_blur()
@@ -850,44 +862,43 @@ class ImageEditController:
                 item = self.blur_region_items[self.active_blur_index]
                 handle_id = item.handles.hit_test(QPointF(event.pos()))
                 if handle_id:
-                    self.view.viewport().setCursor(item.handles.get_cursor_for_handle(handle_id))
-                    return True
+                    self.view.viewport().setCursor(
+                        item.handles.get_cursor_for_handle(handle_id))
                 elif item.rect().contains(sp):
                     self.view.viewport().setCursor(Qt.SizeAllCursor)
-                    return True
-            for item in self.blur_region_items:
-                if item.rect().contains(sp):
-                    self.view.viewport().setCursor(Qt.SizeAllCursor)
-                    return True
+            else:
+                for item in self.blur_region_items:
+                    if item.rect().contains(sp):
+                        self.view.viewport().setCursor(Qt.SizeAllCursor)
+                        break
             return False
 
         sp = self.view.mapToScene(event.pos())
         if self.blur_outside_interaction == 'resizing':
             if self.active_blur_index is not None:
+                new_rect = self._apply_blur_resize(
+                    self.active_blur_index, self.blur_resize_handle, sp)
                 item = self.blur_region_items[self.active_blur_index]
-                new_rect = self._apply_blur_resize(self.active_blur_index, self.blur_resize_handle, sp)
                 item.update_rect(new_rect)
                 self.blur_regions[self.active_blur_index] = new_rect
-                self._recompute_blurred_pixmap()
+                self._schedule_blur_recompute()
             return True
         elif self.blur_outside_interaction == 'moving':
             if self.active_blur_index is not None:
                 item = self.blur_region_items[self.active_blur_index]
                 delta = sp - self.blur_move_start
 
-                # Ограничение по осям при зажатом Shift
                 if event.modifiers() & Qt.ShiftModifier:
                     if abs(delta.x()) > abs(delta.y()):
                         delta.setY(0.0)
                     else:
                         delta.setX(0.0)
 
-                old_rect = self.blur_old_rect
-                new_rect = self._constrain_move(old_rect, delta)
+                new_rect = self._constrain_move(self.blur_old_rect, delta)
                 if not new_rect.isEmpty():
                     item.update_rect(new_rect)
                     self.blur_regions[self.active_blur_index] = new_rect
-                    self._recompute_blurred_pixmap()
+                    self._schedule_blur_recompute()
             return True
 
         return False
@@ -900,8 +911,10 @@ class ImageEditController:
             if self.active_blur_index is not None:
                 old_rect = self.blur_old_rect
                 new_rect = self.blur_regions[self.active_blur_index]
+                self._force_blur_recompute()
                 if new_rect != old_rect:
-                    command = ResizeBlurRegionCommand(self, self.active_blur_index, old_rect, new_rect)
+                    command = ResizeBlurRegionCommand(
+                        self, self.active_blur_index, old_rect, new_rect)
                     self.view.history.push(command)
             self.blur_resize_handle = None
             self.blur_old_rect = None
@@ -909,8 +922,10 @@ class ImageEditController:
             if self.active_blur_index is not None:
                 old_rect = self.blur_old_rect
                 new_rect = self.blur_regions[self.active_blur_index]
+                self._force_blur_recompute()
                 if new_rect != old_rect:
-                    command = MoveBlurRegionCommand(self, self.active_blur_index, old_rect, new_rect)
+                    command = MoveBlurRegionCommand(
+                        self, self.active_blur_index, old_rect, new_rect)
                     self.view.history.push(command)
             self.blur_move_start = None
             self.blur_old_rect = None
@@ -919,6 +934,9 @@ class ImageEditController:
         self.blur_outside_interaction = None
         return True
 
+    # --------------------------------------------------------------
+    # Вспомогательные
+    # --------------------------------------------------------------
     def _apply_blur_resize(self, index, handle_id, new_scene_pos):
         item = self.blur_region_items[index]
         rect = item.rect()
@@ -953,7 +971,6 @@ class ImageEditController:
         return QRectF(left, top, right - left, bottom - top).normalized()
 
     def _constrain_move(self, old_rect: QRectF, delta: QPointF):
-        """Ограничивает перемещение прямоугольника границами изображения без изменения размера."""
         image_rect = QRectF(self.background_item.pixmap().rect())
         new_rect = old_rect.translated(delta)
 
