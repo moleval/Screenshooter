@@ -1,3 +1,6 @@
 venv/
 __pycache__/
 *.pyc
+# Исключаем скрипт экспорта и результат
+export_dynamic.py
+export/
