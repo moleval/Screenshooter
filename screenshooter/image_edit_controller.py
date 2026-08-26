@@ -32,6 +32,9 @@ class ImageEditController:
     PREVIEW_RADIUS = 4.0    # Радиус при перетаскивании (быстрый режим)
     FULL_RADIUS = 10.0      # Радиус при отпускании (полное качество)
     PREVIEW_SCALE = 4       # Уменьшение в 4 раза (быстрый режим)
+    
+    # ВРЕМЕННО: полное качество для всех разрешений (для проверки)
+    FORCE_FULL_QUALITY = True
 
     def __init__(self, view):
         self.view = view
@@ -249,6 +252,10 @@ class ImageEditController:
     # --------------------------------------------------------------
     def _get_preview_settings(self):
         """Возвращает (радиус, масштаб) в зависимости от размера изображения."""
+        # ВРЕМЕННО: полное качество для проверки
+        if self.FORCE_FULL_QUALITY:
+            return self.FULL_RADIUS, 1
+
         if self.blur_base_pixmap is None:
             return self.PREVIEW_RADIUS, self.PREVIEW_SCALE
 
@@ -257,13 +264,10 @@ class ImageEditController:
         pixels = w * h
 
         if pixels <= 921600:
-            # До 1280×720 — полное качество
             return self.FULL_RADIUS, 1
         elif pixels <= 2073600:
-            # До 1920×1080 — выше среднего
             return 8.0, 2
         else:
-            # Больше 1920×1080 — среднее
             return 6.0, 2
 
     # --------------------------------------------------------------
