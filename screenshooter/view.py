@@ -140,6 +140,10 @@ class EditorView(QGraphicsView):
         self.layout_manager = LayoutManager(self)
         self._tool = None
 
+        # ЭТАП 5: кэш для _update_cursor
+        self._last_cursor_pos = None
+        self._last_cursor_item = None
+
         self._update_info_widget_content(self.current_pen_color, self.pen_width)
 
         for w in (self.zoom_widget, self.text_format_widget,
@@ -151,30 +155,33 @@ class EditorView(QGraphicsView):
         # ЭТАП 3: батчинг selectionChanged через таймер
         self.scene().selectionChanged.connect(self._schedule_selection_update)
 
-        # ДОБАВЛЕНО ЭТАП 3: таймер для батчинга изменений выделения
         self._selection_update_timer = QTimer(self)
         self._selection_update_timer.setSingleShot(True)
-        self._selection_update_timer.setInterval(0)  # Следующий цикл событий
+        self._selection_update_timer.setInterval(0)
         self._selection_update_timer.timeout.connect(self._do_selection_update)
 
     # ==============================================================
     # ЭТАП 3: батчинг изменений выделения
     # ==============================================================
     def _schedule_selection_update(self):
-        """Запускает отложенное обновление выделения.
-        Все изменения выделения в текущем цикле событий будут
-        обработаны один раз в следующем цикле."""
         if not self._selection_update_timer.isActive():
             self._selection_update_timer.start()
 
     def _do_selection_update(self):
-        """Вызывается один раз на пачку изменений выделения."""
         try:
             self._sync_selection_properties()
             self._update_floating_widgets_visibility()
             self._update_blur_region_handles()
         except RuntimeError:
-            pass  # C++ объекты уже удалены (закрытие приложения)
+            pass
+
+    # ==============================================================
+    # ЭТАП 5: сброс кэша курсора
+    # ==============================================================
+    def _invalidate_cursor_cache(self):
+        """Сбрасывает кэш курсора при изменении сцены."""
+        self._last_cursor_pos = None
+        self._last_cursor_item = None
 
     # ==============================================================
     # Вспомогательные
@@ -207,6 +214,8 @@ class EditorView(QGraphicsView):
         if old != new:
             self.fit_background_to_view()
         self._update_after_history_change()
+        # ЭТАП 5: сброс кэша курсора после изменения истории
+        self._invalidate_cursor_cache()
 
     def redo(self):
         old = self._get_background_pixmap_size()
@@ -215,6 +224,8 @@ class EditorView(QGraphicsView):
         if old != new:
             self.fit_background_to_view()
         self._update_after_history_change()
+        # ЭТАП 5: сброс кэша курсора после изменения истории
+        self._invalidate_cursor_cache()
 
     def _get_background_pixmap_size(self):
         bg = self.image_editor.background_item
@@ -336,7 +347,7 @@ class EditorView(QGraphicsView):
                 else:
                     item.hide_handles()
         except RuntimeError:
-            pass  # C++ объекты уже удалены (закрытие приложения)
+            pass
 
     def hide_pasted_image_handles_for_render(self):
         for item in self.pasted_images:
@@ -349,10 +360,8 @@ class EditorView(QGraphicsView):
 
     # ==============================================================
     # Ручки зон размытия при множественном выделении
-    # ЭТАП 1: защита от удалённых C++ объектов при закрытии
     # ==============================================================
     def _update_blur_region_handles(self):
-        """Скрывает ручки зон размытия при множественном выделении."""
         try:
             if self.image_editor.blur_outside_mode:
                 return
@@ -377,7 +386,7 @@ class EditorView(QGraphicsView):
             else:
                 self.image_editor._clear_active_blur()
         except RuntimeError:
-            pass  # C++ объекты уже удалены (закрытие приложения)
+            pass
 
     # ==============================================================
     # Drag & Drop
@@ -544,17 +553,14 @@ class EditorView(QGraphicsView):
                 self.rubber_band_active = True
                 self.rubber_band_start = sp
                 pen = QPen(QColor(255, 200, 0), 3, Qt.DashLine)
-                pen.setCosmetic(True)  # толщина не зависит от масштаба
+                pen.setCosmetic(True)
                 self.rubber_band_item = QGraphicsRectItem(QRectF(sp, sp))
                 self.rubber_band_item.setPen(pen)
-                # Поверх всех элементов
                 self.rubber_band_item.setZValue(10000)
                 self.rubber_band_item.setFlag(QGraphicsRectItem.ItemIsMovable, False)
                 self.rubber_band_item.setFlag(QGraphicsRectItem.ItemIsSelectable, False)
                 self.scene().addItem(self.rubber_band_item)
-                # Даём сцене время зарегистрировать новый элемент
                 QApplication.processEvents()
-                # Временно переключаемся на FullViewportUpdate для перерисовки рамки
                 self.setViewportUpdateMode(QGraphicsView.FullViewportUpdate)
                 self.viewport().update()
             e.accept()
@@ -760,7 +766,6 @@ class EditorView(QGraphicsView):
                         idx_blur = self.image_editor.blur_region_items.index(drag_item)
                         self.image_editor.blur_regions[idx_blur] = new_rect
                         self._drag_blur_needs_recompute = True
-                        # ЭТАП 4: передаём индекс двигающейся зоны
                         self.image_editor._schedule_blur_recompute(moving_index=idx_blur)
                     except ValueError:
                         pass
@@ -808,12 +813,11 @@ class EditorView(QGraphicsView):
             e.accept()
             return
 
-        # Рамка выделения ПКМ — перерисовка в режиме FullViewportUpdate
+        # Рамка выделения ПКМ
         if self.rubber_band_active and self.rubber_band_item:
             cp = self.mapToScene(e.pos())
             self.rubber_band_item.setRect(
                 QRectF(self.rubber_band_start, cp).normalized())
-            # Принудительная перерисовка
             self.rubber_band_item.update()
             self.viewport().update()
             e.accept()
@@ -900,6 +904,8 @@ class EditorView(QGraphicsView):
             self._drag_start_item_pos = QPointF()
             self._update_pasted_image_handles()
             self._update_blur_region_handles()
+            # ЭТАП 5: сброс кэша курсора после завершения перетаскивания
+            self._invalidate_cursor_cache()
             e.accept()
             return
 
@@ -916,7 +922,6 @@ class EditorView(QGraphicsView):
                         li.setSelected(True)
             self.rubber_band_active = False
             self.rubber_band_start = None
-            # Возвращаем SmartViewportUpdate после завершения рамки
             self.setViewportUpdateMode(QGraphicsView.SmartViewportUpdate)
             self.viewport().update()
             e.accept()
@@ -1414,6 +1419,9 @@ class EditorView(QGraphicsView):
             self._update_info_widget_content(
                 self.current_pen_color, self.get_current_width())
 
+        # ЭТАП 5: сброс кэша курсора при смене инструмента
+        self._invalidate_cursor_cache()
+
         QTimer.singleShot(0, self._refresh_cursor)
         self._update_floating_widgets_visibility()
 
@@ -1508,21 +1516,28 @@ class EditorView(QGraphicsView):
         self._update_floating_widgets_visibility()
 
     # ==============================================================
-    # Курсор
+    # ЭТАП 5: курсор с кэшированием itemAt
     # ==============================================================
     def _update_cursor(self, pos):
-        sp = self.mapToScene(pos)
+        # Кэширование: если позиция не изменилась, используем кэш
+        if pos == self._last_cursor_pos:
+            item = self._last_cursor_item
+        else:
+            sp = self.mapToScene(pos)
+            item = self.scene().itemAt(sp, self.transform())
+            self._last_cursor_pos = pos
+            self._last_cursor_item = item
 
         # 1. Маркеры вставленных изображений
-        for item in self.pasted_images:
-            if item.isSelected() and item.handles:
-                handle_id = item.handles.hit_test(pos)
+        for pasted in self.pasted_images:
+            if pasted.isSelected() and pasted.handles:
+                handle_id = pasted.handles.hit_test(pos)
                 if handle_id:
                     self.viewport().setCursor(
-                        item.handles.get_cursor_for_handle(handle_id))
+                        pasted.handles.get_cursor_for_handle(handle_id))
                     return
 
-        # 2. Маркеры активной зоны размытия (ПЕРЕД itemAt!)
+        # 2. Маркеры активной зоны размытия
         if (self.image_editor.active_blur_index is not None and
                 self.image_editor.active_blur_index < len(
                     self.image_editor.blur_region_items)):
@@ -1535,32 +1550,26 @@ class EditorView(QGraphicsView):
                         active_blur.handles.get_cursor_for_handle(handle_id))
                     return
 
-        # 3. Элемент под курсором
-        item = self.scene().itemAt(sp, self.transform())
-
+        # 3. Элемент под курсором (из кэша или из itemAt)
         if (self.active_text_item and item is self.active_text_item
                 and self.active_text_item._editable):
             self.viewport().setCursor(Qt.IBeamCursor)
             return
 
-        # Зоны размытия — курсор перемещения
         if item and isinstance(item, BlurRegionItem):
             self.viewport().setCursor(Qt.SizeAllCursor)
             return
 
-        # Обычные перемещаемые объекты
         if item and not self._is_background_item(item):
             li = self._item_for_manipulation(item)
             if li is not None and li.flags() & QGraphicsItem.ItemIsMovable:
                 self.viewport().setCursor(Qt.SizeAllCursor)
                 return
 
-        # Вставленные изображения
         if item and isinstance(item, PastedImageItem):
             self.viewport().setCursor(Qt.SizeAllCursor)
             return
 
-        # Инструменты рисования
         if self.current_tool in ('rect', 'ellipse', 'arrow', 'line', 'text'):
             self.viewport().setCursor(Qt.CrossCursor)
         else:

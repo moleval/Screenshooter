@@ -5,6 +5,7 @@
           Используется в режимах обрезки, размытия и в будущем для обычных аннотаций.
 """
 
+from PyQt5 import sip
 from PyQt5.QtCore import Qt, QPointF, QRectF
 from PyQt5.QtGui import QPen, QColor, QBrush
 from PyQt5.QtWidgets import QGraphicsEllipseItem, QGraphicsItem
@@ -52,7 +53,7 @@ class CropHandles:
                 self.positions[handle_id] = pos
 
     def remove_handles(self):
-        from PyQt5 import sip
+        # ЭТАП 1: защита от удалённых C++ объектов при закрытии
         for handle in self.handle_items.values():
             try:
                 if sip.isdeleted(handle):
@@ -65,7 +66,9 @@ class CropHandles:
         self.positions.clear()
 
     def hit_test(self, device_pos: QPointF):
-        """Возвращает id маркера или None, если мышь не над маркером."""
+        """Возвращает id маркера или None, если мышь не над маркером.
+        Используем mapFromScene, потому что он учитывает и трансформацию,
+        и прокрутку вида. transform.map() учитывает только трансформацию."""
         device_pos = QPointF(device_pos)
         for handle_id, scene_pos in self.positions.items():
             handle_device_pos = QPointF(self.view.mapFromScene(scene_pos))
@@ -85,21 +88,6 @@ class CropHandles:
             return Qt.SizeHorCursor
         return Qt.ArrowCursor
 
-    @staticmethod
-    def _ids_positions(rect: QRectF):
-        ids_positions = {
-            'tl': rect.topLeft(),
-            'tr': rect.topRight(),
-            'bl': rect.bottomLeft(),
-            'br': rect.bottomRight(),
-        }
-        # Добавляем средние только если show_midpoints=True
-        # Но у нас нет доступа к self в статическом методе, поэтому добавим их всегда,
-        # а фильтрацию сделаем в create_handles.
-        # Проще: изменим на нестатический метод _ids_positions.
-        return ids_positions
-
-    # Перепишем _ids_positions как обычный метод, чтобы использовать self.show_midpoints
     def _ids_positions(self, rect: QRectF):
         positions = {
             'tl': rect.topLeft(),
