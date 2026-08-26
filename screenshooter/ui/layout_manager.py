@@ -35,8 +35,21 @@ class LayoutManager:
         self.info_widget = view.info_widget
         self.status_label = view.status_label
 
+        # ЭТАП 3: таймер дебаунса для update_all()
+        self._update_timer = QTimer()
+        self._update_timer.setSingleShot(True)
+        self._update_timer.setInterval(16)  # ~60 fps
+        self._update_timer.timeout.connect(self._do_update_all)
+
     def update_all(self):
-        """Обновить позиции всех виджетов."""
+        """Запускает отложенное обновление позиций виджетов.
+        Если вызывается несколько раз подряд, реальное обновление
+        произойдёт только один раз за 16 мс."""
+        if not self._update_timer.isActive():
+            self._update_timer.start()
+
+    def _do_update_all(self):
+        """Реальное обновление позиций всех виджетов."""
         self.update_zoom_widget_position()
         self.update_text_format_widget_position()
         self.update_shape_mode_widget_position()

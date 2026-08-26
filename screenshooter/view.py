@@ -11,7 +11,7 @@ from PyQt5.QtGui import (QPainter, QPen, QColor, QPolygonF, QFont, QImage,
 from PyQt5.QtWidgets import (QGraphicsView, QGraphicsScene, QGraphicsRectItem,
                              QGraphicsEllipseItem, QGraphicsPixmapItem,
                              QGraphicsTextItem, QGraphicsItem, QStyle,
-                             QInputDialog, QLabel)
+                             QInputDialog, QLabel, QApplication)
 
 from .constants import MIN_RECT_SIZE, MIN_ARROW_LENGTH
 from .items import (TextItem, DimensionTextItem, RectangleItem, EllipseItem,
@@ -148,9 +148,30 @@ class EditorView(QGraphicsView):
                   self.info_widget, self.status_label):
             w.setCursor(Qt.ArrowCursor)
 
-        self.scene().selectionChanged.connect(self._sync_selection_properties)
-        self.scene().selectionChanged.connect(self._update_floating_widgets_visibility)
-        self.scene().selectionChanged.connect(self._update_blur_region_handles)
+        # ЭТАП 3: батчинг selectionChanged через таймер
+        self.scene().selectionChanged.connect(self._schedule_selection_update)
+
+        # ДОБАВЛЕНО ЭТАП 3: таймер для батчинга изменений выделения
+        self._selection_update_timer = QTimer(self)
+        self._selection_update_timer.setSingleShot(True)
+        self._selection_update_timer.setInterval(0)  # Следующий цикл событий
+        self._selection_update_timer.timeout.connect(self._do_selection_update)
+
+    # ==============================================================
+    # ЭТАП 3: батчинг изменений выделения
+    # ==============================================================
+    def _schedule_selection_update(self):
+        """Запускает отложенное обновление выделения.
+        Все изменения выделения в текущем цикле событий будут
+        обработаны один раз в следующем цикле."""
+        if not self._selection_update_timer.isActive():
+            self._selection_update_timer.start()
+
+    def _do_selection_update(self):
+        """Вызывается один раз на пачку изменений выделения."""
+        self._sync_selection_properties()
+        self._update_floating_widgets_visibility()
+        self._update_blur_region_handles()
 
     # ==============================================================
     # Вспомогательные
@@ -523,6 +544,8 @@ class EditorView(QGraphicsView):
                 self.rubber_band_item.setFlag(QGraphicsRectItem.ItemIsMovable, False)
                 self.rubber_band_item.setFlag(QGraphicsRectItem.ItemIsSelectable, False)
                 self.scene().addItem(self.rubber_band_item)
+                # Даём сцене время зарегистрировать новый элемент
+                QApplication.processEvents()
                 # Временно переключаемся на FullViewportUpdate для перерисовки рамки
                 self.setViewportUpdateMode(QGraphicsView.FullViewportUpdate)
                 self.viewport().update()
@@ -781,6 +804,9 @@ class EditorView(QGraphicsView):
             cp = self.mapToScene(e.pos())
             self.rubber_band_item.setRect(
                 QRectF(self.rubber_band_start, cp).normalized())
+            # Принудительная перерисовка
+            self.rubber_band_item.update()
+            self.viewport().update()
             e.accept()
             return
 
