@@ -27,7 +27,7 @@ class BlurRegionItem(QGraphicsRectItem):
     ACTIVE_PEN_COLOR = QColor(0, 120, 215)
     ACTIVE_HANDLE_COLOR = QColor(0, 120, 215)
     INACTIVE_PEN_COLOR = QColor(255, 0, 0)
-    INACTIVE_BRUSH_COLOR = QColor(255, 0, 0, 20)  # очень слабая заливка, чтобы зона была заметна
+    INACTIVE_BRUSH_COLOR = QColor(255, 0, 0, 20)
 
     def __init__(self, rect: QRectF, view, mode: str = 'active'):
         super().__init__(rect)
@@ -35,10 +35,10 @@ class BlurRegionItem(QGraphicsRectItem):
         self.mode = mode
         self.handles = None
 
-        self.setZValue(500)  # ниже аннотаций, чтобы не мешать им
+        self.setZValue(500)
         self.setAcceptedMouseButtons(Qt.LeftButton)
         self.setFlag(QGraphicsRectItem.ItemIsMovable, False)
-        self.setFlag(QGraphicsRectItem.ItemIsSelectable, True)   # ИЗМЕНЕНО: разрешаем выделение
+        self.setFlag(QGraphicsRectItem.ItemIsSelectable, True)
         self._apply_mode()
 
     def _apply_mode(self):
@@ -77,6 +77,9 @@ class BlurRegionItem(QGraphicsRectItem):
             self._apply_mode()
 
     def update_rect(self, rect: QRectF):
+        # ЭТАП 1, ШАГ 1.1: уведомляем сцену об изменении геометрии
+        # ДО фактического изменения. Необходимо для SmartViewportUpdate.
+        self.prepareGeometryChange()
         self.setRect(rect)
         if self.handles:
             self.handles.update_handles(rect)

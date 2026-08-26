@@ -11,7 +11,7 @@ import sys
 import os
 import time
 import keyboard
-from PyQt5 import sip  # <-- ДОБАВЛЕНО
+from PyQt5 import sip
 from PyQt5.QtCore import Qt, QRectF, QSize, QTimer, pyqtSignal, QDir, QSettings
 from PyQt5.QtGui import QPixmap, QPainter, QImage, QColor, QIcon, QKeySequence
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
@@ -583,16 +583,35 @@ class ScreenshotApp(QMainWindow):
                 pass
             self._ctrl_printscreen_hotkey = None
 
+    # --------------------------------------------------------------
+    # ЭТАП 1, ШАГ 1.4: безопасное закрытие приложения
+    # --------------------------------------------------------------
     def closeEvent(self, e):
+        # Останавливаем таймер перерисовки размытия
+        try:
+            if hasattr(self, 'view') and hasattr(self.view, 'image_editor'):
+                self.view.image_editor._blur_recompute_timer.stop()
+        except (RuntimeError, AttributeError):
+            pass
+
         # Отключаем сигналы сцены перед закрытием
         try:
             self.scene.selectionChanged.disconnect(self._on_scene_selection_changed)
         except (TypeError, RuntimeError):
             pass
+
+        # Очистка сцены с защитой от удалённых объектов
+        try:
+            if not sip.isdeleted(self.scene):
+                self.scene.clear()
+        except RuntimeError:
+            pass
+
         try:
             self._remove_keyboard_hooks()
         except Exception:
             pass
+
         e.accept()
 
     def _create_tool_action(self, text, tool_name, group, toolbar, icon=None, tooltip=None):

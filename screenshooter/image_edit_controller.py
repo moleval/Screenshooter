@@ -56,7 +56,6 @@ class ImageEditController:
         self.blur_outside_mode = False
         self.blur_outside_interaction = None
 
-        # Таймер троттлинга перерисовки размытия при перетаскивании
         self._blur_recompute_timer = QTimer()
         self._blur_recompute_timer.setInterval(50)
         self._blur_recompute_timer.timeout.connect(self._recompute_blurred_pixmap)
@@ -248,16 +247,20 @@ class ImageEditController:
         self._recompute_blurred_pixmap()
 
     def _set_active_blur(self, index):
+        # ЭТАП 1, ШАГ 1.2: защита от удалённых C++ объектов
         self._clear_active_blur()
-        if 0 <= index < len(self.blur_regions):
+        if 0 <= index < len(self.blur_region_items):
             item = self.blur_region_items[index]
-            item.set_mode('active')
-            self.active_blur_index = index
+            if not sip.isdeleted(item):
+                item.set_mode('active')
+                self.active_blur_index = index
 
     def _clear_active_blur(self):
+        # ЭТАП 1, ШАГ 1.2: защита от удалённых C++ объектов
         if self.active_blur_index is not None and self.active_blur_index < len(self.blur_region_items):
             item = self.blur_region_items[self.active_blur_index]
-            item.set_mode('inactive')
+            if not sip.isdeleted(item):
+                item.set_mode('inactive')
         self.active_blur_index = None
 
     def delete_active_blur_region(self):
@@ -270,11 +273,13 @@ class ImageEditController:
     # --------------------------------------------------------------
     def hide_blur_regions_for_render(self):
         for item in self.blur_region_items:
-            item.setVisible(False)
+            if not sip.isdeleted(item):
+                item.setVisible(False)
 
     def show_blur_regions_after_render(self):
         for item in self.blur_region_items:
-            item.setVisible(True)
+            if not sip.isdeleted(item):
+                item.setVisible(True)
 
     # --------------------------------------------------------------
     # Режим обрезки
@@ -496,7 +501,8 @@ class ImageEditController:
         self.blur_interaction = None
         self.active_blur_index = None
         for item in self.blur_region_items:
-            item.set_mode('inactive')
+            if not sip.isdeleted(item):
+                item.set_mode('inactive')
         self.view.setCursor(Qt.CrossCursor)
         self.view.blur_mode_changed.emit(True)
         self.view._update_floating_widgets_visibility()
@@ -612,7 +618,6 @@ class ImageEditController:
                     self.blur_interaction = 'resizing'
                     self.blur_resize_handle = handle_id
                     self.blur_old_rect = QRectF(item.rect())
-                    # Убеждаемся что зона выделена в Qt-смысле
                     if not item.isSelected():
                         self.view.scene().clearSelection()
                         item.setSelected(True)
@@ -634,7 +639,6 @@ class ImageEditController:
                     self.blur_interaction = 'moving'
                     self.blur_move_start = sp
                     self.blur_old_rect = QRectF(rect)
-                    # Выделяем зону
                     item = self.blur_region_items[idx]
                     self.view.scene().clearSelection()
                     item.setSelected(True)
@@ -709,7 +713,6 @@ class ImageEditController:
                     self.blur_temp_item.setRect(rect)
                 return True
 
-            # Нет активного взаимодействия — только курсор, НЕ перехватываем
             if self.active_blur_index is not None:
                 item = self.blur_region_items[self.active_blur_index]
                 handle_id = item.handles.hit_test(QPointF(event.pos()))
@@ -822,7 +825,6 @@ class ImageEditController:
                 self.blur_outside_interaction = 'resizing'
                 self.blur_resize_handle = handle_id
                 self.blur_old_rect = QRectF(item.rect())
-                # Убеждаемся что зона выделена в Qt-смысле
                 if not item.isSelected():
                     self.view.scene().clearSelection()
                     item.setSelected(True)
@@ -846,7 +848,6 @@ class ImageEditController:
                 self.blur_outside_interaction = 'moving'
                 self.blur_move_start = sp
                 self.blur_old_rect = QRectF(rect)
-                # Выделяем зону
                 item = self.blur_region_items[idx]
                 self.view.scene().clearSelection()
                 item.setSelected(True)

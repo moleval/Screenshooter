@@ -319,36 +319,35 @@ class EditorView(QGraphicsView):
 
     # ==============================================================
     # Ручки зон размытия при множественном выделении
+    # ЭТАП 1, ШАГ 1.3: защита от удалённых C++ объектов при закрытии
     # ==============================================================
     def _update_blur_region_handles(self):
         """Скрывает ручки зон размытия при множественном выделении."""
-        # Не трогаем ручки во время активного перетаскивания/изменения размера
-        if self.image_editor.blur_outside_mode:
-            return
-        if self.image_editor.blur_interaction is not None:
-            return
+        try:
+            if self.image_editor.blur_outside_mode:
+                return
+            if self.image_editor.blur_interaction is not None:
+                return
 
-        selected = self.scene().selectedItems()
-        non_bg_selected = [it for it in selected if not self._is_background_item(it)]
+            selected = self.scene().selectedItems()
+            non_bg_selected = [it for it in selected if not self._is_background_item(it)]
 
-        if len(non_bg_selected) > 1:
-            # Множественное выделение — скрываем ручки
-            self.image_editor._clear_active_blur()
-        elif len(non_bg_selected) == 1:
-            item = non_bg_selected[0]
-            if isinstance(item, BlurRegionItem):
-                # Одиночная зона размытия — показываем ручки
-                try:
-                    idx = self.image_editor.blur_region_items.index(item)
-                    self.image_editor._set_active_blur(idx)
-                except ValueError:
-                    pass
-            else:
-                # Выделен не размытие — скрываем ручки
+            if len(non_bg_selected) > 1:
                 self.image_editor._clear_active_blur()
-        else:
-            # Ничего не выделено
-            self.image_editor._clear_active_blur()
+            elif len(non_bg_selected) == 1:
+                item = non_bg_selected[0]
+                if isinstance(item, BlurRegionItem) and not sip.isdeleted(item):
+                    try:
+                        idx = self.image_editor.blur_region_items.index(item)
+                        self.image_editor._set_active_blur(idx)
+                    except ValueError:
+                        pass
+                else:
+                    self.image_editor._clear_active_blur()
+            else:
+                self.image_editor._clear_active_blur()
+        except RuntimeError:
+            pass  # C++ объекты уже удалены (закрытие приложения)
 
     # ==============================================================
     # Drag & Drop
@@ -420,9 +419,6 @@ class EditorView(QGraphicsView):
             is_blur_item = isinstance(li, BlurRegionItem)
             is_empty_or_bg = li is None or self._is_background_item(li)
 
-            # Проверяем, попадает ли клик на ручку активной зоны размытия.
-            # Это необходимо, потому что itemAt() возвращает элемент ручки
-            # (дочерний QGraphicsItem из CropHandles), а не BlurRegionItem.
             is_blur_handle = False
             if (self.image_editor.active_blur_index is not None and
                     self.image_editor.active_blur_index < len(
@@ -1471,7 +1467,6 @@ class EditorView(QGraphicsView):
     def _update_cursor(self, pos):
         sp = self.mapToScene(pos)
 
-        # 1. Маркеры вставленных изображений
         for item in self.pasted_images:
             if item.isSelected() and item.handles:
                 handle_id = item.handles.hit_test(pos)
@@ -1480,7 +1475,6 @@ class EditorView(QGraphicsView):
                         item.handles.get_cursor_for_handle(handle_id))
                     return
 
-        # 2. Маркеры активной зоны размытия (ПЕРЕД itemAt!)
         if (self.image_editor.active_blur_index is not None and
                 self.image_editor.active_blur_index < len(
                     self.image_editor.blur_region_items)):
@@ -1493,7 +1487,6 @@ class EditorView(QGraphicsView):
                         active_blur.handles.get_cursor_for_handle(handle_id))
                     return
 
-        # 3. Элемент под курсором
         item = self.scene().itemAt(sp, self.transform())
 
         if (self.active_text_item and item is self.active_text_item
@@ -1501,24 +1494,20 @@ class EditorView(QGraphicsView):
             self.viewport().setCursor(Qt.IBeamCursor)
             return
 
-        # Зоны размытия — курсор перемещения
         if item and isinstance(item, BlurRegionItem):
             self.viewport().setCursor(Qt.SizeAllCursor)
             return
 
-        # Обычные перемещаемые объекты
         if item and not self._is_background_item(item):
             li = self._item_for_manipulation(item)
             if li is not None and li.flags() & QGraphicsItem.ItemIsMovable:
                 self.viewport().setCursor(Qt.SizeAllCursor)
                 return
 
-        # Вставленные изображения
         if item and isinstance(item, PastedImageItem):
             self.viewport().setCursor(Qt.SizeAllCursor)
             return
 
-        # Инструменты рисования
         if self.current_tool in ('rect', 'ellipse', 'arrow', 'line', 'text'):
             self.viewport().setCursor(Qt.CrossCursor)
         else:
