@@ -361,7 +361,7 @@ class ResizeBlurRegionCommand(QUndoCommand):
 
 
 # --------------------------------------------------------------
-# Команды для вставленных изображений (с исправлением синхронизации маркеров)
+# Команды для вставленных изображений
 # --------------------------------------------------------------
 
 class AddPastedImageCommand(QUndoCommand):
@@ -411,7 +411,7 @@ class RemovePastedImageCommand(QUndoCommand):
         if self.item not in self.view.pasted_images:
             self.view.pasted_images.append(self.item)
         self.item.setVisible(True)
-        self.item.show_handles()  # показываем маркеры, если элемент был выделен
+        self.item.show_handles()
         self.item.update_handles()
 
 
@@ -548,7 +548,7 @@ class RemoveSelectedItemsCommand(QUndoCommand):
             if item not in self.view.pasted_images:
                 self.view.pasted_images.append(item)
             item.setVisible(True)
-            item.show_handles()  # восстановить маркеры, если были
+            item.show_handles()
             item.update_handles()
 
         # Возвращаем зоны размытия
@@ -562,3 +562,28 @@ class RemoveSelectedItemsCommand(QUndoCommand):
         if self.active_text_removed is not None:
             self.view.active_text_item = self.active_text_removed
             self.active_text_removed = None
+
+
+# --------------------------------------------------------------
+# Команда вставки элементов из буфера обмена
+# --------------------------------------------------------------
+
+class PasteItemsCommand(QUndoCommand):
+    """Команда вставки элементов из внутреннего буфера обмена."""
+
+    def __init__(self, scene, items):
+        super().__init__("Вставить элементы")
+        self.scene = scene
+        self.items = items
+
+    def redo(self):
+        for item in self.items:
+            if item.scene() is not self.scene:
+                self.scene.addItem(item)
+            item.setVisible(True)
+
+    def undo(self):
+        for item in self.items:
+            item.setVisible(False)
+            if item.scene() is self.scene:
+                self.scene.removeItem(item)

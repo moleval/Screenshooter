@@ -442,7 +442,12 @@ class ScreenshotApp(QMainWindow):
             return
         if self.view.active_text_item and self.view.active_text_item._editable:
             return
-        self.insert_image_from_clipboard()
+        # Сначала пробуем вставить из внутреннего буфера (элементы редактора)
+        if self.view.clipboard_controller.has_clipboard:
+            self.view.clipboard_controller.paste()
+        else:
+            # Если внутренний буфер пуст — вставляем изображение из системного буфера
+            self.insert_image_from_clipboard()
 
     def undo_action(self):
         self.view.undo()

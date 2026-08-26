@@ -33,6 +33,7 @@ from .history import (HistoryManager, AddItemCommand, RemoveItemCommand,
 from .image_edit_controller import ImageEditController
 from .ui.layout_manager import LayoutManager
 from .tools import RectTool, EllipseTool, LineTool, ArrowTool, TextTool
+from .controllers import ClipboardController  # КОПИРОВАНИЕ/ВСТАВКА
 
 
 class EditorView(QGraphicsView):
@@ -139,6 +140,9 @@ class EditorView(QGraphicsView):
 
         self.layout_manager = LayoutManager(self)
         self._tool = None
+
+        # КОПИРОВАНИЕ/ВСТАВКА: контроллер копирования/вставки
+        self.clipboard_controller = ClipboardController(self)
 
         # ЭТАП 5: кэш для _update_cursor
         self._last_cursor_pos = None
@@ -986,6 +990,33 @@ class EditorView(QGraphicsView):
                 super().keyPressEvent(e)
                 return
             self.select_all_items()
+            e.accept()
+            return
+
+        # КОПИРОВАНИЕ/ВСТАВКА: Ctrl+C
+        if e.key() == Qt.Key_C and e.modifiers() & Qt.ControlModifier:
+            if self.active_text_item and self.active_text_item._editable:
+                super().keyPressEvent(e)
+                return
+            self.clipboard_controller.copy_selected()
+            e.accept()
+            return
+
+        # КОПИРОВАНИЕ/ВСТАВКА: Ctrl+V
+        if e.key() == Qt.Key_V and e.modifiers() & Qt.ControlModifier:
+            if self.active_text_item and self.active_text_item._editable:
+                super().keyPressEvent(e)
+                return
+            self.clipboard_controller.paste()
+            e.accept()
+            return
+
+        # КОПИРОВАНИЕ/ВСТАВКА: Ctrl+X
+        if e.key() == Qt.Key_X and e.modifiers() & Qt.ControlModifier:
+            if self.active_text_item and self.active_text_item._editable:
+                super().keyPressEvent(e)
+                return
+            self.clipboard_controller.cut_selected()
             e.accept()
             return
 

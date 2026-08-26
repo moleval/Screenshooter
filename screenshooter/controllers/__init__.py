@@ -1,5 +1,8 @@
 """
-Модуль: controllers/__init__.py
-Описание: Пакет контроллеров для управления взаимодействием с пользователем.
-          Содержит ManipulationController для обработки манипуляций с объектами.
+Пакет контроллеров.
+Содержит контроллеры для различных подсистем редактора.
 """
+
+from .clipboard_controller import ClipboardController
+
+__all__ = ['ClipboardController']
