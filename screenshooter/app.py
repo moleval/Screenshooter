@@ -580,9 +580,21 @@ class ScreenshotApp(QMainWindow):
             self._ctrl_printscreen_hotkey = None
 
     def closeEvent(self, e):
+        # Останавливаем все таймеры перед закрытием
         try:
-            if hasattr(self, 'view') and hasattr(self.view, 'image_editor'):
-                self.view.image_editor._blur_recompute_timer.stop()
+            if hasattr(self, 'view'):
+                # Таймер пересчёта размытия
+                if hasattr(self.view, 'image_editor'):
+                    self.view.image_editor._blur_recompute_timer.stop()
+                # Таймер батчинга выделения (Этап 3)
+                if hasattr(self.view, '_selection_update_timer'):
+                    self.view._selection_update_timer.stop()
+                # Таймер дебаунса layout_manager (Этап 3)
+                if hasattr(self.view, 'layout_manager') and hasattr(self.view.layout_manager, '_update_timer'):
+                    self.view.layout_manager._update_timer.stop()
+                # Таймер статусной метки
+                if hasattr(self.view, '_status_timer'):
+                    self.view._status_timer.stop()
         except (RuntimeError, AttributeError):
             pass
 

@@ -28,6 +28,11 @@ class ImageEditController:
     Также поддерживает операции с вставленными изображениями.
     """
 
+    # ЭТАП 4: константы для пересчёта размытия
+    PREVIEW_RADIUS = 4.0    # Радиус при перетаскивании (быстрый режим)
+    FULL_RADIUS = 10.0      # Радиус при отпускании (полное качество)
+    PREVIEW_SCALE = 4       # Уменьшение в 4 раза (быстрый режим)
+
     def __init__(self, view):
         self.view = view
 
@@ -56,10 +61,15 @@ class ImageEditController:
         self.blur_outside_mode = False
         self.blur_outside_interaction = None
 
-        # Таймер троттлинга перерисовки размытия при перетаскивании
+        # ЭТАП 4: таймер троттлинга перерисовки размытия при перетаскивании
         self._blur_recompute_timer = QTimer()
-        self._blur_recompute_timer.setInterval(50)
-        self._blur_recompute_timer.timeout.connect(self._recompute_blurred_pixmap)
+        self._blur_recompute_timer.setInterval(16)  # ~60 fps
+        self._blur_recompute_timer.timeout.connect(self._on_blur_timer)
+
+        # ЭТАП 4: кэш для неизменных зон
+        self._blur_cache_pixmap = None
+        self._blur_cache_index = None
+        self._pending_moving_index = None
 
     # --------------------------------------------------------------
     # Установка фонового элемента и сброс
@@ -120,6 +130,7 @@ class ImageEditController:
         self.blur_outside_mode = False
         self.blur_outside_interaction = None
         self._blur_recompute_timer.stop()
+        self._invalidate_blur_cache()
 
     def _clear_blur_regions(self):
         self._clear_all_blur_regions()
@@ -164,6 +175,7 @@ class ImageEditController:
 
         self.blur_regions = new_regions
         self.active_blur_index = None
+        self._invalidate_blur_cache()
 
         for rect in self.blur_regions:
             item = BlurRegionItem(rect, self.view, mode='inactive')
@@ -179,6 +191,7 @@ class ImageEditController:
         item = BlurRegionItem(rect, self.view, mode='active')
         self.view.scene().addItem(item)
         self.blur_region_items.append(item)
+        self._invalidate_blur_cache()
         self._recompute_blurred_pixmap()
         self._set_active_blur(len(self.blur_regions) - 1)
 
@@ -192,6 +205,7 @@ class ImageEditController:
                 if isinstance(it, BlurRegionItem) and it not in self.blur_region_items:
                     it.remove()
             self.active_blur_index = None
+            self._invalidate_blur_cache()
             self._recompute_blurred_pixmap()
 
     def _remove_blur_region_at(self, index):
@@ -207,6 +221,7 @@ class ImageEditController:
             for it in self.view.scene().items():
                 if isinstance(it, BlurRegionItem) and it not in self.blur_region_items:
                     it.remove()
+            self._invalidate_blur_cache()
             self._recompute_blurred_pixmap()
             return rect
         return None
@@ -216,6 +231,7 @@ class ImageEditController:
         item = BlurRegionItem(rect, self.view, mode='inactive')
         self.view.scene().addItem(item)
         self.blur_region_items.insert(index, item)
+        self._invalidate_blur_cache()
         self._recompute_blurred_pixmap()
 
     def _update_blur_region_rect(self, index, rect):
@@ -228,32 +244,152 @@ class ImageEditController:
                     item.handles.update_handles(rect)
             self._recompute_blurred_pixmap()
 
+    # --------------------------------------------------------------
+    # ЭТАП 4: адаптивные настройки пересчёта размытия
+    # --------------------------------------------------------------
+    def _get_preview_settings(self):
+        """Возвращает (радиус, масштаб) в зависимости от размера изображения."""
+        if self.blur_base_pixmap is None:
+            return self.PREVIEW_RADIUS, self.PREVIEW_SCALE
+
+        w = self.blur_base_pixmap.width()
+        h = self.blur_base_pixmap.height()
+        pixels = w * h
+
+        if pixels <= 921600:
+            # До 1280×720 — полное качество
+            return self.FULL_RADIUS, 1
+        elif pixels <= 2073600:
+            # До 1920×1080 — выше среднего
+            return 8.0, 2
+        else:
+            # Больше 1920×1080 — среднее
+            return 6.0, 2
+
+    # --------------------------------------------------------------
+    # ЭТАП 4: пересчёт размытия
+    # --------------------------------------------------------------
     def _recompute_blurred_pixmap(self):
-        # ЭТАП 2: принудительная перерисовка для SmartViewportUpdate
+        """Полный пересчёт с нормальным радиусом (при отпускании)."""
+        self._do_blur_recompute(radius=self.FULL_RADIUS, preview=False)
+
+    def _recompute_blurred_pixmap_preview(self):
+        """Быстрый пересчёт для перетаскивания (адаптивный)."""
+        radius, scale = self._get_preview_settings()
+        self._do_blur_recompute(radius=radius, preview=True, preview_scale=scale)
+
+    def _do_blur_recompute(self, radius=10.0, moving_index=None,
+                           preview=False, preview_scale=None):
+        """
+        Пересчёт размытия.
+        preview=True: уменьшенная копия + уменьшенный радиус (для перетаскивания).
+        preview=False: полный размер + полный радиус (для финального результата).
+        preview_scale: коэффициент уменьшения (если None — используется PREVIEW_SCALE).
+        """
         if self.blur_base_pixmap is None:
             return
-        pixmap = QPixmap(self.blur_base_pixmap)
-        for rect in self.blur_regions:
-            pixmap = blur_region(pixmap, rect, radius=10.0)
-        # Уведомляем сцену об изменении ДО замены пиксмапа
+        if not self.blur_regions:
+            self.background_item.prepareGeometryChange()
+            self.background_item.setPixmap(self.blur_base_pixmap)
+            self.background_item.update()
+            self.view.viewport().update()
+            return
+
+        if preview_scale is None:
+            preview_scale = self.PREVIEW_SCALE
+
+        if preview:
+            # Уменьшенная копия для скорости
+            small_w = max(1, self.blur_base_pixmap.width() // preview_scale)
+            small_h = max(1, self.blur_base_pixmap.height() // preview_scale)
+            scale_x = small_w / self.blur_base_pixmap.width()
+            scale_y = small_h / self.blur_base_pixmap.height()
+
+            # Проверяем кэш: если та же зона двигается, используем кэш
+            if (moving_index is not None and
+                    self._blur_cache_index == moving_index and
+                    self._blur_cache_pixmap is not None):
+                pixmap = QPixmap(self._blur_cache_pixmap)
+            else:
+                # Создаём уменьшенную копию и применяем все зоны кроме двигающейся
+                pixmap = self.blur_base_pixmap.scaled(
+                    small_w, small_h, Qt.IgnoreAspectRatio, Qt.FastTransformation)
+                for idx, rect in enumerate(self.blur_regions):
+                    if idx == moving_index:
+                        continue
+                    small_rect = QRectF(
+                        rect.x() * scale_x, rect.y() * scale_y,
+                        rect.width() * scale_x, rect.height() * scale_y)
+                    pixmap = blur_region(pixmap, small_rect, radius=radius)
+
+                # Кэшируем результат без двигающейся зоны
+                if moving_index is not None:
+                    self._blur_cache_pixmap = QPixmap(pixmap)
+                    self._blur_cache_index = moving_index
+
+            # Применяем двигающуюся зону
+            if moving_index is not None and moving_index < len(self.blur_regions):
+                rect = self.blur_regions[moving_index]
+                small_rect = QRectF(
+                    rect.x() * scale_x, rect.y() * scale_y,
+                    rect.width() * scale_x, rect.height() * scale_y)
+                pixmap = blur_region(pixmap, small_rect, radius=radius)
+
+            # Масштабируем обратно
+            pixmap = pixmap.scaled(
+                self.blur_base_pixmap.width(),
+                self.blur_base_pixmap.height(),
+                Qt.IgnoreAspectRatio, Qt.FastTransformation)
+        else:
+            # Полный пересчёт
+            pixmap = QPixmap(self.blur_base_pixmap)
+            for rect in self.blur_regions:
+                pixmap = blur_region(pixmap, rect, radius=radius)
+
         self.background_item.prepareGeometryChange()
         self.background_item.setPixmap(pixmap)
         self.background_item.update()
-        # Принудительная перерисовка для SmartViewportUpdate
         self.view.viewport().update()
 
-    def _schedule_blur_recompute(self):
-        """Запускает отложенную перерисовку размытия (троттлинг ~20 fps)."""
+    def _schedule_blur_recompute(self, moving_index=None):
+        """Запускает быстрый пересчёт (для перетаскивания)."""
+        self._pending_moving_index = moving_index
         if not self._blur_recompute_timer.isActive():
+            try:
+                self._blur_recompute_timer.timeout.disconnect()
+            except TypeError:
+                pass
+            self._blur_recompute_timer.timeout.connect(self._on_blur_timer)
             self._blur_recompute_timer.start()
 
-    def _force_blur_recompute(self):
-        """Останавливает таймер и немедленно перерисовывает размытие."""
-        self._blur_recompute_timer.stop()
-        self._recompute_blurred_pixmap()
+    def _on_blur_timer(self):
+        """Обработчик таймера: адаптивный пересчёт на уменьшенной копии."""
+        idx = getattr(self, '_pending_moving_index', None)
+        radius, scale = self._get_preview_settings()
+        self._do_blur_recompute(
+            radius=radius, moving_index=idx, preview=True, preview_scale=scale)
 
+    def _force_blur_recompute(self):
+        """При отпускании — полный пересчёт с нормальным радиусом."""
+        self._blur_recompute_timer.stop()
+        try:
+            self._blur_recompute_timer.timeout.disconnect()
+        except TypeError:
+            pass
+        self._pending_moving_index = None
+        self._invalidate_blur_cache()
+        self._do_blur_recompute(radius=self.FULL_RADIUS, preview=False)
+
+    def _invalidate_blur_cache(self):
+        """Сбрасывает кэш при изменении набора зон."""
+        self._blur_cache_pixmap = None
+        self._blur_cache_index = None
+
+    # --------------------------------------------------------------
+    # Активная зона размытия
+    # ЭТАП 1: защита от удалённых C++ объектов
+    # --------------------------------------------------------------
     def _set_active_blur(self, index):
-        # ЭТАП 1: защита от удалённых C++ объектов
         self._clear_active_blur()
         if 0 <= index < len(self.blur_region_items):
             item = self.blur_region_items[index]
@@ -262,7 +398,6 @@ class ImageEditController:
                 self.active_blur_index = index
 
     def _clear_active_blur(self):
-        # ЭТАП 1: защита от удалённых C++ объектов
         if self.active_blur_index is not None and self.active_blur_index < len(self.blur_region_items):
             item = self.blur_region_items[self.active_blur_index]
             if not sip.isdeleted(item):
@@ -276,15 +411,14 @@ class ImageEditController:
 
     # --------------------------------------------------------------
     # Скрытие зон для рендера
+    # ЭТАП 1: защита от удалённых C++ объектов
     # --------------------------------------------------------------
     def hide_blur_regions_for_render(self):
-        # ЭТАП 1: защита от удалённых C++ объектов
         for item in self.blur_region_items:
             if not sip.isdeleted(item):
                 item.setVisible(False)
 
     def show_blur_regions_after_render(self):
-        # ЭТАП 1: защита от удалённых C++ объектов
         for item in self.blur_region_items:
             if not sip.isdeleted(item):
                 item.setVisible(True)
@@ -508,7 +642,6 @@ class ImageEditController:
         self.active_handle = None
         self.blur_interaction = None
         self.active_blur_index = None
-        # ЭТАП 1: защита от удалённых C++ объектов
         for item in self.blur_region_items:
             if not sip.isdeleted(item):
                 item.set_mode('inactive')
@@ -695,7 +828,7 @@ class ImageEditController:
                     item = self.blur_region_items[self.active_blur_index]
                     item.update_rect(new_rect)
                     self.blur_regions[self.active_blur_index] = new_rect
-                    self._schedule_blur_recompute()
+                    self._schedule_blur_recompute(moving_index=self.active_blur_index)
                 return True
 
             if self.blur_interaction == 'moving':
@@ -713,7 +846,7 @@ class ImageEditController:
                     if not new_rect.isEmpty():
                         item.update_rect(new_rect)
                         self.blur_regions[self.active_blur_index] = new_rect
-                        self._schedule_blur_recompute()
+                        self._schedule_blur_recompute(moving_index=self.active_blur_index)
                 return True
 
             if self.blur_interaction == 'drawing':
@@ -722,7 +855,6 @@ class ImageEditController:
                     self.blur_temp_item.setRect(rect)
                 return True
 
-            # Нет активного взаимодействия — только курсор, НЕ перехватываем
             if self.active_blur_index is not None:
                 item = self.blur_region_items[self.active_blur_index]
                 handle_id = item.handles.hit_test(QPointF(event.pos()))
@@ -892,7 +1024,7 @@ class ImageEditController:
                 item = self.blur_region_items[self.active_blur_index]
                 item.update_rect(new_rect)
                 self.blur_regions[self.active_blur_index] = new_rect
-                self._schedule_blur_recompute()
+                self._schedule_blur_recompute(moving_index=self.active_blur_index)
             return True
         elif self.blur_outside_interaction == 'moving':
             if self.active_blur_index is not None:
@@ -909,7 +1041,7 @@ class ImageEditController:
                 if not new_rect.isEmpty():
                     item.update_rect(new_rect)
                     self.blur_regions[self.active_blur_index] = new_rect
-                    self._schedule_blur_recompute()
+                    self._schedule_blur_recompute(moving_index=self.active_blur_index)
             return True
 
         return False

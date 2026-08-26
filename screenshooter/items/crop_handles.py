@@ -52,9 +52,15 @@ class CropHandles:
                 self.positions[handle_id] = pos
 
     def remove_handles(self):
+        from PyQt5 import sip
         for handle in self.handle_items.values():
-            if handle.scene() is self.view.scene():
-                self.view.scene().removeItem(handle)
+            try:
+                if sip.isdeleted(handle):
+                    continue
+                if handle.scene() is self.view.scene():
+                    self.view.scene().removeItem(handle)
+            except RuntimeError:
+                continue
         self.handle_items.clear()
         self.positions.clear()
 

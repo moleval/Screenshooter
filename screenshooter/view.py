@@ -169,9 +169,12 @@ class EditorView(QGraphicsView):
 
     def _do_selection_update(self):
         """Вызывается один раз на пачку изменений выделения."""
-        self._sync_selection_properties()
-        self._update_floating_widgets_visibility()
-        self._update_blur_region_handles()
+        try:
+            self._sync_selection_properties()
+            self._update_floating_widgets_visibility()
+            self._update_blur_region_handles()
+        except RuntimeError:
+            pass  # C++ объекты уже удалены (закрытие приложения)
 
     # ==============================================================
     # Вспомогательные
@@ -322,13 +325,18 @@ class EditorView(QGraphicsView):
         self.pasted_images.clear()
 
     def _update_pasted_image_handles(self):
-        selected_ids = {id(it) for it in self.scene().selectedItems()
-                        if isinstance(it, PastedImageItem)}
-        for item in self.pasted_images:
-            if id(item) in selected_ids:
-                item.show_handles()
-            else:
-                item.hide_handles()
+        try:
+            selected_ids = {id(it) for it in self.scene().selectedItems()
+                            if isinstance(it, PastedImageItem)}
+            for item in self.pasted_images:
+                if sip.isdeleted(item):
+                    continue
+                if id(item) in selected_ids:
+                    item.show_handles()
+                else:
+                    item.hide_handles()
+        except RuntimeError:
+            pass  # C++ объекты уже удалены (закрытие приложения)
 
     def hide_pasted_image_handles_for_render(self):
         for item in self.pasted_images:
@@ -752,7 +760,8 @@ class EditorView(QGraphicsView):
                         idx_blur = self.image_editor.blur_region_items.index(drag_item)
                         self.image_editor.blur_regions[idx_blur] = new_rect
                         self._drag_blur_needs_recompute = True
-                        self.image_editor._schedule_blur_recompute()
+                        # ЭТАП 4: передаём индекс двигающейся зоны
+                        self.image_editor._schedule_blur_recompute(moving_index=idx_blur)
                     except ValueError:
                         pass
                     if drag_item.handles:
