@@ -56,6 +56,7 @@ class ImageEditController:
         self.blur_outside_mode = False
         self.blur_outside_interaction = None
 
+        # Таймер троттлинга перерисовки размытия при перетаскивании
         self._blur_recompute_timer = QTimer()
         self._blur_recompute_timer.setInterval(50)
         self._blur_recompute_timer.timeout.connect(self._recompute_blurred_pixmap)
@@ -228,13 +229,18 @@ class ImageEditController:
             self._recompute_blurred_pixmap()
 
     def _recompute_blurred_pixmap(self):
+        # ЭТАП 2: принудительная перерисовка для SmartViewportUpdate
         if self.blur_base_pixmap is None:
             return
         pixmap = QPixmap(self.blur_base_pixmap)
         for rect in self.blur_regions:
             pixmap = blur_region(pixmap, rect, radius=10.0)
+        # Уведомляем сцену об изменении ДО замены пиксмапа
+        self.background_item.prepareGeometryChange()
         self.background_item.setPixmap(pixmap)
         self.background_item.update()
+        # Принудительная перерисовка для SmartViewportUpdate
+        self.view.viewport().update()
 
     def _schedule_blur_recompute(self):
         """Запускает отложенную перерисовку размытия (троттлинг ~20 fps)."""
@@ -247,7 +253,7 @@ class ImageEditController:
         self._recompute_blurred_pixmap()
 
     def _set_active_blur(self, index):
-        # ЭТАП 1, ШАГ 1.2: защита от удалённых C++ объектов
+        # ЭТАП 1: защита от удалённых C++ объектов
         self._clear_active_blur()
         if 0 <= index < len(self.blur_region_items):
             item = self.blur_region_items[index]
@@ -256,7 +262,7 @@ class ImageEditController:
                 self.active_blur_index = index
 
     def _clear_active_blur(self):
-        # ЭТАП 1, ШАГ 1.2: защита от удалённых C++ объектов
+        # ЭТАП 1: защита от удалённых C++ объектов
         if self.active_blur_index is not None and self.active_blur_index < len(self.blur_region_items):
             item = self.blur_region_items[self.active_blur_index]
             if not sip.isdeleted(item):
@@ -272,11 +278,13 @@ class ImageEditController:
     # Скрытие зон для рендера
     # --------------------------------------------------------------
     def hide_blur_regions_for_render(self):
+        # ЭТАП 1: защита от удалённых C++ объектов
         for item in self.blur_region_items:
             if not sip.isdeleted(item):
                 item.setVisible(False)
 
     def show_blur_regions_after_render(self):
+        # ЭТАП 1: защита от удалённых C++ объектов
         for item in self.blur_region_items:
             if not sip.isdeleted(item):
                 item.setVisible(True)
@@ -500,6 +508,7 @@ class ImageEditController:
         self.active_handle = None
         self.blur_interaction = None
         self.active_blur_index = None
+        # ЭТАП 1: защита от удалённых C++ объектов
         for item in self.blur_region_items:
             if not sip.isdeleted(item):
                 item.set_mode('inactive')
@@ -713,6 +722,7 @@ class ImageEditController:
                     self.blur_temp_item.setRect(rect)
                 return True
 
+            # Нет активного взаимодействия — только курсор, НЕ перехватываем
             if self.active_blur_index is not None:
                 item = self.blur_region_items[self.active_blur_index]
                 handle_id = item.handles.hit_test(QPointF(event.pos()))

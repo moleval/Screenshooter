@@ -342,7 +342,6 @@ class ScreenshotApp(QMainWindow):
         clipboard = QApplication.clipboard()
         mime = clipboard.mimeData()
 
-        # 1. Проверяем наличие изображения в буфере
         if mime.hasImage():
             image = clipboard.image()
             if not image.isNull():
@@ -351,7 +350,6 @@ class ScreenshotApp(QMainWindow):
                     self.view.add_pasted_image(pixmap)
                     return
 
-        # 2. Проверяем файлы (например, скопированный файл .png в проводнике)
         if mime.hasUrls():
             for url in mime.urls():
                 local_path = url.toLocalFile()
@@ -361,7 +359,6 @@ class ScreenshotApp(QMainWindow):
                         self.view.add_pasted_image(pixmap)
                         return
 
-        # Если ничего не удалось вставить
         self.view.show_status_message("Не удалось вставить изображение из буфера.", 5000)
 
     # --------------------------------------------------------------
@@ -514,7 +511,6 @@ class ScreenshotApp(QMainWindow):
             self.view.show_status_message("Не удалось сохранить файл.", 15000)
 
     def _on_scene_selection_changed(self):
-        # Защита от обращения к удалённой сцене
         if sip.isdeleted(self.scene):
             return
         self.view.update_text_format_widget_visibility()
@@ -583,24 +579,18 @@ class ScreenshotApp(QMainWindow):
                 pass
             self._ctrl_printscreen_hotkey = None
 
-    # --------------------------------------------------------------
-    # ЭТАП 1, ШАГ 1.4: безопасное закрытие приложения
-    # --------------------------------------------------------------
     def closeEvent(self, e):
-        # Останавливаем таймер перерисовки размытия
         try:
             if hasattr(self, 'view') and hasattr(self.view, 'image_editor'):
                 self.view.image_editor._blur_recompute_timer.stop()
         except (RuntimeError, AttributeError):
             pass
 
-        # Отключаем сигналы сцены перед закрытием
         try:
             self.scene.selectionChanged.disconnect(self._on_scene_selection_changed)
         except (TypeError, RuntimeError):
             pass
 
-        # Очистка сцены с защитой от удалённых объектов
         try:
             if not sip.isdeleted(self.scene):
                 self.scene.clear()
@@ -670,8 +660,12 @@ class ScreenshotApp(QMainWindow):
 
         item = QGraphicsPixmapItem(self.screenshot_pixmap)
         item.setTransformationMode(Qt.SmoothTransformation)
-        self.scene.addItem(item)
 
+        # ИСПРАВЛЕНИЕ: фон не перехватывает события мыши и всегда ниже всех элементов
+        item.setAcceptedMouseButtons(Qt.NoButton)
+        item.setZValue(-1)
+
+        self.scene.addItem(item)
         self.view.set_background_item(item)
 
         self.view.setSceneRect(QRectF(self.screenshot_pixmap.rect()))

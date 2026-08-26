@@ -44,7 +44,8 @@ class EditorView(QGraphicsView):
 
     def __init__(self, scene):
         super().__init__(scene)
-        self.setViewportUpdateMode(QGraphicsView.FullViewportUpdate)
+        # ЭТАП 2: SmartViewportUpdate вместо FullViewportUpdate
+        self.setViewportUpdateMode(QGraphicsView.SmartViewportUpdate)
         self.current_tool = None
         self.start_point = None
         self.temp_item = None
@@ -319,7 +320,7 @@ class EditorView(QGraphicsView):
 
     # ==============================================================
     # Ручки зон размытия при множественном выделении
-    # ЭТАП 1, ШАГ 1.3: защита от удалённых C++ объектов при закрытии
+    # ЭТАП 1: защита от удалённых C++ объектов при закрытии
     # ==============================================================
     def _update_blur_region_handles(self):
         """Скрывает ручки зон размытия при множественном выделении."""
@@ -513,12 +514,18 @@ class EditorView(QGraphicsView):
                 self._activate_temp_pointer('right_click')
                 self.rubber_band_active = True
                 self.rubber_band_start = sp
-                pen = QPen(QColor(0, 120, 215), 1, Qt.DashLine)
+                pen = QPen(QColor(255, 200, 0), 3, Qt.DashLine)
+                pen.setCosmetic(True)  # толщина не зависит от масштаба
                 self.rubber_band_item = QGraphicsRectItem(QRectF(sp, sp))
                 self.rubber_band_item.setPen(pen)
+                # Поверх всех элементов
+                self.rubber_band_item.setZValue(10000)
                 self.rubber_band_item.setFlag(QGraphicsRectItem.ItemIsMovable, False)
                 self.rubber_band_item.setFlag(QGraphicsRectItem.ItemIsSelectable, False)
                 self.scene().addItem(self.rubber_band_item)
+                # Временно переключаемся на FullViewportUpdate для перерисовки рамки
+                self.setViewportUpdateMode(QGraphicsView.FullViewportUpdate)
+                self.viewport().update()
             e.accept()
             return
 
@@ -769,6 +776,7 @@ class EditorView(QGraphicsView):
             e.accept()
             return
 
+        # Рамка выделения ПКМ — перерисовка в режиме FullViewportUpdate
         if self.rubber_band_active and self.rubber_band_item:
             cp = self.mapToScene(e.pos())
             self.rubber_band_item.setRect(
@@ -873,6 +881,9 @@ class EditorView(QGraphicsView):
                         li.setSelected(True)
             self.rubber_band_active = False
             self.rubber_band_start = None
+            # Возвращаем SmartViewportUpdate после завершения рамки
+            self.setViewportUpdateMode(QGraphicsView.SmartViewportUpdate)
+            self.viewport().update()
             e.accept()
             return
 
@@ -1467,6 +1478,7 @@ class EditorView(QGraphicsView):
     def _update_cursor(self, pos):
         sp = self.mapToScene(pos)
 
+        # 1. Маркеры вставленных изображений
         for item in self.pasted_images:
             if item.isSelected() and item.handles:
                 handle_id = item.handles.hit_test(pos)
@@ -1475,6 +1487,7 @@ class EditorView(QGraphicsView):
                         item.handles.get_cursor_for_handle(handle_id))
                     return
 
+        # 2. Маркеры активной зоны размытия (ПЕРЕД itemAt!)
         if (self.image_editor.active_blur_index is not None and
                 self.image_editor.active_blur_index < len(
                     self.image_editor.blur_region_items)):
@@ -1487,6 +1500,7 @@ class EditorView(QGraphicsView):
                         active_blur.handles.get_cursor_for_handle(handle_id))
                     return
 
+        # 3. Элемент под курсором
         item = self.scene().itemAt(sp, self.transform())
 
         if (self.active_text_item and item is self.active_text_item
@@ -1494,20 +1508,24 @@ class EditorView(QGraphicsView):
             self.viewport().setCursor(Qt.IBeamCursor)
             return
 
+        # Зоны размытия — курсор перемещения
         if item and isinstance(item, BlurRegionItem):
             self.viewport().setCursor(Qt.SizeAllCursor)
             return
 
+        # Обычные перемещаемые объекты
         if item and not self._is_background_item(item):
             li = self._item_for_manipulation(item)
             if li is not None and li.flags() & QGraphicsItem.ItemIsMovable:
                 self.viewport().setCursor(Qt.SizeAllCursor)
                 return
 
+        # Вставленные изображения
         if item and isinstance(item, PastedImageItem):
             self.viewport().setCursor(Qt.SizeAllCursor)
             return
 
+        # Инструменты рисования
         if self.current_tool in ('rect', 'ellipse', 'arrow', 'line', 'text'):
             self.viewport().setCursor(Qt.CrossCursor)
         else:
