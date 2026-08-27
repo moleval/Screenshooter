@@ -2,9 +2,11 @@
 Модуль: controllers/floating_widget_manager.py
 Описание: Контроллер управления плавающими виджетами редактора.
           Управляет видимостью виджетов режимов, синхронизацией свойств
-          выделенных элементов, применением стиля и статусным виджетом.
+          выделенных элементов, применением стиля, статусным виджетом
+          и обработчиками сигналов виджетов.
 """
 
+from PyQt5 import sip
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QPen, QColor, QFont
 from PyQt5.QtWidgets import QGraphicsTextItem
@@ -18,7 +20,8 @@ from ..history import ChangePenCommand
 class FloatingWidgetManager:
     """
     Управляет плавающими виджетами редактора:
-    видимость, синхронизация свойств, применение стиля, статусный виджет.
+    видимость, синхронизация свойств, применение стиля, статусный виджет,
+    обработчики сигналов виджетов.
     """
 
     def __init__(self, view):
@@ -31,11 +34,62 @@ class FloatingWidgetManager:
         self._status_timer.timeout.connect(self._restore_status_label)
 
         # Подключаем сигналы виджетов
+        view.zoom_widget.zoomChanged.connect(self._on_zoom_widget_changed)
+        view.zoom_widget.fitRequested.connect(self._fit_to_view)
         view.text_format_widget.bgChanged.connect(self._on_text_bg_changed)
         view.shape_mode_widget.modeChanged.connect(self._on_shape_mode_changed)
         view.ellipse_mode_widget.modeChanged.connect(self._on_ellipse_mode_changed)
         view.arrow_mode_widget.modeChanged.connect(self._on_arrow_mode_changed)
         view.line_mode_widget.modeChanged.connect(self._on_line_mode_changed)
+
+    # ==============================================================
+    # Обработчики сигналов виджетов
+    # ==============================================================
+
+    def _on_zoom_widget_changed(self, p):
+        """Обработчик сигнала изменения масштаба."""
+        self.view.zoomChangedByWheel.emit(p)
+
+    def _fit_to_view(self):
+        """Подгоняет изображение под размер окна."""
+        view = self.view
+        bg = view.image_editor.background_item
+        if bg is not None and not sip.isdeleted(bg) and bg.scene() is view.scene():
+            view.fitInView(bg, Qt.KeepAspectRatio)
+        elif view.scene() and view.scene().items():
+            view.fitInView(view.scene().itemsBoundingRect(), Qt.KeepAspectRatio)
+        else:
+            view.resetTransform()
+        view.auto_fit = False
+        scale = view.transform().m11() * 100
+        view.zoom_widget.set_zoom(scale)
+
+    def _on_text_bg_changed(self, m):
+        """Обработчик смены фона текста."""
+        view = self.view
+        view.current_text_bg = (
+            QColor(255, 255, 255, 200) if m == 'white' else
+            QColor(0, 0, 0, 200) if m == 'black' else None)
+        if view.active_text_item:
+            view.active_text_item.bg_color = view.current_text_bg
+            view.active_text_item.update()
+        else:
+            for item in view.scene().selectedItems():
+                if isinstance(item, TextItem):
+                    item.bg_color = view.current_text_bg
+                    item.update()
+
+    def _on_shape_mode_changed(self, m):
+        self.view.shape_mode = m
+
+    def _on_ellipse_mode_changed(self, m):
+        self.view.ellipse_mode = m
+
+    def _on_arrow_mode_changed(self, m):
+        self.view.arrow_mode = m
+
+    def _on_line_mode_changed(self, m):
+        self.view.line_mode = m
 
     # ==============================================================
     # Статусный виджет
@@ -179,37 +233,6 @@ class FloatingWidgetManager:
     def update_text_format_widget_visibility(self):
         """Обновляет видимость виджета формата текста."""
         self.update_floating_widgets_visibility()
-
-    # ==============================================================
-    # Обработчики сигналов виджетов
-    # ==============================================================
-
-    def _on_text_bg_changed(self, m):
-        """Обработчик смены фона текста."""
-        view = self.view
-        view.current_text_bg = (
-            QColor(255, 255, 255, 200) if m == 'white' else
-            QColor(0, 0, 0, 200) if m == 'black' else None)
-        if view.active_text_item:
-            view.active_text_item.bg_color = view.current_text_bg
-            view.active_text_item.update()
-        else:
-            for item in view.scene().selectedItems():
-                if isinstance(item, TextItem):
-                    item.bg_color = view.current_text_bg
-                    item.update()
-
-    def _on_shape_mode_changed(self, m):
-        self.view.shape_mode = m
-
-    def _on_ellipse_mode_changed(self, m):
-        self.view.ellipse_mode = m
-
-    def _on_arrow_mode_changed(self, m):
-        self.view.arrow_mode = m
-
-    def _on_line_mode_changed(self, m):
-        self.view.line_mode = m
 
     # ==============================================================
     # Применение стиля и сеттеры

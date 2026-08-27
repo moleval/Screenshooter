@@ -75,8 +75,6 @@ class EditorView(QGraphicsView):
         self.image_editor = ImageEditController(self)
 
         self.zoom_widget = ZoomWidget(self)
-        self.zoom_widget.zoomChanged.connect(self._on_zoom_widget_changed)
-        self.zoom_widget.fitRequested.connect(self._fit_to_view)
 
         self.text_format_widget = TextFormatWidget(self)
         self.text_format_widget.setVisible(False)
@@ -711,24 +709,6 @@ class EditorView(QGraphicsView):
 
     def _text_editing_finished(self, item):
         self.widget_manager.text_editing_finished(item)
-
-    # ==============================================================
-    # Обработчики сигналов виджетов
-    # ==============================================================
-    def _on_zoom_widget_changed(self, p):
-        self.zoomChangedByWheel.emit(p)
-
-    def _fit_to_view(self):
-        bg = self.image_editor.background_item
-        if bg is not None and not sip.isdeleted(bg) and bg.scene() is self.scene():
-            self.fitInView(bg, Qt.KeepAspectRatio)
-        elif self.scene() and self.scene().items():
-            self.fitInView(self.scene().itemsBoundingRect(), Qt.KeepAspectRatio)
-        else:
-            self.resetTransform()
-        self.auto_fit = False
-        scale = self.transform().m11() * 100
-        self.zoom_widget.set_zoom(scale)
 
     # ==============================================================
     # Временный указатель / инструменты
