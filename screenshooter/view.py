@@ -34,7 +34,8 @@ from .image_edit_controller import ImageEditController
 from .ui.layout_manager import LayoutManager
 from .tools import RectTool, EllipseTool, LineTool, ArrowTool, TextTool
 from .controllers import (ClipboardController, ManipulationController,
-                          KeyboardManager, FloatingWidgetManager)
+                          KeyboardManager, FloatingWidgetManager,
+                          PastedImageController)
 
 
 class EditorView(QGraphicsView):
@@ -68,8 +69,6 @@ class EditorView(QGraphicsView):
         self.arrow_mode = 'straight'
         self.line_mode = 'straight'
         self.setCursor(Qt.CrossCursor)
-
-        self.pasted_images = []
 
         self.history = HistoryManager()
         self.image_editor = ImageEditController(self)
@@ -108,6 +107,7 @@ class EditorView(QGraphicsView):
         self._tool = None
 
         # Контроллеры
+        self.pasted_image_controller = PastedImageController(self)
         self.clipboard_controller = ClipboardController(self)
         self.manipulation_controller = ManipulationController(self)
         self.keyboard_manager = KeyboardManager(self)
@@ -265,58 +265,29 @@ class EditorView(QGraphicsView):
         self.image_editor.rotate_image(angle)
 
     # ==============================================================
-    # Вставленные изображения
+    # Вставленные изображения — делегирование в PastedImageController
     # ==============================================================
+    @property
+    def pasted_images(self):
+        return self.pasted_image_controller.pasted_images
+
     def add_pasted_image(self, pixmap):
-        item = PastedImageItem(pixmap, self)
-        self.pasted_images.append(item)
-        self.scene().addItem(item)
-        center = self.mapToScene(self.viewport().rect().center())
-        item.setPos(center - QPointF(pixmap.width() / 2, pixmap.height() / 2))
-        viewport_rect = self.viewport().rect()
-        max_w = viewport_rect.width() * 0.8
-        max_h = viewport_rect.height() * 0.8
-        if pixmap.width() > max_w or pixmap.height() > max_h:
-            scale = min(max_w / pixmap.width(), max_h / pixmap.height())
-            item.set_image_scale(scale)
-        self.history.push(AddPastedImageCommand(self.scene(), item, self))
-        self.scene().clearSelection()
-        item.setSelected(True)
-        item.show_handles()
-        return item
+        return self.pasted_image_controller.add_image(pixmap)
 
     def remove_pasted_image(self, item):
-        if item in self.pasted_images:
-            self.history.push(RemovePastedImageCommand(self.scene(), item, self))
+        self.pasted_image_controller.remove_image(item)
 
     def clear_pasted_images(self):
-        for item in self.pasted_images[:]:
-            item.hide_handles()
-            self.scene().removeItem(item)
-        self.pasted_images.clear()
+        self.pasted_image_controller.clear_all()
 
     def _update_pasted_image_handles(self):
-        try:
-            selected_ids = {id(it) for it in self.scene().selectedItems()
-                            if isinstance(it, PastedImageItem)}
-            for item in self.pasted_images:
-                if sip.isdeleted(item):
-                    continue
-                if id(item) in selected_ids:
-                    item.show_handles()
-                else:
-                    item.hide_handles()
-        except RuntimeError:
-            pass
+        self.pasted_image_controller.update_handles()
 
     def hide_pasted_image_handles_for_render(self):
-        for item in self.pasted_images:
-            item.hide_handles()
+        self.pasted_image_controller.hide_handles_for_render()
 
     def show_pasted_image_handles_after_render(self):
-        for item in self.pasted_images:
-            if item.isSelected():
-                item.show_handles()
+        self.pasted_image_controller.show_handles_after_render()
 
     # ==============================================================
     # Ручки зон размытия при множественном выделении
