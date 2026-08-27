@@ -1,0 +1,133 @@
+"""
+Модуль: history/background_commands.py
+Описание: Команды для редактирования фонового изображения.
+          Обрезка, поворот, размытие фона.
+"""
+
+from PyQt5.QtCore import QRectF
+from PyQt5.QtWidgets import QUndoCommand
+
+
+class CropCommand(QUndoCommand):
+    """
+    Команда обрезки фонового изображения.
+    Сохраняет состояние зон размытия, чтобы откат мог их восстановить.
+    """
+
+    def __init__(self, scene, background_item, old_pixmap, new_pixmap, items_to_remove,
+                 controller=None, crop_rect=None):
+        super().__init__("Обрезка")
+        self.scene = scene
+        self.background_item = background_item
+        self.old_pixmap = old_pixmap
+        self.new_pixmap = new_pixmap
+        self.items_to_remove = items_to_remove
+        self.removed_items = []
+        self.controller = controller
+        self.crop_rect = crop_rect
+
+        if controller is not None:
+            self.blur_state = controller._get_blur_state()
+        else:
+            self.blur_state = None
+
+    def redo(self):
+        for item in self.items_to_remove:
+            if item.scene() is self.scene:
+                self.scene.removeItem(item)
+                self.removed_items.append(item)
+
+        self.background_item.setPixmap(self.new_pixmap)
+        self.background_item.update()
+
+        if self.controller is not None and self.crop_rect is not None:
+            self.controller._apply_crop_to_blur_regions(self.crop_rect)
+            self.controller.view.setSceneRect(QRectF(self.new_pixmap.rect()))
+            self.controller.view.update_resolution_from_background()
+            self.controller.view.fit_background_to_view()
+
+    def undo(self):
+        self.background_item.setPixmap(self.old_pixmap)
+        self.background_item.update()
+
+        for item in self.removed_items:
+            if item.scene() is not self.scene:
+                self.scene.addItem(item)
+        self.removed_items.clear()
+
+        if self.controller is not None and self.blur_state is not None:
+            self.controller._restore_blur_state(self.blur_state)
+            self.controller.view.setSceneRect(QRectF(self.old_pixmap.rect()))
+            self.controller.view.update_resolution_from_background()
+            self.controller.view.fit_background_to_view()
+
+
+class RotateCommand(QUndoCommand):
+    """
+    Команда поворота фонового изображения.
+    Растеризует аннотации, но сохраняет зоны размытия для undo.
+    """
+
+    def __init__(self, scene, background_item, old_pixmap, new_pixmap, items_to_remove,
+                 controller=None):
+        super().__init__("Поворот")
+        self.scene = scene
+        self.background_item = background_item
+        self.old_pixmap = old_pixmap
+        self.new_pixmap = new_pixmap
+        self.items_to_remove = items_to_remove
+        self.removed_items = []
+        self.controller = controller
+
+        if controller is not None:
+            self.blur_state = controller._get_blur_state()
+        else:
+            self.blur_state = None
+
+    def redo(self):
+        for item in self.items_to_remove:
+            if item.scene() is self.scene:
+                self.scene.removeItem(item)
+                self.removed_items.append(item)
+
+        self.background_item.setPixmap(self.new_pixmap)
+        self.background_item.update()
+
+        if self.controller is not None:
+            self.controller._clear_blur_regions()
+            self.controller.view.setSceneRect(QRectF(self.new_pixmap.rect()))
+            self.controller.view.update_resolution_from_background()
+            self.controller.view.fit_background_to_view()
+
+    def undo(self):
+        self.background_item.setPixmap(self.old_pixmap)
+        self.background_item.update()
+
+        for item in self.removed_items:
+            if item.scene() is not self.scene:
+                self.scene.addItem(item)
+        self.removed_items.clear()
+
+        if self.controller is not None and self.blur_state is not None:
+            self.controller._restore_blur_state(self.blur_state)
+            self.controller.view.setSceneRect(QRectF(self.old_pixmap.rect()))
+            self.controller.view.update_resolution_from_background()
+            self.controller.view.fit_background_to_view()
+
+
+class BlurCommand(QUndoCommand):
+    """Команда размытия области фонового изображения."""
+
+    def __init__(self, background_item, old_pixmap, new_pixmap):
+        super().__init__("Размытие")
+        self.background_item = background_item
+        self.old_pixmap = old_pixmap
+        self.new_pixmap = new_pixmap
+
+    def redo(self):
+        self.background_item.setPixmap(self.new_pixmap)
+        self.background_item.update()
+
+    def undo(self):
+        self.background_item.setPixmap(self.old_pixmap)
+        self.background_item.update()
