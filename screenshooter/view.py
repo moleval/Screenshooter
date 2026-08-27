@@ -35,7 +35,7 @@ from .ui.layout_manager import LayoutManager
 from .tools import RectTool, EllipseTool, LineTool, ArrowTool, TextTool
 from .controllers import (ClipboardController, ManipulationController,
                           KeyboardManager, FloatingWidgetManager,
-                          PastedImageController)
+                          PastedImageController, BlurController)
 
 
 class EditorView(QGraphicsView):
@@ -108,6 +108,7 @@ class EditorView(QGraphicsView):
 
         # Контроллеры
         self.pasted_image_controller = PastedImageController(self)
+        self.blur_controller = BlurController(self)
         self.clipboard_controller = ClipboardController(self)
         self.manipulation_controller = ManipulationController(self)
         self.keyboard_manager = KeyboardManager(self)
@@ -231,7 +232,7 @@ class EditorView(QGraphicsView):
 
     @property
     def blur_mode(self):
-        return self.image_editor.blur_mode
+        return self.blur_controller.blur_mode
 
     @property
     def background_item(self):
@@ -256,10 +257,10 @@ class EditorView(QGraphicsView):
         self.image_editor.apply_crop()
 
     def start_blur_mode(self):
-        self.image_editor.start_blur_mode()
+        self.blur_controller.start_blur_mode()
 
     def cancel_blur_mode(self):
-        self.image_editor.cancel_blur_mode()
+        self.blur_controller.cancel_blur_mode()
 
     def rotate_image(self, angle):
         self.image_editor.rotate_image(angle)
@@ -294,28 +295,28 @@ class EditorView(QGraphicsView):
     # ==============================================================
     def _update_blur_region_handles(self):
         try:
-            if self.image_editor.blur_outside_mode:
+            if self.blur_controller.blur_outside_mode:
                 return
-            if self.image_editor.blur_interaction is not None:
+            if self.blur_controller.blur_interaction is not None:
                 return
 
             selected = self.scene().selectedItems()
             non_bg_selected = [it for it in selected if not self._is_background_item(it)]
 
             if len(non_bg_selected) > 1:
-                self.image_editor._clear_active_blur()
+                self.blur_controller._clear_active_blur()
             elif len(non_bg_selected) == 1:
                 item = non_bg_selected[0]
                 if isinstance(item, BlurRegionItem) and not sip.isdeleted(item):
                     try:
-                        idx = self.image_editor.blur_region_items.index(item)
-                        self.image_editor._set_active_blur(idx)
+                        idx = self.blur_controller.blur_region_items.index(item)
+                        self.blur_controller._set_active_blur(idx)
                     except ValueError:
                         pass
                 else:
-                    self.image_editor._clear_active_blur()
+                    self.blur_controller._clear_active_blur()
             else:
-                self.image_editor._clear_active_blur()
+                self.blur_controller._clear_active_blur()
         except RuntimeError:
             pass
 
@@ -363,17 +364,17 @@ class EditorView(QGraphicsView):
     # ==============================================================
     def mousePressEvent(self, e):
         # 1. Режим Размыть
-        if self.image_editor.blur_mode:
+        if self.blur_controller.blur_mode:
             sp = self.mapToScene(e.pos())
             item = self.scene().itemAt(sp, self.transform())
             li = self._item_for_manipulation(item) if item else None
 
             is_blur_handle = False
-            if (self.image_editor.active_blur_index is not None and
-                    self.image_editor.active_blur_index < len(
-                        self.image_editor.blur_region_items)):
-                active_blur = self.image_editor.blur_region_items[
-                    self.image_editor.active_blur_index]
+            if (self.blur_controller.active_blur_index is not None and
+                    self.blur_controller.active_blur_index < len(
+                        self.blur_controller.blur_region_items)):
+                active_blur = self.blur_controller.blur_region_items[
+                    self.blur_controller.active_blur_index]
                 if active_blur.handles:
                     hid = active_blur.handles.hit_test(QPointF(e.pos()))
                     if hid:
@@ -405,7 +406,7 @@ class EditorView(QGraphicsView):
                     e.accept()
                     return
 
-            if self.image_editor.handle_mouse_press(e):
+            if self.blur_controller.handle_mouse_press(e):
                 e.accept()
                 return
 
@@ -470,8 +471,8 @@ class EditorView(QGraphicsView):
 
     def mouseMoveEvent(self, e):
         if not self.manipulation_controller._drag_items:
-            if self.image_editor.blur_mode:
-                if self.image_editor.handle_mouse_move(e):
+            if self.blur_controller.blur_mode:
+                if self.blur_controller.handle_mouse_move(e):
                     e.accept()
                     return
             elif self.image_editor.crop_mode:
@@ -480,8 +481,8 @@ class EditorView(QGraphicsView):
                     return
 
         if not self.manipulation_controller._drag_items:
-            if not self.image_editor.crop_mode and not self.image_editor.blur_mode:
-                if self.image_editor.handle_blur_region_move_outside(e):
+            if not self.image_editor.crop_mode and not self.blur_controller.blur_mode:
+                if self.blur_controller.handle_blur_region_move_outside(e):
                     e.accept()
                     return
 
@@ -501,8 +502,8 @@ class EditorView(QGraphicsView):
 
     def mouseReleaseEvent(self, e):
         if not self.manipulation_controller._drag_items:
-            if self.image_editor.blur_mode:
-                if self.image_editor.handle_mouse_release(e):
+            if self.blur_controller.blur_mode:
+                if self.blur_controller.handle_mouse_release(e):
                     e.accept()
                     return
             elif self.image_editor.crop_mode:
@@ -513,8 +514,8 @@ class EditorView(QGraphicsView):
         if not self.manipulation_controller._drag_items:
             if (e.button() == Qt.LeftButton and
                     not self.image_editor.crop_mode and
-                    not self.image_editor.blur_mode):
-                if self.image_editor.handle_blur_region_release_outside(e):
+                    not self.blur_controller.blur_mode):
+                if self.blur_controller.handle_blur_region_release_outside(e):
                     e.accept()
                     return
 
@@ -615,8 +616,8 @@ class EditorView(QGraphicsView):
                 item.setSelected(True)
 
     def delete_selected(self):
-        if self.image_editor.active_blur_index is not None:
-            self.image_editor.delete_active_blur_region()
+        if self.blur_controller.active_blur_index is not None:
+            self.blur_controller.delete_active_blur_region()
             return
 
         items = self.scene().selectedItems()
@@ -630,7 +631,7 @@ class EditorView(QGraphicsView):
                        and not self._is_background_item(it)]
 
         blur_indices = []
-        for idx, blur_item in enumerate(self.image_editor.blur_region_items):
+        for idx, blur_item in enumerate(self.blur_controller.blur_region_items):
             if blur_item.scene() is self.scene() and blur_item.isSelected():
                 blur_indices.append(idx)
 
@@ -693,8 +694,8 @@ class EditorView(QGraphicsView):
 
         if self.image_editor.crop_mode:
             self.image_editor.cancel_crop_mode()
-        if self.image_editor.blur_mode:
-            self.image_editor.cancel_blur_mode()
+        if self.blur_controller.blur_mode:
+            self.blur_controller.cancel_blur_mode()
 
         self.scene().clearSelection()
 

@@ -132,11 +132,11 @@ class ManipulationController:
                     return
 
         # 2. Маркеры активной зоны размытия
-        if (view.image_editor.active_blur_index is not None and
-                view.image_editor.active_blur_index < len(
-                    view.image_editor.blur_region_items)):
-            active_blur = view.image_editor.blur_region_items[
-                view.image_editor.active_blur_index]
+        if (view.blur_controller.active_blur_index is not None and
+                view.blur_controller.active_blur_index < len(
+                    view.blur_controller.blur_region_items)):
+            active_blur = view.blur_controller.blur_region_items[
+                view.blur_controller.active_blur_index]
             if active_blur.handles:
                 handle_id = active_blur.handles.hit_test(pos)
                 if handle_id:
@@ -204,7 +204,7 @@ class ManipulationController:
         """Зоны размытия вне режима размытия."""
         if event.button() != Qt.LeftButton:
             return False
-        if self.view.image_editor.crop_mode or self.view.image_editor.blur_mode:
+        if self.view.image_editor.crop_mode or self.view.blur_controller.blur_mode:
             return False
 
         modifiers = event.modifiers()
@@ -224,7 +224,7 @@ class ManipulationController:
                 skip_blur_handler = True
 
         if not skip_blur_handler:
-            if self.view.image_editor.handle_blur_region_press_outside(event):
+            if self.view.blur_controller.handle_blur_region_press_outside(event):
                 return True
         return False
 
@@ -462,10 +462,10 @@ class ManipulationController:
                         new_rect.moveBottom(image_rect.bottom())
                 drag_item.setRect(new_rect)
                 try:
-                    idx_blur = self.view.image_editor.blur_region_items.index(drag_item)
-                    self.view.image_editor.blur_regions[idx_blur] = new_rect
+                    idx_blur = self.view.blur_controller.blur_region_items.index(drag_item)
+                    self.view.blur_controller.blur_regions[idx_blur] = new_rect
                     self._drag_blur_needs_recompute = True
-                    self.view.image_editor._schedule_blur_recompute(moving_index=idx_blur)
+                    self.view.blur_controller._schedule_blur_recompute(moving_index=idx_blur)
                 except ValueError:
                     pass
                 if drag_item.handles:
@@ -568,14 +568,14 @@ class ManipulationController:
                 new_rect = it.rect()
                 if old_rect != new_rect:
                     try:
-                        idx_blur = self.view.image_editor.blur_region_items.index(it)
+                        idx_blur = self.view.blur_controller.blur_region_items.index(it)
                         self.view.history.push(MoveBlurRegionCommand(
-                            self.view.image_editor, idx_blur, old_rect, new_rect))
+                            self.view.blur_controller, idx_blur, old_rect, new_rect))
                     except ValueError:
                         pass
 
         if self._drag_blur_needs_recompute:
-            self.view.image_editor._force_blur_recompute()
+            self.view.blur_controller._force_blur_recompute()
             self._drag_blur_needs_recompute = False
 
         self._drag_items = []

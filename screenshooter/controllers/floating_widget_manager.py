@@ -186,7 +186,7 @@ class FloatingWidgetManager:
                 return
 
         # Режимы обрезки/размытия — виджеты инструментов скрыты
-        if view.image_editor.crop_mode or view.image_editor.blur_mode:
+        if view.image_editor.crop_mode or view.blur_controller.blur_mode:
             view.layout_manager.update_all()
             return
 

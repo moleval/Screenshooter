@@ -526,9 +526,9 @@ class RemoveSelectedItemsCommand(QUndoCommand):
 
         # Удаляем зоны размытия
         for idx in reversed(self.blur_indices):
-            self.removed_blur_rects.append(QRectF(self.view.image_editor.blur_regions[idx]))
-            self.removed_blur_was_active.append(self.view.image_editor.active_blur_index == idx)
-            self.view.image_editor._remove_blur_region_at(idx)
+            self.removed_blur_rects.append(QRectF(self.view.blur_controller.blur_regions[idx]))
+            self.removed_blur_was_active.append(self.view.blur_controller.active_blur_index == idx)
+            self.view.blur_controller._remove_blur_region_at(idx)
 
         if self.view.active_text_item in self.items + self.pasted_items:
             self.active_text_removed = self.view.active_text_item
@@ -555,9 +555,9 @@ class RemoveSelectedItemsCommand(QUndoCommand):
         for rect, was_active, idx in zip(reversed(self.removed_blur_rects),
                                           reversed(self.removed_blur_was_active),
                                           self.blur_indices):
-            self.view.image_editor._insert_blur_region_at(idx, rect)
+            self.view.blur_controller._insert_blur_region_at(idx, rect)
             if was_active:
-                self.view.image_editor._set_active_blur(idx)
+                self.view.blur_controller._set_active_blur(idx)
 
         if self.active_text_removed is not None:
             self.view.active_text_item = self.active_text_removed

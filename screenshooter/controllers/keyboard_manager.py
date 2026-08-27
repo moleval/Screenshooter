@@ -1,8 +1,6 @@
 """
 Модуль: controllers/keyboard_manager.py
 Описание: Контроллер обработки клавиатуры.
-          Перехватывает горячие клавиши и делегирует их соответствующим
-          контроллерам и методам редактора.
 """
 
 from PyQt5.QtCore import Qt, QPointF, QRectF
@@ -65,8 +63,8 @@ class KeyboardManager:
             if self.view.image_editor.crop_mode:
                 self.view.image_editor.cancel_crop_mode()
                 return True
-            if self.view.image_editor.blur_mode:
-                self.view.image_editor.handle_blur_escape()
+            if self.view.blur_controller.blur_mode:
+                self.view.blur_controller.handle_blur_escape()
                 return True
             self.view.scene().clearSelection()
             self.view._deactivate_active_text()
@@ -109,9 +107,9 @@ class KeyboardManager:
         view = self.view
 
         # Активная зона размытия — двигаем её
-        if view.image_editor.active_blur_index is not None:
-            idx = view.image_editor.active_blur_index
-            old_rect = view.image_editor.blur_regions[idx]
+        if view.blur_controller.active_blur_index is not None:
+            idx = view.blur_controller.active_blur_index
+            old_rect = view.blur_controller.blur_regions[idx]
             dx = dy = 0
             step = 10 if (event.modifiers() & Qt.ShiftModifier) else 1
             if event.key() == Qt.Key_Left: dx = -step
@@ -119,13 +117,13 @@ class KeyboardManager:
             elif event.key() == Qt.Key_Up: dy = -step
             elif event.key() == Qt.Key_Down: dy = step
 
-            new_rect = view.image_editor._constrain_move(old_rect, QPointF(dx, dy))
+            new_rect = view.blur_controller._constrain_move(old_rect, QPointF(dx, dy))
             if new_rect != old_rect:
-                view.image_editor.blur_regions[idx] = new_rect
-                view.image_editor.blur_region_items[idx].update_rect(new_rect)
-                view.image_editor._force_blur_recompute()
+                view.blur_controller.blur_regions[idx] = new_rect
+                view.blur_controller.blur_region_items[idx].update_rect(new_rect)
+                view.blur_controller._force_blur_recompute()
                 view.history.push(MoveBlurRegionCommand(
-                    view.image_editor, idx, old_rect, new_rect))
+                    view.blur_controller, idx, old_rect, new_rect))
             return True
 
         # Выделенные элементы — двигаем их
@@ -172,9 +170,9 @@ class KeyboardManager:
                     new_rect = old_rect.translated(dx, dy)
                     if old_rect != new_rect:
                         try:
-                            idx_blur = view.image_editor.blur_region_items.index(it)
+                            idx_blur = view.blur_controller.blur_region_items.index(it)
                             view.history.push(MoveBlurRegionCommand(
-                                view.image_editor, idx_blur, old_rect, new_rect))
+                                view.blur_controller, idx_blur, old_rect, new_rect))
                         except ValueError:
                             pass
                 else:

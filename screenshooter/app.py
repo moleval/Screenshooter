@@ -589,17 +589,17 @@ class ScreenshotApp(QMainWindow):
         try:
             if hasattr(self, 'view'):
                 # Таймер пересчёта размытия
-                if hasattr(self.view, 'image_editor'):
-                    self.view.image_editor._blur_recompute_timer.stop()
+                if hasattr(self.view, 'blur_controller'):
+                    self.view.blur_controller._blur_recompute_timer.stop()
                 # Таймер батчинга выделения (Этап 3)
                 if hasattr(self.view, '_selection_update_timer'):
                     self.view._selection_update_timer.stop()
                 # Таймер дебаунса layout_manager (Этап 3)
                 if hasattr(self.view, 'layout_manager') and hasattr(self.view.layout_manager, '_update_timer'):
                     self.view.layout_manager._update_timer.stop()
-                # Таймер статусной метки
-                if hasattr(self.view, '_status_timer'):
-                    self.view._status_timer.stop()
+                # Таймер статусной метки (в widget_manager)
+                if hasattr(self.view, 'widget_manager') and hasattr(self.view.widget_manager, '_status_timer'):
+                    self.view.widget_manager._status_timer.stop()
         except (RuntimeError, AttributeError):
             pass
 
@@ -713,7 +713,7 @@ class ScreenshotApp(QMainWindow):
         if bg_pixmap.isNull():
             return None
 
-        self.view.image_editor.hide_blur_regions_for_render()
+        self.view.blur_controller.hide_blur_regions_for_render()
         self.view.hide_pasted_image_handles_for_render()
 
         target = bg_pixmap.rect()
@@ -725,7 +725,7 @@ class ScreenshotApp(QMainWindow):
         self.scene.render(p, QRectF(img.rect()), QRectF(target))
         p.end()
 
-        self.view.image_editor.show_blur_regions_after_render()
+        self.view.blur_controller.show_blur_regions_after_render()
         self.view.show_pasted_image_handles_after_render()
         return img
 
