@@ -6,7 +6,7 @@
 """
 
 from PyQt5 import sip
-from PyQt5.QtCore import Qt, QRectF, QPointF, QPoint
+from PyQt5.QtCore import Qt, QRectF, QPointF, QPoint, QTimer  # QTimer перенесен сюда
 from PyQt5.QtGui import QPen, QColor, QCursor
 from PyQt5.QtWidgets import QGraphicsRectItem, QGraphicsItem, QApplication
 
@@ -17,6 +17,7 @@ from ..items.pasted_image_item import PastedImageItem
 from ..items.blur_region_item import BlurRegionItem
 from ..history import (MoveItemsCommand, MoveBlurRegionCommand,
                        ResizePastedImageCommand)
+from ..tools import RectTool, EllipseTool, LineTool, ArrowTool, TextTool
 
 
 class ManipulationController:
@@ -65,68 +66,32 @@ class ManipulationController:
 
     def handle_mouse_press(self, event) -> bool:
         """Обрабатывает нажатие кнопки мыши. Возвращает True, если обработано."""
-        # 1. Маркеры вставленных изображений
-        if self._handle_resize_press(event):
-            return True
-
-        # 2. Зоны размытия вне режима размытия
-        if self._handle_blur_region_press(event):
-            return True
-
-        # 3. Панорамирование (средняя кнопка)
-        if self._handle_pan_press(event):
-            return True
-
-        # 4. Правая кнопка — выделение или рамка
-        if self._handle_right_click_press(event):
-            return True
-
-        # 5. Левая кнопка — выделение и начало перетаскивания
-        if self._handle_left_click_press(event):
-            return True
-
-        # 6. Временный указатель
-        if self._handle_temp_pointer_press(event):
-            return True
-
+        if self._handle_resize_press(event): return True
+        if self._handle_blur_region_press(event): return True
+        if self._handle_pan_press(event): return True
+        if self._handle_right_click_press(event): return True
+        if self._handle_left_click_press(event): return True
+        if self._handle_temp_pointer_press(event): return True
         return False
 
     def handle_mouse_move(self, event) -> bool:
         """Обрабатывает движение мыши. Возвращает True, если обработано."""
-        # 1. Изменение размера вставленного изображения
-        if self._handle_resize_move(event):
-            return True
-
-        # 2. Панорамирование
-        if self._handle_pan_move(event):
-            return True
-
-        # 3. Групповое перетаскивание
-        if self._handle_drag_move(event):
-            return True
-
-        # 4. Рамка выделения ПКМ
-        if self._handle_rubber_band_move(event):
-            return True
-
+        if self._handle_resize_move(event): return True
+        if self._handle_pan_move(event): return True
+        if self._handle_drag_move(event): return True
+        if self._handle_rubber_band_move(event): return True
         return False
 
     def handle_mouse_release(self, event) -> bool:
         """Обрабатывает отпускание кнопки мыши. Возвращает True, если обработано."""
-        # 1. Изменение размера вставленного изображения
-        if self._handle_resize_release(event):
-            return True
+        if self._handle_resize_release(event): return True
+        if self._handle_pan_release(event): return True
+        if self._handle_drag_release(event): return True
+        if self._handle_rubber_band_release(event): return True
 
-        # 2. Панорамирование
-        if self._handle_pan_release(event):
-            return True
-
-        # 3. Групповое перетаскивание
-        if self._handle_drag_release(event):
-            return True
-
-        # 4. Рамка выделения ПКМ
-        if self._handle_rubber_band_release(event):
+        # 5. Отпускание ПКМ (если временный указатель был активен, но рамки не было)
+        if event.button() == Qt.RightButton and self.right_click_temp_pointer:
+            self._restore_tool_if_needed()
             return True
 
         return False
@@ -234,7 +199,6 @@ class ManipulationController:
         if event.button() != Qt.LeftButton:
             return False
 
-        # Текст в режиме редактирования — не трогаем
         sp = self.view.mapToScene(event.pos())
         item = self.view.scene().itemAt(sp, self.view.transform())
         if isinstance(item, TextItem) and item._editable:
@@ -338,26 +302,20 @@ class ManipulationController:
         scale_y = local_rect.height() / item.original_pixmap.height()
         scale = min(scale_x, scale_y)
 
-        # Фиксируем противоположный угол
         corner_anchors = {'tl': 'br', 'tr': 'bl', 'bl': 'tr', 'br': 'tl'}
         anchor_id = corner_anchors[handle_id]
 
-        # Запоминаем позицию противоположного угла до масштабирования
         old_scene_rect = item.mapRectToScene(item.boundingRect())
         old_anchor = self._get_rect_corner(old_scene_rect, anchor_id)
 
-        # Применяем масштаб
         item.set_image_scale(scale)
 
-        # Вычисляем новую позицию противоположного угла
         new_scene_rect = item.mapRectToScene(item.boundingRect())
         new_anchor = self._get_rect_corner(new_scene_rect, anchor_id)
 
-        # Сдвигаем элемент, чтобы противоположный угол остался на месте
         shift = old_anchor - new_anchor
         item.setPos(item.pos() + shift)
 
-        # Обновляем маркеры
         item.update_handles()
 
         return True
@@ -564,6 +522,10 @@ class ManipulationController:
         self.rubber_band_start = None
         self.view.setViewportUpdateMode(self.view.SmartViewportUpdate)
         self.view.viewport().update()
+        
+        # Восстанавливаем инструмент после завершения выделения рамкой
+        self._restore_tool_if_needed()
+        
         return True
 
     # ==============================================================
@@ -581,19 +543,51 @@ class ManipulationController:
                 self.previous_tool_for_modifier = self.view.current_tool
         self.view.current_tool = None
         self.view.setDragMode(self.view.NoDrag)
+        # Скрываем виджеты инструментов при активации временного указателя
+        self.view.widget_manager.update_floating_widgets_visibility()
 
     def _restore_tool_if_needed(self):
         """Восстанавливает инструмент после временного указателя."""
         if self.right_click_temp_pointer and not self.modifier_temp_pointer:
-            self.view._apply_tool(self.previous_tool_for_right_click)
+            tool = self.previous_tool_for_right_click
             self.right_click_temp_pointer = False
             self.previous_tool_for_right_click = None
-            self.view._update_floating_widgets_visibility()
+            if tool:
+                self._restore_tool_state(tool)
+            self.view.widget_manager.update_floating_widgets_visibility()
         elif self.modifier_temp_pointer and not self.right_click_temp_pointer:
-            self.view._apply_tool(self.previous_tool_for_modifier)
+            tool = self.previous_tool_for_modifier
             self.modifier_temp_pointer = False
             self.previous_tool_for_modifier = None
-            self.view._update_floating_widgets_visibility()
+            if tool:
+                self._restore_tool_state(tool)
+            self.view.widget_manager.update_floating_widgets_visibility()
+
+    def _restore_tool_state(self, t):
+        """Восстанавливает состояние инструмента без снятия выделения."""
+        self.view._apply_tool(t)
+        self.view._first_click_after_activation = (t == 'text')
+
+        # Создаем объект инструмента, чтобы он мог обрабатывать события мыши
+        if t == 'rect':
+            self.view._tool = RectTool(self.view)
+        elif t == 'ellipse':
+            self.view._tool = EllipseTool(self.view)
+        elif t == 'line':
+            self.view._tool = LineTool(self.view)
+        elif t == 'arrow':
+            self.view._tool = ArrowTool(self.view)
+        elif t == 'text':
+            self.view._tool = TextTool(self.view)
+        else:
+            self.view._tool = None
+
+        if not self.view.scene().selectedItems():
+            self.view.widget_manager.update_info_widget_content(
+                self.view.current_pen_color, self.view.get_current_width())
+
+        self.view._invalidate_cursor_cache()
+        QTimer.singleShot(0, self._refresh_cursor)
 
     def _refresh_cursor(self):
         """Обновляет курсор по текущей позиции мыши."""

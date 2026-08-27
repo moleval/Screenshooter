@@ -33,7 +33,8 @@ from .history import (HistoryManager, AddItemCommand, RemoveItemCommand,
 from .image_edit_controller import ImageEditController
 from .ui.layout_manager import LayoutManager
 from .tools import RectTool, EllipseTool, LineTool, ArrowTool, TextTool
-from .controllers import ClipboardController, ManipulationController, KeyboardManager
+from .controllers import (ClipboardController, ManipulationController,
+                          KeyboardManager, FloatingWidgetManager)
 
 
 class EditorView(QGraphicsView):
@@ -45,7 +46,6 @@ class EditorView(QGraphicsView):
 
     def __init__(self, scene):
         super().__init__(scene)
-        # ЭТАП 2: SmartViewportUpdate вместо FullViewportUpdate
         self.setViewportUpdateMode(QGraphicsView.SmartViewportUpdate)
         self.current_tool = None
         self.start_point = None
@@ -79,23 +79,18 @@ class EditorView(QGraphicsView):
         self.zoom_widget.fitRequested.connect(self._fit_to_view)
 
         self.text_format_widget = TextFormatWidget(self)
-        self.text_format_widget.bgChanged.connect(self._on_text_bg_changed)
         self.text_format_widget.setVisible(False)
 
         self.shape_mode_widget = ShapeModeWidget(self)
-        self.shape_mode_widget.modeChanged.connect(self._on_shape_mode_changed)
         self.shape_mode_widget.setVisible(False)
 
         self.ellipse_mode_widget = ShapeModeWidgetEllipse(self)
-        self.ellipse_mode_widget.modeChanged.connect(self._on_ellipse_mode_changed)
         self.ellipse_mode_widget.setVisible(False)
 
         self.arrow_mode_widget = ShapeModeWidgetArrow(self)
-        self.arrow_mode_widget.modeChanged.connect(self._on_arrow_mode_changed)
         self.arrow_mode_widget.setVisible(False)
 
         self.line_mode_widget = LineModeWidget(self)
-        self.line_mode_widget.modeChanged.connect(self._on_line_mode_changed)
         self.line_mode_widget.setVisible(False)
 
         self.info_widget = InfoWidget(self)
@@ -119,20 +114,18 @@ class EditorView(QGraphicsView):
         self.layout_manager = LayoutManager(self)
         self._tool = None
 
-        # Контроллер копирования/вставки
+        # Контроллеры
         self.clipboard_controller = ClipboardController(self)
-
-        # Контроллер манипуляций (перетаскивание, выделение, рамка, панорамирование)
         self.manipulation_controller = ManipulationController(self)
-
-        # Контроллер клавиатуры
         self.keyboard_manager = KeyboardManager(self)
+        self.widget_manager = FloatingWidgetManager(self)
 
         # ЭТАП 5: кэш для _update_cursor
         self._last_cursor_pos = None
         self._last_cursor_item = None
 
-        self._update_info_widget_content(self.current_pen_color, self.pen_width)
+        self.widget_manager.update_info_widget_content(
+            self.current_pen_color, self.pen_width)
 
         for w in (self.zoom_widget, self.text_format_widget,
                   self.shape_mode_widget, self.ellipse_mode_widget,
@@ -157,8 +150,8 @@ class EditorView(QGraphicsView):
 
     def _do_selection_update(self):
         try:
-            self._sync_selection_properties()
-            self._update_floating_widgets_visibility()
+            self.widget_manager.sync_selection_properties()
+            self.widget_manager.update_floating_widgets_visibility()
             self._update_blur_region_handles()
         except RuntimeError:
             pass
@@ -226,7 +219,7 @@ class EditorView(QGraphicsView):
                 self.image_editor.background_item.scene() is self.scene()):
             self.setSceneRect(QRectF(self.image_editor.background_item.pixmap().rect()))
             self.update_resolution_from_background()
-        self._update_floating_widgets_visibility()
+        self.widget_manager.update_floating_widgets_visibility()
         self._update_pasted_image_handles()
         self._update_blur_region_handles()
 
@@ -437,7 +430,6 @@ class EditorView(QGraphicsView):
             item = self.scene().itemAt(sp, self.transform())
             li = self._item_for_manipulation(item) if item else None
 
-            # Проверяем маркеры активной зоны размытия
             is_blur_handle = False
             if (self.image_editor.active_blur_index is not None and
                     self.image_editor.active_blur_index < len(
@@ -452,7 +444,6 @@ class EditorView(QGraphicsView):
             delegate_to_manipulation = False
 
             if is_blur_handle:
-                # Клик по маркеру зоны размытия — обрабатывает image_editor
                 pass
             elif li is not None and not self._is_background_item(li):
                 if isinstance(li, BlurRegionItem):
@@ -461,19 +452,14 @@ class EditorView(QGraphicsView):
                     is_shift = bool(modifiers & Qt.ShiftModifier)
 
                     if is_ctrl or is_shift:
-                        # Ctrl/Shift — множественное выделение через манипуляции
                         delegate_to_manipulation = True
                     else:
-                        # Проверяем множественное выделение
                         selected = self.scene().selectedItems()
                         non_bg_selected = [it for it in selected
                                            if not self._is_background_item(it)]
                         if len(non_bg_selected) > 1 and li.isSelected():
-                            # Зона размытия в множественном выделении
-                            # — групповое перетаскивание через манипуляции
                             delegate_to_manipulation = True
                 else:
-                    # Обычный элемент — делегируем в манипуляции
                     delegate_to_manipulation = True
 
             if delegate_to_manipulation:
@@ -481,7 +467,6 @@ class EditorView(QGraphicsView):
                     e.accept()
                     return
 
-            # Иначе — обрабатывает контроллер размытия
             if self.image_editor.handle_mouse_press(e):
                 e.accept()
                 return
@@ -492,7 +477,7 @@ class EditorView(QGraphicsView):
                 e.accept()
                 return
 
-        # 3. Манипуляции (перетаскивание, выделение, рамка, панорамирование)
+        # 3. Манипуляции
         if self.manipulation_controller.handle_mouse_press(e):
             e.accept()
             return
@@ -546,7 +531,6 @@ class EditorView(QGraphicsView):
         e.accept()
 
     def mouseMoveEvent(self, e):
-        # 1. Режим Размыть / Обрезки
         if not self.manipulation_controller._drag_items:
             if self.image_editor.blur_mode:
                 if self.image_editor.handle_mouse_move(e):
@@ -557,22 +541,18 @@ class EditorView(QGraphicsView):
                     e.accept()
                     return
 
-        # 2. Зоны размытия вне режима размытия
         if not self.manipulation_controller._drag_items:
             if not self.image_editor.crop_mode and not self.image_editor.blur_mode:
                 if self.image_editor.handle_blur_region_move_outside(e):
                     e.accept()
                     return
 
-        # 3. Манипуляции
         if self.manipulation_controller.handle_mouse_move(e):
             e.accept()
             return
 
-        # 4. Обновление курсора
         self._update_cursor(e.pos())
 
-        # 5. Рисование инструментами
         if self.temp_item and self._tool is not None and self.current_tool not in ('text',):
             sp = self.mapToScene(e.pos())
             self._tool.update_draw(self.temp_item, sp, e.modifiers())
@@ -582,7 +562,6 @@ class EditorView(QGraphicsView):
         super().mouseMoveEvent(e)
 
     def mouseReleaseEvent(self, e):
-        # 1. Режим Размыть / Обрезки
         if not self.manipulation_controller._drag_items:
             if self.image_editor.blur_mode:
                 if self.image_editor.handle_mouse_release(e):
@@ -593,7 +572,6 @@ class EditorView(QGraphicsView):
                     e.accept()
                     return
 
-        # 2. Зоны размытия вне режима размытия
         if not self.manipulation_controller._drag_items:
             if (e.button() == Qt.LeftButton and
                     not self.image_editor.crop_mode and
@@ -602,12 +580,10 @@ class EditorView(QGraphicsView):
                     e.accept()
                     return
 
-        # 3. Манипуляции
         if self.manipulation_controller.handle_mouse_release(e):
             e.accept()
             return
 
-        # 4. Рисование инструментами
         if (self.temp_item and e.button() == Qt.LeftButton and
                 self._tool is not None and self.current_tool not in ('text',)):
             if self._tool.finish_draw(self.temp_item):
@@ -728,129 +704,38 @@ class EditorView(QGraphicsView):
         self.scene().clearSelection()
         self.manipulation_controller._restore_tool_if_needed()
 
+    # ==============================================================
+    # Обёртки для совместимости с app.py и text_item.py
+    # ==============================================================
     def apply_current_style_to_selected(self, pen_color=None, pen_width=None):
-        for item in self.scene().selectedItems():
-            if isinstance(item, DimensionItem):
-                if pen_color:
-                    item.setPen(QPen(pen_color, item._pen.widthF()))
-                if pen_width:
-                    item.setPen(QPen(item._pen.color(), pen_width))
-                continue
-            if isinstance(item, TextItem):
-                if pen_color:
-                    item.setDefaultTextColor(pen_color)
-                if pen_width:
-                    font = item.font()
-                    font.setPointSize(max(1, pen_width * 4))
-                    item.setFont(font)
-                item.update()
-                continue
-            if isinstance(item, FilledRectItem):
-                if pen_color:
-                    item.setBrush(QColor(pen_color.red(), pen_color.green(),
-                                         pen_color.blue(), 80))
-                continue
-            if isinstance(item, (RectangleItem, EllipseItem, ArrowItem,
-                                 CurvedArrowItem, CloudItem, LineItem, WavyLineItem)):
-                current_pen = item.pen()
-                new_color = pen_color if pen_color else current_pen.color()
-                new_width = pen_width if pen_width else current_pen.widthF()
-                new_pen = QPen(new_color, new_width)
-                if isinstance(item, (RectangleItem, EllipseItem, CloudItem,
-                                     LineItem, WavyLineItem)):
-                    new_pen.setCapStyle(Qt.RoundCap)
-                    new_pen.setJoinStyle(Qt.RoundJoin)
-                    if isinstance(item, LineItem) and self.line_mode == 'dashed':
-                        new_pen.setStyle(Qt.DashLine)
-                elif isinstance(item, CurvedArrowItem):
-                    new_pen.setCapStyle(Qt.RoundCap)
-                    new_pen.setJoinStyle(Qt.RoundJoin)
-                self.history.push(ChangePenCommand(item, current_pen, new_pen))
+        self.widget_manager.apply_current_style_to_selected(pen_color, pen_width)
 
-    # ==============================================================
-    # Видимость виджетов
-    # ==============================================================
-    def _update_info_widget_content(self, color, thickness):
-        self.info_widget.set_info(color, thickness)
-        QTimer.singleShot(0, self.layout_manager.update_info_widget_position)
+    def set_pen_color(self, c):
+        self.widget_manager.set_pen_color(c)
 
-    def _sync_selection_properties(self):
-        sel = self.scene().selectedItems()
-        if not sel:
-            self._update_info_widget_content(self.current_pen_color, self.pen_width)
-            return
-        item = sel[0]
-        color = None
-        width = None
-        if isinstance(item, QGraphicsTextItem):
-            color = item.defaultTextColor()
-            if isinstance(item, TextItem):
-                width = max(1, int(round(item.font().pointSize() / 4)))
-        elif isinstance(item, (RectangleItem, EllipseItem, ArrowItem,
-                               CurvedArrowItem, CloudItem, LineItem, WavyLineItem)):
-            if hasattr(item, 'pen'):
-                pen = item.pen()
-                color = pen.color()
-                width = int(pen.widthF())
-            elif hasattr(item, '_pen'):
-                color = item._pen.color()
-                width = int(item._pen.widthF())
-        elif isinstance(item, FilledRectItem):
-            brush = item.brush()
-            color = brush.color() if brush.style() == Qt.SolidPattern else QColor(255, 0, 0)
-            width = 2
-        elif isinstance(item, DimensionItem):
-            color = item._pen.color()
-            width = int(item._pen.widthF())
-        else:
-            return
-        if color and color.isValid():
-            self._update_info_widget_content(color, width if width is not None else 0)
-        else:
-            self._update_info_widget_content(QColor(0, 0, 0), 0)
+    def set_pen_width(self, w):
+        self.widget_manager.set_pen_width(w)
+
+    def set_text_size(self, v):
+        self.widget_manager.set_text_size(v)
+
+    def set_text_bg(self, bg):
+        self.widget_manager.set_text_bg(bg)
+
+    def get_current_width(self):
+        return self.widget_manager.get_current_width()
+
+    def update_text_format_widget_visibility(self):
+        self.widget_manager.update_text_format_widget_visibility()
 
     def _update_floating_widgets_visibility(self):
-        self.shape_mode_widget.setVisible(False)
-        self.ellipse_mode_widget.setVisible(False)
-        self.arrow_mode_widget.setVisible(False)
-        self.line_mode_widget.setVisible(False)
-        self.text_format_widget.setVisible(False)
+        self.widget_manager.update_floating_widgets_visibility()
 
-        if self.image_editor.crop_mode or self.image_editor.blur_mode:
-            self.layout_manager.update_all()
-            return
+    def _remove_empty_text(self, item):
+        self.widget_manager.remove_empty_text(item)
 
-        if self.active_text_item is not None:
-            self.text_format_widget.setVisible(True)
-            self.layout_manager.update_all()
-            return
-
-        if self.current_tool == 'text':
-            self.text_format_widget.setVisible(True)
-            self.layout_manager.update_all()
-            return
-
-        selected = self.scene().selectedItems()
-        if selected:
-            all_text = all(isinstance(item, TextItem) for item in selected)
-            if all_text:
-                self.text_format_widget.setVisible(True)
-                self.layout_manager.update_all()
-                return
-            self.layout_manager.update_all()
-            return
-
-        if self.current_tool == 'rect':
-            self.shape_mode_widget.setVisible(True)
-        elif self.current_tool == 'ellipse':
-            self.ellipse_mode_widget.setVisible(True)
-        elif self.current_tool == 'arrow':
-            self.arrow_mode_widget.setVisible(True)
-        elif self.current_tool == 'line':
-            self.line_mode_widget.setVisible(True)
-
-        self._update_pasted_image_handles()
-        self.layout_manager.update_all()
+    def _text_editing_finished(self, item):
+        self.widget_manager.text_editing_finished(item)
 
     # ==============================================================
     # Обработчики сигналов виджетов
@@ -869,34 +754,6 @@ class EditorView(QGraphicsView):
         self.auto_fit = False
         scale = self.transform().m11() * 100
         self.zoom_widget.set_zoom(scale)
-
-    def _on_text_bg_changed(self, m):
-        self.current_text_bg = (
-            QColor(255, 255, 255, 200) if m == 'white' else
-            QColor(0, 0, 0, 200) if m == 'black' else None)
-        if self.active_text_item:
-            self.active_text_item.bg_color = self.current_text_bg
-            self.active_text_item.update()
-        else:
-            for item in self.scene().selectedItems():
-                if isinstance(item, TextItem):
-                    item.bg_color = self.current_text_bg
-                    item.update()
-
-    def _on_shape_mode_changed(self, m):
-        self.shape_mode = m
-
-    def _on_ellipse_mode_changed(self, m):
-        self.ellipse_mode = m
-
-    def _on_arrow_mode_changed(self, m):
-        self.arrow_mode = m
-
-    def _on_line_mode_changed(self, m):
-        self.line_mode = m
-
-    def update_text_format_widget_visibility(self):
-        self._update_floating_widgets_visibility()
 
     # ==============================================================
     # Временный указатель / инструменты
@@ -951,30 +808,12 @@ class EditorView(QGraphicsView):
             self.line_mode_widget.set_current_mode('straight')
 
         if not self.scene().selectedItems():
-            self._update_info_widget_content(
+            self.widget_manager.update_info_widget_content(
                 self.current_pen_color, self.get_current_width())
 
         self._invalidate_cursor_cache()
         QTimer.singleShot(0, self.manipulation_controller._refresh_cursor)
-        self._update_floating_widgets_visibility()
-
-    def set_pen_color(self, c):
-        if self.scene().selectedItems():
-            self.apply_current_style_to_selected(pen_color=c)
-            self._sync_selection_properties()
-        else:
-            self.current_pen_color = c
-            self._update_info_widget_content(self.current_pen_color, self.pen_width)
-
-    def set_pen_width(self, w):
-        w = max(1, min(100, int(w)))
-        if self.scene().selectedItems() or self.active_text_item:
-            self.apply_current_style_to_selected(pen_width=w)
-            self._sync_selection_properties()
-        else:
-            self.pen_width = w
-            self.text_size = w
-            self._update_info_widget_content(self.current_pen_color, self.pen_width)
+        self.widget_manager.update_floating_widgets_visibility()
 
     # ==============================================================
     # Работа с элементами
@@ -989,64 +828,6 @@ class EditorView(QGraphicsView):
                 return item
             item = item.parentItem()
         return None
-
-    def get_selected_text_item(self):
-        for item in self.scene().selectedItems():
-            if isinstance(item, TextItem):
-                return item
-        return None
-
-    def get_selected_dimension_item(self):
-        for item in self.scene().selectedItems():
-            if isinstance(item, DimensionItem):
-                return item
-        return None
-
-    def get_current_width(self):
-        sd = self.get_selected_dimension_item()
-        if sd:
-            return max(1, int(round(sd._pen.widthF())))
-        st = self.get_selected_text_item()
-        if st:
-            return max(1, int(round(st.font().pointSize() / 4)))
-        if self.active_text_item:
-            return max(1, int(round(self.active_text_item.font().pointSize() / 4)))
-        if self.current_tool == 'text':
-            return self.text_size
-        return self.pen_width
-
-    def set_text_size(self, v):
-        v = max(1, min(100, int(v)))
-        self.text_size = v
-        st = self.get_selected_text_item()
-        if st:
-            font = st.font()
-            font.setPointSize(max(1, v * 4))
-            st.setFont(font)
-            st.update()
-        if self.active_text_item and isinstance(self.active_text_item, TextItem):
-            font = self.active_text_item.font()
-            font.setPointSize(max(1, v * 4))
-            self.active_text_item.setFont(font)
-            self.active_text_item.update()
-
-    def set_text_bg(self, bg):
-        self.current_text_bg = bg
-
-    def _remove_empty_text(self, item):
-        if item.scene():
-            item.scene().removeItem(item)
-        if self.active_text_item is item:
-            self.active_text_item = None
-        self._update_floating_widgets_visibility()
-
-    def _text_editing_finished(self, item):
-        if self.active_text_item is item:
-            self.active_text_item = None
-        if isinstance(item, TextItem):
-            item._editable = False
-            item.setTextInteractionFlags(Qt.NoTextInteraction)
-        self._update_floating_widgets_visibility()
 
     # ==============================================================
     # ЭТАП 5: курсор с кэшированием itemAt

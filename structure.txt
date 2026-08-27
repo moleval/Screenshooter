@@ -1,47 +1,57 @@
-Screenshooter/
-├── main.py                      # Точка входа: настройка High DPI, инициализация QApplication и запуск ScreenshotApp.
-├── requirements.txt             # Зависимости: PyQt5, keyboard, pywin32, mss, pillow и др.
-├── LICENSES.txt                 # Лицензии сторонних библиотек (GPLv3, MIT, PSF).
-├── .gitignore                   # Исключения для venv, __pycache__, *.pyc.
+D:\Screenshooter\
+├── main.py                             # Точка входа
+├── requirements.txt                    # Зависимости
+├── LICENSES.txt                        # Лицензии сторонних библиотек
 │
-└── screenshooter/               # Основной пакет приложения
-    ├── __init__.py              # Метаданные пакета (версия "0.1.0").
-    ├── app.py                   # Главное окно (QMainWindow). Управляет тулбарами, глобальными горячими клавишами, триггерами захвата экрана и координацией между View и историей.
-    ├── view.py                  # EditorView (QGraphicsView). Ядро редактора: обработка мыши, создание/перемещение аннотаций, зум, управление плавающими виджетами, делегирование обрезки/размытия в ImageEditController.
-    ├── constants.py             # Глобальные константы: HIT_AREA_PADDING (зона клика), MIN_RECT_SIZE, MIN_ARROW_LENGTH.
-    ├── utils.py                 # Утилиты: resource_path (для PyInstaller) и SelectAllLineEdit (QLineEdit с автовыделением текста).
+└── screenshooter/
+    ├── __init__.py
+    ├── app.py                          # Главное окно (панель инструментов, горячие клавиши)
+    ├── constants.py                    # Константы (размеры, цвета, отступы)
+    ├── view.py                         # EditorView — тонкий координатор (~400 строк)
+    ├── image_edit_controller.py        # Обрезка, размытие, поворот изображения
     │
-    ├── crop_handles.py          # CropHandles: логика отрисовки и управления 8 маркерами изменения размера (игнорируют масштабирование сцены).
-    ├── blur_region_item.py      # BlurRegionItem: графический элемент зоны размытия. Поддерживает режимы drawing, active (с маркерами), inactive.
-    ├── pasted_image_item.py     # PastedImageItem: элемент вставленного изображения. Поддерживает масштабирование, обрезку, поворот и отображение маркеров.
-    ├── image_edit_controller.py # ImageEditController: контроллер операций с фоном и вставленными изображениями (обрезка, поворот, размытие). Управляет состоянием, маркерами и создаёт команды для Undo/Redo.
+    ├── history/
+    │   └── __init__.py                 # Undo/Redo команды (все типы операций)
     │
-    ├── capture/                 # Модуль захвата экрана
-    │   ├── __init__.py          # Пустой init-файл пакета.
-    │   ├── virtual_screen.py    # Работа с мультимониторностью: получение объединённой геометрии и снимка всего виртуального экрана.
-    │   ├── screen_overlay.py    # Оверлей выбора монитора (PrintScreen). Рисует номера экранов, перехватывает клик для захвата.
-    │   ├── region_overlay.py    # Оверлей выделения области (Ctrl+PrintScreen). Рисует рамку, показывает координаты/размер, делает снимок выделенной области.
-    │   └── window_capture.py    # Захват клиентской области активного окна (Alt+PrintScreen) через win32gui и вырезка её из виртуального скриншота.
+    ├── items/
+    │   ├── __init__.py
+    │   ├── shape_items.py              # RectangleItem, EllipseItem, FilledRectItem, CloudItem
+    │   ├── arrow_items.py              # ArrowItem, CurvedArrowItem, DimensionItem
+    │   ├── line_items.py               # LineItem, WavyLineItem
+    │   ├── text_item.py                # TextItem, DimensionTextItem
+    │   ├── pasted_image_item.py        # PastedImageItem
+    │   ├── blur_region_item.py         # BlurRegionItem
+    │   └── crop_handles.py             # CropHandles (маркеры обрезки/размера)
     │
-    ├── items/                   # Графические элементы аннотаций (наследники QGraphicsItem)
-    │   ├── __init__.py          # Реэкспорт всех классов элементов для удобного импорта.
-    │   ├── text_item.py         # TextItem (редактируемый текст с фоном) и DimensionTextItem (текст размерной линии).
-    │   ├── shape_items.py       # RectangleItem, EllipseItem, FilledRectItem (полупрозрачный), CloudItem (волнистый контур).
-    │   ├── line_items.py        # LineItem (прямая/пунктирная) и WavyLineItem (генерируется синусоидой).
-    │   └── arrow_items.py       # ArrowItem (прямая), CurvedArrowItem (квадратичная кривая Безье), DimensionItem (размерная линия с засечками, QGraphicsItemGroup).
+    ├── tools/                          # Шаг 2: паттерн «Стратегия»
+    │   ├── __init__.py
+    │   ├── base_tool.py                # BaseTool (абстрактный)
+    │   ├── rect_tool.py                # RectTool
+    │   ├── ellipse_tool.py             # EllipseTool
+    │   ├── line_tool.py                # LineTool
+    │   ├── arrow_tool.py               # ArrowTool
+    │   └── text_tool.py                # TextTool
     │
-    ├── history/                 # Управление историей операций (Undo/Redo)
-    │   └── __init__.py          # HistoryManager (обёртка над QUndoStack) и все классы команд (AddItemCommand, MoveItemCommand, ResizeItemCommand, CropCommand, BlurCommand и т.д.).
+    ├── widgets/
+    │   ├── __init__.py
+    │   ├── color_palette.py            # Палитра цветов
+    │   ├── thickness_slider.py         # Слайдер толщины
+    │   ├── text_size_slider.py         # Слайдер размера текста
+    │   ├── info_widget.py              # Виджет информации (цвет, толщина)
+    │   ├── zoom_widget.py              # Виджет масштаба
+    │   ├── text_format_widget.py       # Виджет формата текста (фон)
+    │   └── mode_widgets.py             # Виджеты режимов (4 типа)
     │
-    ├── image_processing/        # Низкоуровневая обработка QPixmap/QImage
-    │   └── __init__.py          # Функции: crop_pixmap (вырезка области), rotate_pixmap (поворот на угол, кратный 90°), blur_region (размытие через QGraphicsBlurEffect).
+    ├── ui/                             # Шаг 1: позиционирование
+    │   ├── __init__.py
+    │   └── layout_manager.py           # LayoutManager (дебаунс 16 мс)
     │
-    └── widgets/                 # Пользовательские интерфейсные виджеты
-        ├── __init__.py          # Пустой init-файл пакета.
-        ├── tool_icons.py        # Программная генерация QIcon для инструментов и режимов (через QPainter).
-        ├── color_palette.py     # Выбор цвета: 11 пресетов + кнопка вызова QColorDialog.
-        ├── thickness.py         # Выбор толщины: пресеты (1,2,5,10,20), слайдер и поле ручного ввода (с поддержкой колёсика мыши).
-        ├── info_widget.py       # Плавающий индикатор текущего цвета и толщины линии.
-        ├── zoom_widget.py       # Управление масштабом: кнопки +/-, кнопка "вписать", слайдер и поле ввода процентов.
-        ├── text_format_widget.py# Выбор фона текста: белый, чёрный или прозрачный.
-        └── mode_widgets.py      # Плавающие тулбары подрежимов: прямоугольник (прямоугольник/квадрат/заливка), эллипс, стрелка, линия.
+    ├── image_processing/
+    │   └── __init__.py                 # crop_pixmap, rotate_pixmap, blur_region (cv2)
+    │
+    └── controllers/                    # Шаги 3–5: контроллеры
+        ├── __init__.py
+        ├── clipboard_controller.py     # Копирование/вырезание/вставка элементов
+        ├── manipulation_controller.py  # Перетаскивание, выделение, рамка, панорамирование
+        ├── keyboard_manager.py         # Горячие клавиши (кроме Ctrl+Z/Y)
+        └── floating_widget_manager.py  # Видимость виджетов, синхронизация свойств
