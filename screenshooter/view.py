@@ -106,11 +106,6 @@ class EditorView(QGraphicsView):
         self.status_label.setWordWrap(False)
         self.status_label.setVisible(False)
 
-        self._status_timer = QTimer(self)
-        self._status_timer.setSingleShot(True)
-        self._status_timer.timeout.connect(self._restore_status_label)
-        self._resolution_text = ""
-
         self.layout_manager = LayoutManager(self)
         self._tool = None
 
@@ -398,27 +393,13 @@ class EditorView(QGraphicsView):
             e.ignore()
 
     # ==============================================================
-    # Статусный виджет
+    # Статусный виджет — делегирование в FloatingWidgetManager
     # ==============================================================
     def set_resolution_text(self, text):
-        self._resolution_text = text
-        self.status_label.setText(text)
-        self.status_label.setToolTip(text if text else "")
-        self.status_label.setVisible(bool(text))
-        self.layout_manager.update_status_label_position()
+        self.widget_manager.set_resolution_text(text)
 
     def show_status_message(self, message, duration=15000):
-        self.status_label.setText(message)
-        self.status_label.setToolTip(message)
-        self.status_label.setVisible(True)
-        self.layout_manager.update_status_label_position()
-        self._status_timer.start(duration)
-
-    def _restore_status_label(self):
-        if self._resolution_text:
-            self.status_label.setText(self._resolution_text)
-        else:
-            self.status_label.setVisible(False)
+        self.widget_manager.show_status_message(message, duration)
 
     # ==============================================================
     # Мышь — делегирование в контроллеры
@@ -707,6 +688,9 @@ class EditorView(QGraphicsView):
     # ==============================================================
     # Обёртки для совместимости с app.py и text_item.py
     # ==============================================================
+    def _update_floating_widgets_visibility(self):
+        self.widget_manager.update_floating_widgets_visibility()
+
     def apply_current_style_to_selected(self, pen_color=None, pen_width=None):
         self.widget_manager.apply_current_style_to_selected(pen_color, pen_width)
 
@@ -727,9 +711,6 @@ class EditorView(QGraphicsView):
 
     def update_text_format_widget_visibility(self):
         self.widget_manager.update_text_format_widget_visibility()
-
-    def _update_floating_widgets_visibility(self):
-        self.widget_manager.update_floating_widgets_visibility()
 
     def _remove_empty_text(self, item):
         self.widget_manager.remove_empty_text(item)

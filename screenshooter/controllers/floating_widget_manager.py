@@ -2,7 +2,7 @@
 Модуль: controllers/floating_widget_manager.py
 Описание: Контроллер управления плавающими виджетами редактора.
           Управляет видимостью виджетов режимов, синхронизацией свойств
-          выделенных элементов и применением стиля.
+          выделенных элементов, применением стиля и статусным виджетом.
 """
 
 from PyQt5.QtCore import Qt, QTimer
@@ -18,11 +18,17 @@ from ..history import ChangePenCommand
 class FloatingWidgetManager:
     """
     Управляет плавающими виджетами редактора:
-    видимость, синхронизация свойств, применение стиля.
+    видимость, синхронизация свойств, применение стиля, статусный виджет.
     """
 
     def __init__(self, view):
         self.view = view
+
+        # Статусный виджет
+        self._resolution_text = ""
+        self._status_timer = QTimer(view)
+        self._status_timer.setSingleShot(True)
+        self._status_timer.timeout.connect(self._restore_status_label)
 
         # Подключаем сигналы виджетов
         view.text_format_widget.bgChanged.connect(self._on_text_bg_changed)
@@ -30,6 +36,33 @@ class FloatingWidgetManager:
         view.ellipse_mode_widget.modeChanged.connect(self._on_ellipse_mode_changed)
         view.arrow_mode_widget.modeChanged.connect(self._on_arrow_mode_changed)
         view.line_mode_widget.modeChanged.connect(self._on_line_mode_changed)
+
+    # ==============================================================
+    # Статусный виджет
+    # ==============================================================
+
+    def set_resolution_text(self, text):
+        """Устанавливает текст разрешения в статусный виджет."""
+        self._resolution_text = text
+        self.view.status_label.setText(text)
+        self.view.status_label.setToolTip(text if text else "")
+        self.view.status_label.setVisible(bool(text))
+        self.view.layout_manager.update_status_label_position()
+
+    def show_status_message(self, message, duration=15000):
+        """Показывает сообщение на время, затем восстанавливает текст разрешения."""
+        self.view.status_label.setText(message)
+        self.view.status_label.setToolTip(message)
+        self.view.status_label.setVisible(True)
+        self.view.layout_manager.update_status_label_position()
+        self._status_timer.start(duration)
+
+    def _restore_status_label(self):
+        """Восстанавливает текст разрешения после сообщения."""
+        if self._resolution_text:
+            self.view.status_label.setText(self._resolution_text)
+        else:
+            self.view.status_label.setVisible(False)
 
     # ==============================================================
     # Видимость и синхронизация
@@ -83,7 +116,7 @@ class FloatingWidgetManager:
 
         # Текст выделен или активен — показываем виджет фона
         # (работает во всех режимах, включая Размыть)
-        if view.current_tool == 'text':
+        if view.active_text_item is not None:
             view.text_format_widget.setVisible(True)
             view.text_format_widget.raise_()
             view.layout_manager.update_all()
@@ -94,6 +127,7 @@ class FloatingWidgetManager:
             all_text = all(isinstance(item, TextItem) for item in selected)
             if all_text:
                 view.text_format_widget.setVisible(True)
+                view.text_format_widget.raise_()
                 view.layout_manager.update_all()
                 return
 
@@ -104,6 +138,7 @@ class FloatingWidgetManager:
 
         if view.current_tool == 'text':
             view.text_format_widget.setVisible(True)
+            view.text_format_widget.raise_()
             view.layout_manager.update_all()
             return
 
