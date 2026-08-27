@@ -33,7 +33,7 @@ from .history import (HistoryManager, AddItemCommand, RemoveItemCommand,
 from .image_edit_controller import ImageEditController
 from .ui.layout_manager import LayoutManager
 from .tools import RectTool, EllipseTool, LineTool, ArrowTool, TextTool
-from .controllers import ClipboardController  # КОПИРОВАНИЕ/ВСТАВКА
+from .controllers import ClipboardController, ManipulationController
 
 
 class EditorView(QGraphicsView):
@@ -60,14 +60,6 @@ class EditorView(QGraphicsView):
         self.setFocusPolicy(Qt.StrongFocus)
         self.setMouseTracking(True)
         self.viewport().setMouseTracking(True)
-        self.right_click_temp_pointer = False
-        self.previous_tool_for_right_click = None
-        self.ctrl_pressed = False
-        self.modifier_temp_pointer = False
-        self.previous_tool_for_modifier = None
-        self.rubber_band_active = False
-        self.rubber_band_start = None
-        self.rubber_band_item = None
         self.active_text_item = None
         self.current_text_bg = None
         self._first_click_after_activation = True
@@ -76,22 +68,8 @@ class EditorView(QGraphicsView):
         self.arrow_mode = 'straight'
         self.line_mode = 'straight'
         self.setCursor(Qt.CrossCursor)
-        self._pan_active = False
-        self._pan_start_pos = QPoint()
-        self._pan_start_scroll = QPoint()
 
         self.pasted_images = []
-        self._resizing_pasted_item = None
-        self._resize_handle = None
-        self._resize_start_rect = None
-        self._resize_start_scale = 1.0
-
-        self._drag_items = []
-        self._drag_old_positions = []
-        self._drag_old_rects = []
-        self._drag_start_scene_pos = QPointF()
-        self._drag_start_item_pos = QPointF()
-        self._drag_blur_needs_recompute = False
 
         self.history = HistoryManager()
         self.image_editor = ImageEditController(self)
@@ -141,8 +119,11 @@ class EditorView(QGraphicsView):
         self.layout_manager = LayoutManager(self)
         self._tool = None
 
-        # КОПИРОВАНИЕ/ВСТАВКА: контроллер копирования/вставки
+        # Контроллер копирования/вставки
         self.clipboard_controller = ClipboardController(self)
+
+        # Контроллер манипуляций (перетаскивание, выделение, рамка, панорамирование)
+        self.manipulation_controller = ManipulationController(self)
 
         # ЭТАП 5: кэш для _update_cursor
         self._last_cursor_pos = None
@@ -218,7 +199,6 @@ class EditorView(QGraphicsView):
         if old != new:
             self.fit_background_to_view()
         self._update_after_history_change()
-        # ЭТАП 5: сброс кэша курсора после изменения истории
         self._invalidate_cursor_cache()
 
     def redo(self):
@@ -228,7 +208,6 @@ class EditorView(QGraphicsView):
         if old != new:
             self.fit_background_to_view()
         self._update_after_history_change()
-        # ЭТАП 5: сброс кэша курсора после изменения истории
         self._invalidate_cursor_cache()
 
     def _get_background_pixmap_size(self):
@@ -446,22 +425,16 @@ class EditorView(QGraphicsView):
             self.status_label.setVisible(False)
 
     # ==============================================================
-    # Мышь
+    # Мышь — делегирование в контроллеры
     # ==============================================================
     def mousePressEvent(self, e):
-        sp = self.mapToScene(e.pos())
-        item = self.scene().itemAt(sp, self.transform())
-        li = self._item_for_manipulation(item) if item else None
-
-        modifiers = e.modifiers()
-        is_ctrl = bool(modifiers & Qt.ControlModifier)
-        is_shift = bool(modifiers & Qt.ShiftModifier)
-
-        # --- Режим Размыть ---
+        # 1. Режим Размыть
         if self.image_editor.blur_mode:
-            is_blur_item = isinstance(li, BlurRegionItem)
-            is_empty_or_bg = li is None or self._is_background_item(li)
+            sp = self.mapToScene(e.pos())
+            item = self.scene().itemAt(sp, self.transform())
+            li = self._item_for_manipulation(item) if item else None
 
+            # Проверяем маркеры активной зоны размытия
             is_blur_handle = False
             if (self.image_editor.active_blur_index is not None and
                     self.image_editor.active_blur_index < len(
@@ -473,206 +446,105 @@ class EditorView(QGraphicsView):
                     if hid:
                         is_blur_handle = True
 
-            skip_blur_in_blur_mode = False
-            if is_ctrl or is_shift:
-                skip_blur_in_blur_mode = True
-            elif is_blur_item:
-                selected_items = self.scene().selectedItems()
-                if li.isSelected() and len(selected_items) > 1:
-                    skip_blur_in_blur_mode = True
+            delegate_to_manipulation = False
 
-            if not skip_blur_in_blur_mode and (is_blur_item or is_empty_or_bg or is_blur_handle):
-                if self.image_editor.handle_mouse_press(e):
+            if is_blur_handle:
+                # Клик по маркеру зоны размытия — обрабатывает image_editor
+                pass
+            elif li is not None and not self._is_background_item(li):
+                if isinstance(li, BlurRegionItem):
+                    modifiers = e.modifiers()
+                    is_ctrl = bool(modifiers & Qt.ControlModifier)
+                    is_shift = bool(modifiers & Qt.ShiftModifier)
+
+                    if is_ctrl or is_shift:
+                        # Ctrl/Shift — множественное выделение через манипуляции
+                        delegate_to_manipulation = True
+                    else:
+                        # Проверяем множественное выделение
+                        selected = self.scene().selectedItems()
+                        non_bg_selected = [it for it in selected
+                                           if not self._is_background_item(it)]
+                        if len(non_bg_selected) > 1 and li.isSelected():
+                            # Зона размытия в множественном выделении
+                            # — групповое перетаскивание через манипуляции
+                            delegate_to_manipulation = True
+                else:
+                    # Обычный элемент — делегируем в манипуляции
+                    delegate_to_manipulation = True
+
+            if delegate_to_manipulation:
+                if self.manipulation_controller.handle_mouse_press(e):
                     e.accept()
                     return
 
-        # --- Режим Обрезки ---
+            # Иначе — обрабатывает контроллер размытия
+            if self.image_editor.handle_mouse_press(e):
+                e.accept()
+                return
+
+        # 2. Режим Обрезки
         elif self.image_editor.crop_mode:
             if self.image_editor.handle_mouse_press(e):
                 e.accept()
                 return
 
-        # --- Маркеры вставленных изображений ---
-        if e.button() == Qt.LeftButton:
-            for p_item in self.pasted_images:
-                if p_item.isSelected() and p_item.handles:
-                    handle_id = p_item.handles.hit_test(e.pos())
-                    if handle_id:
-                        self._resizing_pasted_item = p_item
-                        self._resize_handle = handle_id
-                        self._resize_start_rect = p_item.mapRectToScene(p_item.boundingRect())
-                        self._resize_start_scale = p_item.scale
-                        e.accept()
-                        return
-
-        # --- Зоны размытия ВНЕ режима размытия ---
-        if (e.button() == Qt.LeftButton and
-                not self.image_editor.crop_mode and
-                not self.image_editor.blur_mode):
-            skip_blur_handler = False
-            if is_ctrl or is_shift:
-                skip_blur_handler = True
-            elif li is not None and isinstance(li, BlurRegionItem):
-                selected_items = self.scene().selectedItems()
-                if li.isSelected() and len(selected_items) > 1:
-                    skip_blur_handler = True
-
-            if not skip_blur_handler:
-                if self.image_editor.handle_blur_region_press_outside(e):
-                    e.accept()
-                    return
-
-        # --- Панорамирование ---
-        if e.button() == Qt.MiddleButton:
-            if self.active_text_item and self.active_text_item._editable:
-                e.accept()
-                return
-            self._pan_active = True
-            self._pan_start_pos = e.pos()
-            self._pan_start_scroll = QPoint(
-                self.horizontalScrollBar().value(),
-                self.verticalScrollBar().value())
-            self.viewport().setCursor(Qt.ClosedHandCursor)
+        # 3. Манипуляции (перетаскивание, выделение, рамка, панорамирование)
+        if self.manipulation_controller.handle_mouse_press(e):
             e.accept()
             return
 
-        # --- Правая кнопка ---
-        if e.button() == Qt.RightButton:
-            if self.active_text_item and self.active_text_item._editable:
-                e.accept()
-                return
-            right_item = None
-            for it in self.scene().items(sp):
-                if not self._is_background_item(it):
-                    right_item = it
-                    break
-            if right_item:
-                right_li = self._item_for_manipulation(right_item)
-                self.scene().clearSelection()
-                right_li.setSelected(True)
-                self._activate_temp_pointer('right_click')
-            else:
-                self.scene().clearSelection()
-                self._activate_temp_pointer('right_click')
-                self.rubber_band_active = True
-                self.rubber_band_start = sp
-                pen = QPen(QColor(255, 200, 0), 3, Qt.DashLine)
-                pen.setCosmetic(True)
-                self.rubber_band_item = QGraphicsRectItem(QRectF(sp, sp))
-                self.rubber_band_item.setPen(pen)
-                self.rubber_band_item.setZValue(10000)
-                self.rubber_band_item.setFlag(QGraphicsRectItem.ItemIsMovable, False)
-                self.rubber_band_item.setFlag(QGraphicsRectItem.ItemIsSelectable, False)
-                self.scene().addItem(self.rubber_band_item)
-                QApplication.processEvents()
-                self.setViewportUpdateMode(QGraphicsView.FullViewportUpdate)
-                self.viewport().update()
-            e.accept()
-            return
+        # 4. Текст
+        if self.current_tool == 'text':
+            sp = self.mapToScene(e.pos())
+            item = self.scene().itemAt(sp, self.transform())
+            li = self._item_for_manipulation(item) if item else None
 
-        # --- Левая кнопка ---
-        if e.button() == Qt.LeftButton:
             if isinstance(item, TextItem) and item._editable:
                 super().mousePressEvent(e)
                 e.accept()
                 return
 
-            if self.current_tool == 'text':
-                if isinstance(li, TextItem):
-                    if self.active_text_item is not None and self.active_text_item is not li:
-                        self._deactivate_active_text()
-                else:
-                    if self.active_text_item and self.active_text_item._editable:
-                        self._deactivate_active_text()
-                    if li is None or self._is_background_item(li):
-                        if self._first_click_after_activation:
-                            ti = TextItem(self, bg_color=self.current_text_bg)
-                            ti.setDefaultTextColor(self.current_pen_color)
-                            font = QFont()
-                            font.setPointSize(self.text_size * 4)
-                            ti.setFont(font)
-                            ti.setPos(sp)
-                            self.scene().addItem(ti)
-                            self.active_text_item = ti
-                            ti.setSelected(True)
-                            ti.setEditable(True)
-                            self._first_click_after_activation = False
-                            self.history.push(AddItemCommand(self.scene(), ti))
-                            e.accept()
-                            return
-
-            # Общая логика выделения и перетаскивания
-            if li is not None and not self._is_background_item(li):
-                if li.isSelected():
-                    if is_ctrl:
-                        li.setSelected(False)
+            if isinstance(li, TextItem):
+                if self.active_text_item is not None and self.active_text_item is not li:
+                    self._deactivate_active_text()
+            else:
+                if self.active_text_item and self.active_text_item._editable:
+                    self._deactivate_active_text()
+                if li is None or self._is_background_item(li):
+                    if self._first_click_after_activation:
+                        ti = TextItem(self, bg_color=self.current_text_bg)
+                        ti.setDefaultTextColor(self.current_pen_color)
+                        font = QFont()
+                        font.setPointSize(self.text_size * 4)
+                        ti.setFont(font)
+                        ti.setPos(sp)
+                        self.scene().addItem(ti)
+                        self.active_text_item = ti
+                        ti.setSelected(True)
+                        ti.setEditable(True)
+                        self._first_click_after_activation = False
+                        self.history.push(AddItemCommand(self.scene(), ti))
                         e.accept()
                         return
-                else:
-                    if not (is_ctrl or is_shift):
-                        self.scene().clearSelection()
-                    li.setSelected(True)
 
-                selected = self.scene().selectedItems()
-                self._drag_items = [it for it in selected
-                                    if not self._is_background_item(it)]
-
-                if not self._drag_items:
-                    e.accept()
-                    return
-
-                self._drag_old_positions = []
-                self._drag_old_rects = []
-                self._drag_blur_needs_recompute = False
-                for it in self._drag_items:
-                    if isinstance(it, BlurRegionItem):
-                        self._drag_old_positions.append(None)
-                        self._drag_old_rects.append(it.rect())
-                    else:
-                        self._drag_old_positions.append(it.pos())
-                        self._drag_old_rects.append(None)
-
-                self._drag_start_scene_pos = sp
-                self._drag_start_item_pos = (
-                    li.pos() if not isinstance(li, BlurRegionItem)
-                    else li.rect().topLeft())
-                e.accept()
-                return
-
-            # Временный указатель
-            if ((self.right_click_temp_pointer or self.modifier_temp_pointer)
-                    and self.current_tool is None):
-                if li is None or self._is_background_item(li):
-                    if self.right_click_temp_pointer:
-                        self.scene().clearSelection()
-                        self.right_click_temp_pointer = False
-                        if not self.modifier_temp_pointer:
-                            self._restore_tool_if_needed()
-                    e.accept()
-                    return
-                else:
-                    super().mousePressEvent(e)
-                    e.accept()
-                    return
-
-            # Рисование
-            if self.current_tool in ('rect', 'ellipse', 'arrow', 'line'):
-                if self._tool is not None:
-                    self.start_point = sp
-                    self.temp_item = self._tool.start_draw(sp)
-                    if self.temp_item:
-                        self.scene().addItem(self.temp_item)
-                e.accept()
-                return
-
-            super().mousePressEvent(e)
+        # 5. Рисование инструментами
+        if self.current_tool in ('rect', 'ellipse', 'arrow', 'line'):
+            if self._tool is not None:
+                sp = self.mapToScene(e.pos())
+                self.start_point = sp
+                self.temp_item = self._tool.start_draw(sp)
+                if self.temp_item:
+                    self.scene().addItem(self.temp_item)
             e.accept()
             return
 
         super().mousePressEvent(e)
+        e.accept()
 
     def mouseMoveEvent(self, e):
-        if not self._drag_items:
+        # 1. Режим Размыть / Обрезки
+        if not self.manipulation_controller._drag_items:
             if self.image_editor.blur_mode:
                 if self.image_editor.handle_mouse_move(e):
                     e.accept()
@@ -682,155 +554,33 @@ class EditorView(QGraphicsView):
                     e.accept()
                     return
 
-        if self._resizing_pasted_item is not None:
-            sp = self.mapToScene(e.pos())
-            item = self._resizing_pasted_item
-            start_rect = self._resize_start_rect
-            handle_id = self._resize_handle
-            left, top = start_rect.left(), start_rect.top()
-            right, bottom = start_rect.right(), start_rect.bottom()
-            min_size = PastedImageItem.MIN_SIZE
-
-            if handle_id == 'tl':
-                left = min(sp.x(), right - min_size)
-                top = min(sp.y(), bottom - min_size)
-            elif handle_id == 'tr':
-                right = max(sp.x(), left + min_size)
-                top = min(sp.y(), bottom - min_size)
-            elif handle_id == 'bl':
-                left = min(sp.x(), right - min_size)
-                bottom = max(sp.y(), top + min_size)
-            elif handle_id == 'br':
-                right = max(sp.x(), left + min_size)
-                bottom = max(sp.y(), top + min_size)
-            elif handle_id == 'tm':
-                top = min(sp.y(), bottom - min_size)
-            elif handle_id == 'bm':
-                bottom = max(sp.y(), top + min_size)
-            elif handle_id == 'lm':
-                left = min(sp.x(), right - min_size)
-            elif handle_id == 'rm':
-                right = max(sp.x(), left + min_size)
-
-            new_rect = QRectF(left, top, right - left, bottom - top).normalized()
-            local_rect = item.mapRectFromScene(new_rect)
-            scale_x = local_rect.width() / item.original_pixmap.width()
-            scale_y = local_rect.height() / item.original_pixmap.height()
-            scale = min(scale_x, scale_y)
-            item.set_image_scale(scale)
-            e.accept()
-            return
-
-        if not self._drag_items:
+        # 2. Зоны размытия вне режима размытия
+        if not self.manipulation_controller._drag_items:
             if not self.image_editor.crop_mode and not self.image_editor.blur_mode:
                 if self.image_editor.handle_blur_region_move_outside(e):
                     e.accept()
                     return
 
-        if self._pan_active:
-            dx = e.pos().x() - self._pan_start_pos.x()
-            dy = e.pos().y() - self._pan_start_pos.y()
-            scale = self.transform().m11()
-            if scale != 0:
-                self.horizontalScrollBar().setValue(
-                    int(self._pan_start_scroll.x() - dx / scale))
-                self.verticalScrollBar().setValue(
-                    int(self._pan_start_scroll.y() - dy / scale))
+        # 3. Манипуляции
+        if self.manipulation_controller.handle_mouse_move(e):
             e.accept()
             return
 
-        # Групповое перетаскивание
-        if self._drag_items:
-            current_scene_pos = self.mapToScene(e.pos())
-            delta = current_scene_pos - self._drag_start_scene_pos
-
-            if e.modifiers() & Qt.ShiftModifier:
-                if abs(delta.x()) > abs(delta.y()):
-                    delta.setY(0.0)
-                else:
-                    delta.setX(0.0)
-
-            for idx, drag_item in enumerate(self._drag_items):
-                if isinstance(drag_item, BlurRegionItem):
-                    old_rect = self._drag_old_rects[idx]
-                    new_rect = old_rect.translated(delta)
-                    if self.image_editor.background_item is not None:
-                        image_rect = QRectF(
-                            self.image_editor.background_item.pixmap().rect())
-                        if new_rect.left() < image_rect.left():
-                            new_rect.moveLeft(image_rect.left())
-                        elif new_rect.right() > image_rect.right():
-                            new_rect.moveRight(image_rect.right())
-                        if new_rect.top() < image_rect.top():
-                            new_rect.moveTop(image_rect.top())
-                        elif new_rect.bottom() > image_rect.bottom():
-                            new_rect.moveBottom(image_rect.bottom())
-                    drag_item.setRect(new_rect)
-                    try:
-                        idx_blur = self.image_editor.blur_region_items.index(drag_item)
-                        self.image_editor.blur_regions[idx_blur] = new_rect
-                        self._drag_blur_needs_recompute = True
-                        self.image_editor._schedule_blur_recompute(moving_index=idx_blur)
-                    except ValueError:
-                        pass
-                    if drag_item.handles:
-                        drag_item.handles.update_handles(new_rect)
-                else:
-                    old_pos = self._drag_old_positions[idx]
-                    new_pos = old_pos + delta
-                    if self.image_editor.background_item is not None:
-                        image_rect = QRectF(
-                            self.image_editor.background_item.pixmap().rect())
-                        item_rect = drag_item.boundingRect()
-                        proposed_rect = QRectF(
-                            new_pos + item_rect.topLeft(),
-                            new_pos + item_rect.bottomRight())
-                        if proposed_rect.left() < image_rect.left():
-                            new_pos.setX(new_pos.x() + (
-                                image_rect.left() - proposed_rect.left()))
-                        elif proposed_rect.right() > image_rect.right():
-                            new_pos.setX(new_pos.x() - (
-                                proposed_rect.right() - image_rect.right()))
-                        proposed_rect = QRectF(
-                            new_pos + item_rect.topLeft(),
-                            new_pos + item_rect.bottomRight())
-                        if proposed_rect.top() < image_rect.top():
-                            new_pos.setY(new_pos.y() + (
-                                image_rect.top() - proposed_rect.top()))
-                        elif proposed_rect.bottom() > image_rect.bottom():
-                            new_pos.setY(new_pos.y() - (
-                                proposed_rect.bottom() - image_rect.bottom()))
-                    drag_item.setPos(new_pos)
-                    if isinstance(drag_item, PastedImageItem):
-                        drag_item.show_handles()
-
-            self.scene().update()
-            self._update_pasted_image_handles()
-            e.accept()
-            return
-
+        # 4. Обновление курсора
         self._update_cursor(e.pos())
 
+        # 5. Рисование инструментами
         if self.temp_item and self._tool is not None and self.current_tool not in ('text',):
             sp = self.mapToScene(e.pos())
             self._tool.update_draw(self.temp_item, sp, e.modifiers())
             e.accept()
             return
 
-        # Рамка выделения ПКМ
-        if self.rubber_band_active and self.rubber_band_item:
-            cp = self.mapToScene(e.pos())
-            self.rubber_band_item.setRect(
-                QRectF(self.rubber_band_start, cp).normalized())
-            self.rubber_band_item.update()
-            self.viewport().update()
-            e.accept()
-            return
-
         super().mouseMoveEvent(e)
 
     def mouseReleaseEvent(self, e):
-        if not self._drag_items:
+        # 1. Режим Размыть / Обрезки
+        if not self.manipulation_controller._drag_items:
             if self.image_editor.blur_mode:
                 if self.image_editor.handle_mouse_release(e):
                     e.accept()
@@ -840,22 +590,8 @@ class EditorView(QGraphicsView):
                     e.accept()
                     return
 
-        if self._resizing_pasted_item is not None:
-            item = self._resizing_pasted_item
-            old_scale = self._resize_start_scale
-            new_scale = item.scale
-            if old_scale != new_scale:
-                self.history.push(
-                    ResizePastedImageCommand(item, old_scale, new_scale))
-            self._resizing_pasted_item = None
-            self._resize_handle = None
-            self._resize_start_rect = None
-            self._resize_start_scale = 1.0
-            self._update_pasted_image_handles()
-            e.accept()
-            return
-
-        if not self._drag_items:
+        # 2. Зоны размытия вне режима размытия
+        if not self.manipulation_controller._drag_items:
             if (e.button() == Qt.LeftButton and
                     not self.image_editor.crop_mode and
                     not self.image_editor.blur_mode):
@@ -863,74 +599,12 @@ class EditorView(QGraphicsView):
                     e.accept()
                     return
 
-        if e.button() == Qt.MiddleButton and self._pan_active:
-            self._pan_active = False
-            self._refresh_cursor()
+        # 3. Манипуляции
+        if self.manipulation_controller.handle_mouse_release(e):
             e.accept()
             return
 
-        # Завершение группового перетаскивания
-        if self._drag_items:
-            normal_items = [it for it in self._drag_items
-                            if not isinstance(it, BlurRegionItem)]
-
-            if normal_items:
-                old_positions = []
-                new_positions = []
-                for idx, it in enumerate(self._drag_items):
-                    if not isinstance(it, BlurRegionItem):
-                        old_positions.append(self._drag_old_positions[idx])
-                        new_positions.append(it.pos())
-                if old_positions != new_positions:
-                    self.history.push(
-                        MoveItemsCommand(normal_items, old_positions, new_positions))
-
-            for idx, it in enumerate(self._drag_items):
-                if isinstance(it, BlurRegionItem):
-                    old_rect = self._drag_old_rects[idx]
-                    new_rect = it.rect()
-                    if old_rect != new_rect:
-                        try:
-                            idx_blur = self.image_editor.blur_region_items.index(it)
-                            self.history.push(MoveBlurRegionCommand(
-                                self.image_editor, idx_blur, old_rect, new_rect))
-                        except ValueError:
-                            pass
-
-            if self._drag_blur_needs_recompute:
-                self.image_editor._force_blur_recompute()
-                self._drag_blur_needs_recompute = False
-
-            self._drag_items = []
-            self._drag_old_positions = []
-            self._drag_old_rects = []
-            self._drag_start_scene_pos = QPointF()
-            self._drag_start_item_pos = QPointF()
-            self._update_pasted_image_handles()
-            self._update_blur_region_handles()
-            # ЭТАП 5: сброс кэша курсора после завершения перетаскивания
-            self._invalidate_cursor_cache()
-            e.accept()
-            return
-
-        if self.rubber_band_active and e.button() == Qt.RightButton:
-            if self.rubber_band_item:
-                self.scene().removeItem(self.rubber_band_item)
-                rect = self.rubber_band_item.rect()
-                self.rubber_band_item = None
-                for item in self.scene().items():
-                    if self._is_background_item(item):
-                        continue
-                    li = self._item_for_manipulation(item)
-                    if li.sceneBoundingRect().intersects(rect):
-                        li.setSelected(True)
-            self.rubber_band_active = False
-            self.rubber_band_start = None
-            self.setViewportUpdateMode(QGraphicsView.SmartViewportUpdate)
-            self.viewport().update()
-            e.accept()
-            return
-
+        # 4. Рисование инструментами
         if (self.temp_item and e.button() == Qt.LeftButton and
                 self._tool is not None and self.current_tool not in ('text',)):
             if self._tool.finish_draw(self.temp_item):
@@ -993,7 +667,6 @@ class EditorView(QGraphicsView):
             e.accept()
             return
 
-        # КОПИРОВАНИЕ/ВСТАВКА: Ctrl+C
         if e.key() == Qt.Key_C and e.modifiers() & Qt.ControlModifier:
             if self.active_text_item and self.active_text_item._editable:
                 super().keyPressEvent(e)
@@ -1002,7 +675,6 @@ class EditorView(QGraphicsView):
             e.accept()
             return
 
-        # КОПИРОВАНИЕ/ВСТАВКА: Ctrl+V
         if e.key() == Qt.Key_V and e.modifiers() & Qt.ControlModifier:
             if self.active_text_item and self.active_text_item._editable:
                 super().keyPressEvent(e)
@@ -1011,7 +683,6 @@ class EditorView(QGraphicsView):
             e.accept()
             return
 
-        # КОПИРОВАНИЕ/ВСТАВКА: Ctrl+X
         if e.key() == Qt.Key_X and e.modifiers() & Qt.ControlModifier:
             if self.active_text_item and self.active_text_item._editable:
                 super().keyPressEvent(e)
@@ -1036,14 +707,14 @@ class EditorView(QGraphicsView):
                 return
             self.scene().clearSelection()
             self._deactivate_active_text()
-            self._restore_tool_if_needed()
+            self.manipulation_controller._restore_tool_if_needed()
             e.accept()
             return
 
         if e.key() == Qt.Key_Control:
-            self.ctrl_pressed = True
+            self.manipulation_controller.ctrl_pressed = True
             if self.current_tool:
-                self._activate_temp_pointer('modifier')
+                self.manipulation_controller._activate_temp_pointer('modifier')
             e.accept()
             return
 
@@ -1140,9 +811,9 @@ class EditorView(QGraphicsView):
 
     def keyReleaseEvent(self, e):
         if e.key() == Qt.Key_Control:
-            self.ctrl_pressed = False
-            if not self.ctrl_pressed:
-                self._restore_tool_if_needed()
+            self.manipulation_controller.ctrl_pressed = False
+            if not self.manipulation_controller.ctrl_pressed:
+                self.manipulation_controller._restore_tool_if_needed()
             e.accept()
             return
         super().keyReleaseEvent(e)
@@ -1200,7 +871,7 @@ class EditorView(QGraphicsView):
             self.history.push(command)
 
         self.scene().clearSelection()
-        self._restore_tool_if_needed()
+        self.manipulation_controller._restore_tool_if_needed()
 
     def apply_current_style_to_selected(self, pen_color=None, pen_width=None):
         for item in self.scene().selectedItems():
@@ -1375,29 +1046,6 @@ class EditorView(QGraphicsView):
     # ==============================================================
     # Временный указатель / инструменты
     # ==============================================================
-    def _activate_temp_pointer(self, src):
-        if self.current_tool:
-            if src == 'right_click' and not self.right_click_temp_pointer:
-                self.right_click_temp_pointer = True
-                self.previous_tool_for_right_click = self.current_tool
-            elif src == 'modifier' and not self.modifier_temp_pointer:
-                self.modifier_temp_pointer = True
-                self.previous_tool_for_modifier = self.current_tool
-        self.current_tool = None
-        self.setDragMode(QGraphicsView.NoDrag)
-
-    def _restore_tool_if_needed(self):
-        if self.right_click_temp_pointer and not self.modifier_temp_pointer:
-            self._apply_tool(self.previous_tool_for_right_click)
-            self.right_click_temp_pointer = False
-            self.previous_tool_for_right_click = None
-            self._update_floating_widgets_visibility()
-        elif self.modifier_temp_pointer and not self.right_click_temp_pointer:
-            self._apply_tool(self.previous_tool_for_modifier)
-            self.modifier_temp_pointer = False
-            self.previous_tool_for_modifier = None
-            self._update_floating_widgets_visibility()
-
     def _apply_tool(self, t):
         self.current_tool = t
         self.setDragMode(QGraphicsView.NoDrag if t else QGraphicsView.RubberBandDrag)
@@ -1412,10 +1060,11 @@ class EditorView(QGraphicsView):
 
         self.scene().clearSelection()
 
-        self.right_click_temp_pointer = False
-        self.previous_tool_for_right_click = None
-        self.modifier_temp_pointer = False
-        self.previous_tool_for_modifier = None
+        mc = self.manipulation_controller
+        mc.right_click_temp_pointer = False
+        mc.previous_tool_for_right_click = None
+        mc.modifier_temp_pointer = False
+        mc.previous_tool_for_modifier = None
 
         self._apply_tool(t)
         self._first_click_after_activation = (t == 'text')
@@ -1450,10 +1099,8 @@ class EditorView(QGraphicsView):
             self._update_info_widget_content(
                 self.current_pen_color, self.get_current_width())
 
-        # ЭТАП 5: сброс кэша курсора при смене инструмента
         self._invalidate_cursor_cache()
-
-        QTimer.singleShot(0, self._refresh_cursor)
+        QTimer.singleShot(0, self.manipulation_controller._refresh_cursor)
         self._update_floating_widgets_visibility()
 
     def set_pen_color(self, c):
@@ -1550,7 +1197,6 @@ class EditorView(QGraphicsView):
     # ЭТАП 5: курсор с кэшированием itemAt
     # ==============================================================
     def _update_cursor(self, pos):
-        # Кэширование: если позиция не изменилась, используем кэш
         if pos == self._last_cursor_pos:
             item = self._last_cursor_item
         else:
@@ -1559,7 +1205,6 @@ class EditorView(QGraphicsView):
             self._last_cursor_pos = pos
             self._last_cursor_item = item
 
-        # 1. Маркеры вставленных изображений
         for pasted in self.pasted_images:
             if pasted.isSelected() and pasted.handles:
                 handle_id = pasted.handles.hit_test(pos)
@@ -1568,7 +1213,6 @@ class EditorView(QGraphicsView):
                         pasted.handles.get_cursor_for_handle(handle_id))
                     return
 
-        # 2. Маркеры активной зоны размытия
         if (self.image_editor.active_blur_index is not None and
                 self.image_editor.active_blur_index < len(
                     self.image_editor.blur_region_items)):
@@ -1581,7 +1225,6 @@ class EditorView(QGraphicsView):
                         active_blur.handles.get_cursor_for_handle(handle_id))
                     return
 
-        # 3. Элемент под курсором (из кэша или из itemAt)
         if (self.active_text_item and item is self.active_text_item
                 and self.active_text_item._editable):
             self.viewport().setCursor(Qt.IBeamCursor)
@@ -1603,13 +1246,6 @@ class EditorView(QGraphicsView):
 
         if self.current_tool in ('rect', 'ellipse', 'arrow', 'line', 'text'):
             self.viewport().setCursor(Qt.CrossCursor)
-        else:
-            self.viewport().setCursor(Qt.ArrowCursor)
-
-    def _refresh_cursor(self):
-        lp = self.viewport().mapFromGlobal(QCursor.pos())
-        if self.viewport().rect().contains(lp):
-            self._update_cursor(lp)
         else:
             self.viewport().setCursor(Qt.ArrowCursor)
 

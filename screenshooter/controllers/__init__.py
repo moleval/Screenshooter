@@ -4,5 +4,6 @@
 """
 
 from .clipboard_controller import ClipboardController
+from .manipulation_controller import ManipulationController
 
-__all__ = ['ClipboardController']
+__all__ = ['ClipboardController', 'ManipulationController']
