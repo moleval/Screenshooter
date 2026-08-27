@@ -115,10 +115,6 @@ class EditorView(QGraphicsView):
         self.keyboard_manager = KeyboardManager(self)
         self.widget_manager = FloatingWidgetManager(self)
 
-        # ЭТАП 5: кэш для _update_cursor
-        self._last_cursor_pos = None
-        self._last_cursor_item = None
-
         self.widget_manager.update_info_widget_content(
             self.current_pen_color, self.pen_width)
 
@@ -150,14 +146,6 @@ class EditorView(QGraphicsView):
             self._update_blur_region_handles()
         except RuntimeError:
             pass
-
-    # ==============================================================
-    # ЭТАП 5: сброс кэша курсора
-    # ==============================================================
-    def _invalidate_cursor_cache(self):
-        """Сбрасывает кэш курсора при изменении сцены."""
-        self._last_cursor_pos = None
-        self._last_cursor_item = None
 
     # ==============================================================
     # Вспомогательные
@@ -691,6 +679,12 @@ class EditorView(QGraphicsView):
     def _update_floating_widgets_visibility(self):
         self.widget_manager.update_floating_widgets_visibility()
 
+    def _invalidate_cursor_cache(self):
+        self.manipulation_controller.invalidate_cursor_cache()
+
+    def _update_cursor(self, pos):
+        self.manipulation_controller.update_cursor(pos)
+
     def apply_current_style_to_selected(self, pen_color=None, pen_width=None):
         self.widget_manager.apply_current_style_to_selected(pen_color, pen_width)
 
@@ -809,62 +803,6 @@ class EditorView(QGraphicsView):
                 return item
             item = item.parentItem()
         return None
-
-    # ==============================================================
-    # ЭТАП 5: курсор с кэшированием itemAt
-    # ==============================================================
-    def _update_cursor(self, pos):
-        if pos == self._last_cursor_pos:
-            item = self._last_cursor_item
-        else:
-            sp = self.mapToScene(pos)
-            item = self.scene().itemAt(sp, self.transform())
-            self._last_cursor_pos = pos
-            self._last_cursor_item = item
-
-        for pasted in self.pasted_images:
-            if pasted.isSelected() and pasted.handles:
-                handle_id = pasted.handles.hit_test(pos)
-                if handle_id:
-                    self.viewport().setCursor(
-                        pasted.handles.get_cursor_for_handle(handle_id))
-                    return
-
-        if (self.image_editor.active_blur_index is not None and
-                self.image_editor.active_blur_index < len(
-                    self.image_editor.blur_region_items)):
-            active_blur = self.image_editor.blur_region_items[
-                self.image_editor.active_blur_index]
-            if active_blur.handles:
-                handle_id = active_blur.handles.hit_test(pos)
-                if handle_id:
-                    self.viewport().setCursor(
-                        active_blur.handles.get_cursor_for_handle(handle_id))
-                    return
-
-        if (self.active_text_item and item is self.active_text_item
-                and self.active_text_item._editable):
-            self.viewport().setCursor(Qt.IBeamCursor)
-            return
-
-        if item and isinstance(item, BlurRegionItem):
-            self.viewport().setCursor(Qt.SizeAllCursor)
-            return
-
-        if item and not self._is_background_item(item):
-            li = self._item_for_manipulation(item)
-            if li is not None and li.flags() & QGraphicsItem.ItemIsMovable:
-                self.viewport().setCursor(Qt.SizeAllCursor)
-                return
-
-        if item and isinstance(item, PastedImageItem):
-            self.viewport().setCursor(Qt.SizeAllCursor)
-            return
-
-        if self.current_tool in ('rect', 'ellipse', 'arrow', 'line', 'text'):
-            self.viewport().setCursor(Qt.CrossCursor)
-        else:
-            self.viewport().setCursor(Qt.ArrowCursor)
 
     # ==============================================================
     # Resize / Show

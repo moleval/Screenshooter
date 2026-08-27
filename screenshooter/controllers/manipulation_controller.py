@@ -2,11 +2,11 @@
 Модуль: controllers/manipulation_controller.py
 Описание: Контроллер манипуляций с элементами редактора.
           Обрабатывает перетаскивание, выделение рамкой, панорамирование,
-          изменение размера вставленных изображений и временный указатель.
+          изменение размера вставленных изображений, временный указатель и курсор.
 """
 
 from PyQt5 import sip
-from PyQt5.QtCore import Qt, QRectF, QPointF, QPoint, QTimer  # QTimer перенесен сюда
+from PyQt5.QtCore import Qt, QRectF, QPointF, QPoint, QTimer
 from PyQt5.QtGui import QPen, QColor, QCursor
 from PyQt5.QtWidgets import QGraphicsRectItem, QGraphicsItem, QApplication
 
@@ -23,7 +23,7 @@ from ..tools import RectTool, EllipseTool, LineTool, ArrowTool, TextTool
 class ManipulationController:
     """
     Управляет всеми манипуляциями мыши с элементами редактора:
-    перетаскивание, выделение, рамка, панорамирование, изменение размера.
+    перетаскивание, выделение, рамка, панорамирование, изменение размера, курсор.
     """
 
     def __init__(self, view):
@@ -60,6 +60,10 @@ class ManipulationController:
         self.modifier_temp_pointer = False
         self.previous_tool_for_modifier = None
 
+        # Кэш курсора
+        self._last_cursor_pos = None
+        self._last_cursor_item = None
+
     # ==============================================================
     # Три главных метода — вызываются из view.py
     # ==============================================================
@@ -95,6 +99,87 @@ class ManipulationController:
             return True
 
         return False
+
+    # ==============================================================
+    # Курсор
+    # ==============================================================
+
+    def invalidate_cursor_cache(self):
+        """Сбрасывает кэш курсора при изменении сцены."""
+        self._last_cursor_pos = None
+        self._last_cursor_item = None
+
+    def update_cursor(self, pos):
+        """Определяет курсор по позиции мыши и элементу под курсором."""
+        view = self.view
+
+        # Кэширование: если позиция не изменилась, используем кэш
+        if pos == self._last_cursor_pos:
+            item = self._last_cursor_item
+        else:
+            sp = view.mapToScene(pos)
+            item = view.scene().itemAt(sp, view.transform())
+            self._last_cursor_pos = pos
+            self._last_cursor_item = item
+
+        # 1. Маркеры вставленных изображений
+        for pasted in view.pasted_images:
+            if pasted.isSelected() and pasted.handles:
+                handle_id = pasted.handles.hit_test(pos)
+                if handle_id:
+                    view.viewport().setCursor(
+                        pasted.handles.get_cursor_for_handle(handle_id))
+                    return
+
+        # 2. Маркеры активной зоны размытия
+        if (view.image_editor.active_blur_index is not None and
+                view.image_editor.active_blur_index < len(
+                    view.image_editor.blur_region_items)):
+            active_blur = view.image_editor.blur_region_items[
+                view.image_editor.active_blur_index]
+            if active_blur.handles:
+                handle_id = active_blur.handles.hit_test(pos)
+                if handle_id:
+                    view.viewport().setCursor(
+                        active_blur.handles.get_cursor_for_handle(handle_id))
+                    return
+
+        # 3. Текст в режиме редактирования
+        if (view.active_text_item and item is view.active_text_item
+                and view.active_text_item._editable):
+            view.viewport().setCursor(Qt.IBeamCursor)
+            return
+
+        # 4. Зона размытия
+        if item and isinstance(item, BlurRegionItem):
+            view.viewport().setCursor(Qt.SizeAllCursor)
+            return
+
+        # 5. Элемент, который можно перемещать
+        if item and not view._is_background_item(item):
+            li = view._item_for_manipulation(item)
+            if li is not None and li.flags() & QGraphicsItem.ItemIsMovable:
+                view.viewport().setCursor(Qt.SizeAllCursor)
+                return
+
+        # 6. Вставленное изображение
+        if item and isinstance(item, PastedImageItem):
+            view.viewport().setCursor(Qt.SizeAllCursor)
+            return
+
+        # 7. Инструменты рисования
+        if view.current_tool in ('rect', 'ellipse', 'arrow', 'line', 'text'):
+            view.viewport().setCursor(Qt.CrossCursor)
+        else:
+            view.viewport().setCursor(Qt.ArrowCursor)
+
+    def _refresh_cursor(self):
+        """Обновляет курсор по текущей позиции мыши."""
+        lp = self.view.viewport().mapFromGlobal(QCursor.pos())
+        if self.view.viewport().rect().contains(lp):
+            self.update_cursor(lp)
+        else:
+            self.view.viewport().setCursor(Qt.ArrowCursor)
 
     # ==============================================================
     # Нажатие кнопки мыши
@@ -500,7 +585,7 @@ class ManipulationController:
         self._drag_start_item_pos = QPointF()
         self.view._update_pasted_image_handles()
         self.view._update_blur_region_handles()
-        self.view._invalidate_cursor_cache()
+        self.invalidate_cursor_cache()
         return True
 
     def _handle_rubber_band_release(self, event) -> bool:
@@ -586,13 +671,5 @@ class ManipulationController:
             self.view.widget_manager.update_info_widget_content(
                 self.view.current_pen_color, self.view.get_current_width())
 
-        self.view._invalidate_cursor_cache()
+        self.invalidate_cursor_cache()
         QTimer.singleShot(0, self._refresh_cursor)
-
-    def _refresh_cursor(self):
-        """Обновляет курсор по текущей позиции мыши."""
-        lp = self.view.viewport().mapFromGlobal(QCursor.pos())
-        if self.view.viewport().rect().contains(lp):
-            self.view._update_cursor(lp)
-        else:
-            self.view.viewport().setCursor(Qt.ArrowCursor)
