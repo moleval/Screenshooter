@@ -47,7 +47,6 @@ class ClipboardController:
         self._clipboard = []
         self._paste_count = 0  # Сброс счётчика при новом копировании
 
-        self._clipboard = []
         for item in items:
             data = self._serialize_item(item)
             if data:
@@ -95,8 +94,8 @@ class ClipboardController:
 
         # Пересчитываем размытие, если были добавлены зоны
         if blur_added:
-            self.view.image_editor._invalidate_blur_cache()
-            self.view.image_editor._recompute_blurred_pixmap()
+            self.view.blur_controller._invalidate_blur_cache()
+            self.view.blur_controller._recompute_blurred_pixmap()
 
         # Добавляем в историю для Undo/Redo
         self.view.history.push(PasteItemsCommand(self.view.scene(), new_items))
@@ -274,8 +273,8 @@ class ClipboardController:
                 rect = QRectF(*data['rect']).translated(offset)
                 item = BlurRegionItem(rect, self.view, mode='inactive')
                 scene.addItem(item)
-                self.view.image_editor.blur_regions.append(rect)
-                self.view.image_editor.blur_region_items.append(item)
+                self.view.blur_controller.blur_regions.append(rect)
+                self.view.blur_controller.blur_region_items.append(item)
                 return item
 
             if item_type == 'pasted_image':
