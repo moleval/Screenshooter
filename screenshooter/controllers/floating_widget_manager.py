@@ -159,6 +159,35 @@ class FloatingWidgetManager:
         else:
             self.update_info_widget_content(QColor(0, 0, 0), 0)
 
+    def update_resolution_for_selection(self):
+        """Обновляет разрешение в статусной строке в зависимости от выделения.
+
+        Если выбрано вставленное изображение — показываем его разрешение.
+        Иначе — показываем разрешение подложки.
+        """
+        view = self.view
+        selected = view.scene().selectedItems()
+
+        # Ищем вставленное изображение среди выделенных
+        from ..items.pasted_image_item import PastedImageItem
+        pasted = None
+        for item in selected:
+            if isinstance(item, PastedImageItem):
+                pasted = item
+                break
+
+        if pasted is not None:
+            # Показываем разрешение вставленного изображения
+            pixmap = pasted.original_pixmap
+            if pixmap is not None and not pixmap.isNull():
+                w = pixmap.width()
+                h = pixmap.height()
+                self.set_resolution_text(f"{w}×{h}")
+                return
+
+        # Иначе показываем разрешение подложки
+        view.update_resolution_from_background()
+
     def update_floating_widgets_visibility(self):
         """Обновляет видимость плавающих виджетов."""
         view = self.view

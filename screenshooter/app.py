@@ -376,8 +376,10 @@ class ScreenshotApp(QMainWindow):
         if self.view.crop_mode:
             self.view.cancel_crop_mode()
         else:
-            self.pointer_action.setChecked(True)
+            # Сначала запускаем режим обрезки, чтобы захватить выделенную картинку
             self.view.start_crop_mode()
+            # Затем отмечаем кнопку "Выбор" (это вызовет set_tool(None), но цель уже сохранена)
+            self.pointer_action.setChecked(True)
 
     def _on_blur_action_triggered(self):
         if self.view.crop_mode:

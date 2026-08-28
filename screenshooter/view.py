@@ -131,6 +131,9 @@ class EditorView(QGraphicsView):
         self._selection_update_timer.setInterval(0)
         self._selection_update_timer.timeout.connect(self._do_selection_update)
 
+        # Обработка смены режима обрезки (стиль статусной строки)
+        self.crop_mode_changed.connect(self._on_crop_mode_changed)
+
     # ==============================================================
     # ЭТАП 3: батчинг изменений выделения
     # ==============================================================
@@ -142,9 +145,51 @@ class EditorView(QGraphicsView):
         try:
             self.widget_manager.sync_selection_properties()
             self.widget_manager.update_floating_widgets_visibility()
+            self.widget_manager.update_resolution_for_selection()
             self._update_blur_region_handles()
         except RuntimeError:
             pass
+
+    # ==============================================================
+    # Стиль статусной строки для режима обрезки
+    # ==============================================================
+    def _on_crop_mode_changed(self, active):
+        """Обработчик смены режима обрезки."""
+        if active:
+            self._enable_crop_status_style()
+        else:
+            self._disable_crop_status_style()
+
+    def _enable_crop_status_style(self):
+        """Включает стиль статусной строки для режима обрезки.
+
+        Добавляет полупрозрачный чёрный фон и увеличивает шрифт,
+        чтобы текст был читаем на затемнённом экране.
+        """
+        if hasattr(self, 'status_label') and self.status_label is not None:
+            self.status_label.setStyleSheet(
+                "QLabel {"
+                "  background-color: rgba(0, 0, 0, 180);"
+                "  color: white;"
+                "  font-size: 14px;"
+                "  font-weight: bold;"
+                "  padding: 4px 8px;"
+                "  border-radius: 4px;"
+                "}"
+            )
+            self.status_label.setVisible(True)
+
+    def _disable_crop_status_style(self):
+        """Выключает стиль статусной строки для режима обрезки.
+
+        Возвращает обычный стиль и скрывает label.
+        """
+        if hasattr(self, 'status_label') and self.status_label is not None:
+            self.status_label.setStyleSheet(
+                "background-color: rgba(255,255,255,180); color: #333; "
+                "border-radius: 6px; padding: 4px 8px;"
+            )
+            self.status_label.setVisible(False)
 
     # ==============================================================
     # Вспомогательные

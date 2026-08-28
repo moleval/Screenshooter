@@ -6,9 +6,10 @@
 """
 
 from PyQt5 import sip
-from PyQt5.QtCore import Qt, QRectF, QPointF
-from PyQt5.QtGui import QPen, QColor, QBrush, QImage, QPainter, QPixmap
-from PyQt5.QtWidgets import QGraphicsRectItem
+from PyQt5.QtCore import Qt, QRectF, QPointF, QTimer, QPoint
+from PyQt5.QtGui import (QPen, QColor, QBrush, QImage, QPainter, QPixmap,
+                         QFont, QCursor)
+from PyQt5.QtWidgets import QGraphicsRectItem, QGraphicsSimpleTextItem, QGraphicsItem
 
 from .constants import MIN_RECT_SIZE
 from .history import (CropCommand, RotateCommand,
@@ -37,6 +38,11 @@ class ImageEditController:
         self.temp_crop_start = None
         self.handles = None
         self.active_handle = None
+        self.crop_size_label = None
+        self.crop_size_bg = None
+
+        # Кэшируем курсор обрезки, чтобы не создавать его каждый раз
+        self._crop_cursor = None
 
     # --------------------------------------------------------------
     # Установка фонового элемента и сброс
@@ -67,6 +73,43 @@ class ImageEditController:
         return obj is None or sip.isdeleted(obj)
 
     # --------------------------------------------------------------
+    # Кастомный курсор для режима обрезки
+    # --------------------------------------------------------------
+    def _create_crop_cursor(self):
+        """Создаёт контрастный курсор-перекрестие для режима обрезки.
+
+        Чёрные линии с белой обводкой, размер 32×32 пикселя.
+        Видим на любом фоне.
+        """
+        if self._crop_cursor is not None:
+            return self._crop_cursor
+
+        size = 32
+        center = size // 2
+        pixmap = QPixmap(size, size)
+        pixmap.fill(Qt.transparent)
+
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        # Белая обводка (толще)
+        pen_outline = QPen(QColor(255, 255, 255), 3)
+        painter.setPen(pen_outline)
+        painter.drawLine(center, 0, center, size)
+        painter.drawLine(0, center, size, center)
+
+        # Чёрные линии (тоньше, поверх белых)
+        pen_main = QPen(QColor(0, 0, 0), 1)
+        painter.setPen(pen_main)
+        painter.drawLine(center, 0, center, size)
+        painter.drawLine(0, center, size, center)
+
+        painter.end()
+
+        self._crop_cursor = QCursor(pixmap, center, center)
+        return self._crop_cursor
+
+    # --------------------------------------------------------------
     # Маркеры рамки обрезки
     # --------------------------------------------------------------
     def _remove_handles(self):
@@ -86,16 +129,22 @@ class ImageEditController:
         if self.crop_mode:
             return
         self.view.blur_controller.disable_blur_mode()
+
+        # Не вычисляем выделение заново — view.start_crop_mode() уже установил
+        # self.crop_target_item до вызова этого метода.
         self.view.set_tool(None)
-        self.view.scene().clearSelection()
+
         self.crop_mode = True
         self.temp_crop_start = None
         self.active_handle = None
-        self.view.setCursor(Qt.CrossCursor)
+        # Устанавливаем кастомный контрастный курсор
+        self.view.setCursor(self._create_crop_cursor())
         self.view.setBackgroundBrush(QColor(90, 90, 90))
 
+        # Fallback, если контроллер вызван напрямую (без view.start_crop_mode)
         if self.crop_target_item is None:
             self.crop_target_item = self.background_item
+
         if self.crop_target_item:
             self.crop_rect = self.crop_target_item.mapRectToScene(
                 QRectF(self.crop_target_item.pixmap().rect()))
@@ -109,6 +158,10 @@ class ImageEditController:
         self.view.crop_mode_changed.emit(True)
         self.view._update_floating_widgets_visibility()
 
+        # Обновляем статусную строку ПОСЛЕ всех виджетов
+        # (отложенно через таймер, чтобы гарантировать перерисовку)
+        QTimer.singleShot(0, self._update_status_bar_for_crop_target)
+
     def cancel_crop_mode(self):
         self.disable_crop_mode()
 
@@ -119,11 +172,22 @@ class ImageEditController:
         self.crop_rect = None
         self.temp_crop_start = None
         self.active_handle = None
+        # Возвращаем обычный курсор
         self.view.setCursor(Qt.CrossCursor)
         self.view.setBackgroundBrush(self.view.normal_background_color)
         self.view.crop_mode_changed.emit(False)
         self.view._update_floating_widgets_visibility()
         self.crop_target_item = None
+
+        # Восстанавливаем разрешение подложки в статусной строке
+        self.view.update_resolution_from_background()
+        # Принудительно обновляем статусную строку
+        if hasattr(self.view, 'status_label') and self.view.status_label is not None:
+            self.view.status_label.setStyleSheet(
+                "background-color: rgba(255,255,255,180); color: #333; "
+                "border-radius: 6px; padding: 4px 8px;"
+            )
+            self.view.status_label.repaint()
 
     def _clear_crop_preview(self):
         if self.crop_rect_item is not None and not self._is_deleted(self.crop_rect_item):
@@ -131,11 +195,68 @@ class ImageEditController:
                 self.view.scene().removeItem(self.crop_rect_item)
         self.crop_rect_item = None
 
+        # Удаляем текст с разрешением и его фон
+        if self.crop_size_label is not None and not self._is_deleted(self.crop_size_label):
+            if self.crop_size_label.scene() is self.view.scene():
+                self.view.scene().removeItem(self.crop_size_label)
+        self.crop_size_label = None
+
+        if self.crop_size_bg is not None and not self._is_deleted(self.crop_size_bg):
+            if self.crop_size_bg.scene() is self.view.scene():
+                self.view.scene().removeItem(self.crop_size_bg)
+        self.crop_size_bg = None
+
         for item in self.crop_overlay_items:
             if item is not None and not self._is_deleted(item):
                 if item.scene() is self.view.scene():
                     self.view.scene().removeItem(item)
         self.crop_overlay_items.clear()
+
+    def _get_background_resolution(self):
+        """Возвращает разрешение подложки в формате 'WxH'."""
+        bg = self.background_item
+        if bg is not None and not self._is_deleted(bg):
+            pixmap = bg.pixmap()
+            if not pixmap.isNull():
+                return f"{pixmap.width()}×{pixmap.height()}"
+        return "?"
+
+    def _update_status_bar_for_crop_target(self):
+        """Обновляет статусную строку при входе в режим обрезки.
+
+        Для вставленных изображений показываем: разрешение_подложки / разрешение_картинки.
+        Для подложки показываем только разрешение подложки.
+        """
+        if isinstance(self.crop_target_item, PastedImageItem):
+            bg_resolution = self._get_background_resolution()
+            if hasattr(self.crop_target_item, 'original_pixmap') and self.crop_target_item.original_pixmap is not None:
+                pixmap = self.crop_target_item.original_pixmap
+                img_resolution = f"{pixmap.width()}×{pixmap.height()}"
+            else:
+                img_resolution = "?"
+            text = f"{bg_resolution} / {img_resolution}"
+        else:
+            text = self._get_background_resolution()
+
+        if hasattr(self.view, 'status_label') and self.view.status_label is not None:
+            self.view.status_label.setText(text)
+            self.view.status_label.setVisible(True)
+            self.view.status_label.setStyleSheet(
+                "background-color: rgba(0, 0, 0, 180); color: white; "
+                "font-size: 14px; font-weight: bold; "
+                "border-radius: 4px; padding: 4px 8px;"
+            )
+            self.view.layout_manager.update_status_label_position()
+            self.view.status_label.raise_()
+            self.view.status_label.update()
+            self.view.status_label.repaint()
+
+    def _force_repaint_status_label(self):
+        """Принудительно перерисовывает статусную строку."""
+        if hasattr(self.view, 'status_label') and self.view.status_label is not None:
+            self.view.status_label.update()
+            self.view.status_label.repaint()
+            self.view.viewport().update()
 
     def _update_crop_overlay(self, rect):
         crop = rect.normalized()
@@ -178,6 +299,93 @@ class ImageEditController:
 
         if self.handles:
             self.handles.update_handles(crop)
+
+        self._update_crop_resolution_text(crop)
+
+    def _update_crop_resolution_text(self, rect):
+        """Обновляет разрешение рядом с рамкой обрезки."""
+        if self.crop_target_item is None:
+            return
+
+        if isinstance(self.crop_target_item, PastedImageItem):
+            original = self.crop_target_item.original_pixmap
+            if original is None or original.isNull():
+                return
+            full_w = original.width()
+            full_h = original.height()
+
+            displayed = self.crop_target_item.pixmap()
+            full_scene_w = displayed.width()
+            full_scene_h = displayed.height()
+
+            if full_scene_w > 0 and full_scene_h > 0:
+                ratio_w = rect.width() / full_scene_w
+                ratio_h = rect.height() / full_scene_h
+            else:
+                ratio_w = 1.0
+                ratio_h = 1.0
+
+            crop_w = round(full_w * ratio_w)
+            crop_h = round(full_h * ratio_h)
+            crop_w = min(crop_w, full_w)
+            crop_h = min(crop_h, full_h)
+
+            bg_resolution = self._get_background_resolution()
+            text = f"{bg_resolution} / {full_w}×{full_h}"
+            if hasattr(self.view, 'status_label') and self.view.status_label is not None:
+                self.view.status_label.setText(text)
+                self.view.status_label.setVisible(True)
+                self.view.status_label.setStyleSheet(
+                    "background-color: rgba(0, 0, 0, 180); color: white; "
+                    "font-size: 14px; font-weight: bold; "
+                    "border-radius: 4px; padding: 4px 8px;"
+                )
+                self.view.layout_manager.update_status_label_position()
+                self.view.status_label.raise_()
+                self.view.status_label.update()
+                self.view.status_label.repaint()
+        else:
+            crop_w = round(rect.width())
+            crop_h = round(rect.height())
+
+        if crop_w > 0 and crop_h > 0:
+            self._update_crop_size_label(rect, f"{crop_w}×{crop_h}")
+
+    def _update_crop_size_label(self, rect, text):
+        """Создаёт или обновляет текстовый элемент с разрешением рядом с рамкой обрезки."""
+        if self.crop_size_label is None:
+            self.crop_size_label = QGraphicsSimpleTextItem()
+            self.crop_size_label.setBrush(QColor(255, 255, 255))
+            self.crop_size_label.setZValue(1002)
+            self.crop_size_label.setAcceptedMouseButtons(Qt.NoButton)
+            font = QFont()
+            font.setPointSize(12)
+            font.setBold(True)
+            self.crop_size_label.setFont(font)
+            self.crop_size_label.setFlag(QGraphicsItem.ItemIgnoresTransformations)
+
+            self.crop_size_bg = QGraphicsRectItem()
+            self.crop_size_bg.setBrush(QColor(0, 0, 0, 180))
+            self.crop_size_bg.setPen(QPen(Qt.NoPen))
+            self.crop_size_bg.setZValue(1001)
+            self.crop_size_bg.setAcceptedMouseButtons(Qt.NoButton)
+            self.crop_size_bg.setFlag(QGraphicsItem.ItemIgnoresTransformations)
+
+            self.view.scene().addItem(self.crop_size_bg)
+            self.view.scene().addItem(self.crop_size_label)
+
+        self.crop_size_label.setText(text)
+
+        label_rect = self.crop_size_label.boundingRect()
+        x = rect.center().x() - label_rect.width() / 2
+        y = rect.bottom() + 5
+        self.crop_size_label.setPos(x, y)
+
+        padding = 4
+        self.crop_size_bg.setRect(QRectF(-padding, -padding,
+                                          label_rect.width() + padding * 2,
+                                          label_rect.height() + padding * 2))
+        self.crop_size_bg.setPos(x, y)
 
     def _apply_handle_drag(self, handle_id, new_scene_pos):
         rect = self.crop_rect.normalized()
@@ -226,6 +434,8 @@ class ImageEditController:
                     continue
                 if self.handles and item in self.handles.handle_items.values():
                     continue
+                if item is self.crop_size_label or item is self.crop_size_bg:
+                    continue
                 br = item.sceneBoundingRect()
                 if not crop.contains(br):
                     items_to_remove.append(item)
@@ -249,11 +459,23 @@ class ImageEditController:
             self.temp_crop_start = None
             self.active_handle = None
             self.crop_mode = False
+            # Возвращаем обычный курсор
             self.view.setCursor(Qt.CrossCursor)
             self.view.setBackgroundBrush(self.view.normal_background_color)
             self.view.crop_mode_changed.emit(False)
             self.view._update_floating_widgets_visibility()
             self.crop_target_item = None
+
+            # Обновляем разрешение подложки после обрезки
+            self.view.update_resolution_from_background()
+            # Принудительно обновляем статусную строку (БЕЗ скрытия)
+            if hasattr(self.view, 'status_label') and self.view.status_label is not None:
+                self.view.status_label.setStyleSheet(
+                    "background-color: rgba(255,255,255,180); color: #333; "
+                    "border-radius: 6px; padding: 4px 8px;"
+                )
+                self.view.status_label.repaint()
+
         else:
             old_original = self.crop_target_item.original_pixmap
             displayed_pixmap = self.crop_target_item.pixmap()
@@ -278,11 +500,22 @@ class ImageEditController:
             self.temp_crop_start = None
             self.active_handle = None
             self.crop_mode = False
+            # Возвращаем обычный курсор
             self.view.setCursor(Qt.CrossCursor)
             self.view.setBackgroundBrush(self.view.normal_background_color)
             self.view.crop_mode_changed.emit(False)
             self.view._update_floating_widgets_visibility()
             self.crop_target_item = None
+
+            # Обновляем разрешение подложки после обрезки
+            self.view.update_resolution_from_background()
+            # Принудительно обновляем статусную строку
+            if hasattr(self.view, 'status_label') and self.view.status_label is not None:
+                self.view.status_label.setStyleSheet(
+                    "background-color: rgba(255,255,255,180); color: #333; "
+                    "border-radius: 6px; padding: 4px 8px;"
+                )
+                self.view.status_label.repaint()
 
     # --------------------------------------------------------------
     # Поворот
@@ -333,7 +566,6 @@ class ImageEditController:
 
     # --------------------------------------------------------------
     # Обработчики мыши — только режим обрезки
-    # (обработка размытия делегирована в blur_controller через view.py)
     # --------------------------------------------------------------
     def handle_mouse_press(self, event):
         if self.crop_mode and event.button() == Qt.LeftButton:
@@ -369,9 +601,11 @@ class ImageEditController:
                     self.view.viewport().setCursor(
                         self.handles.get_cursor_for_handle(handle_id))
                 else:
-                    self.view.viewport().setCursor(Qt.CrossCursor)
+                    # Кастомный контрастный курсор
+                    self.view.viewport().setCursor(self._create_crop_cursor())
             else:
-                self.view.viewport().setCursor(Qt.CrossCursor)
+                # Кастомный контрастный курсор
+                self.view.viewport().setCursor(self._create_crop_cursor())
             return True
         return False
 
