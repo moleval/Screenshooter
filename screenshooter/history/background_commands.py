@@ -4,7 +4,7 @@
           Обрезка, поворот, размытие фона.
 """
 
-from PyQt5.QtCore import QRectF
+from PyQt5.QtCore import QRectF, QPointF
 from PyQt5.QtWidgets import QUndoCommand
 
 
@@ -12,10 +12,12 @@ class CropCommand(QUndoCommand):
     """
     Команда обрезки фонового изображения.
     Сохраняет состояние зон размытия, чтобы откат мог их восстановить.
+    Также сдвигает оставшиеся элементы, чтобы они соответствовали новой системе координат.
     """
 
     def __init__(self, scene, background_item, old_pixmap, new_pixmap, items_to_remove,
-                 controller=None, crop_rect=None):
+                 controller=None, crop_rect=None,
+                 items_to_shift=None, old_positions=None, new_positions=None):
         super().__init__("Обрезка")
         self.scene = scene
         self.background_item = background_item
@@ -26,16 +28,25 @@ class CropCommand(QUndoCommand):
         self.controller = controller
         self.crop_rect = crop_rect
 
+        self.items_to_shift = items_to_shift or []
+        self.old_positions = old_positions or []
+        self.new_positions = new_positions or []
+
         if controller is not None:
             self.blur_state = controller._get_blur_state()
         else:
             self.blur_state = None
 
     def redo(self):
+        # Удаляем элементы, не попавшие в область
         for item in self.items_to_remove:
             if item.scene() is self.scene:
                 self.scene.removeItem(item)
                 self.removed_items.append(item)
+
+        # Сдвигаем оставшиеся элементы
+        for item, new_pos in zip(self.items_to_shift, self.new_positions):
+            item.setPos(new_pos)
 
         self.background_item.setPixmap(self.new_pixmap)
         self.background_item.update()
@@ -50,6 +61,11 @@ class CropCommand(QUndoCommand):
         self.background_item.setPixmap(self.old_pixmap)
         self.background_item.update()
 
+        # Возвращаем сдвинутые элементы на старые позиции
+        for item, old_pos in zip(self.items_to_shift, self.old_positions):
+            item.setPos(old_pos)
+
+        # Возвращаем удалённые элементы
         for item in self.removed_items:
             if item.scene() is not self.scene:
                 self.scene.addItem(item)

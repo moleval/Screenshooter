@@ -8,8 +8,6 @@ from PyQt5.QtWidgets import QUndoCommand
 
 
 class AddPastedImageCommand(QUndoCommand):
-    """Команда добавления вставленного изображения."""
-
     def __init__(self, scene, item, view):
         super().__init__("Вставить изображение")
         self.scene = scene
@@ -33,8 +31,6 @@ class AddPastedImageCommand(QUndoCommand):
 
 
 class RemovePastedImageCommand(QUndoCommand):
-    """Команда удаления вставленного изображения."""
-
     def __init__(self, scene, item, view):
         super().__init__("Удалить изображение")
         self.scene = scene
@@ -59,8 +55,6 @@ class RemovePastedImageCommand(QUndoCommand):
 
 
 class ResizePastedImageCommand(QUndoCommand):
-    """Команда изменения размера вставленного изображения."""
-
     def __init__(self, item, old_scale, new_scale):
         super().__init__("Изменить размер изображения")
         self.item = item
@@ -79,20 +73,21 @@ class ResizePastedImageCommand(QUndoCommand):
 class CropPastedImageCommand(QUndoCommand):
     """Команда обрезки вставленного изображения."""
 
-    def __init__(self, item, old_original, new_original, old_pos, old_scale, crop_scene_pos):
+    def __init__(self, item, old_original, new_original, old_pos, old_scale, new_scale, crop_scene_pos):
         super().__init__("Обрезать изображение")
         self.item = item
         self.old_original = old_original
         self.new_original = new_original
         self.old_pos = old_pos
         self.old_scale = old_scale
+        self.new_scale = new_scale
         self.crop_scene_pos = crop_scene_pos
 
     def redo(self):
         self.item.setPos(self.crop_scene_pos)
         self.item.original_pixmap = self.new_original
-        self.item.scale = 1.0
-        self.item.setPixmap(self.new_original)
+        self.item.scale = self.new_scale
+        self.item.set_image_scale(self.new_scale)
         self.item.update_handles()
 
     def undo(self):
@@ -104,8 +99,6 @@ class CropPastedImageCommand(QUndoCommand):
 
 
 class RotatePastedImageCommand(QUndoCommand):
-    """Команда поворота вставленного изображения."""
-
     def __init__(self, item, old_original, new_original, old_pos, old_scale):
         super().__init__("Повернуть изображение")
         self.item = item

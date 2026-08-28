@@ -6,27 +6,19 @@
 """
 
 from PyQt5 import sip
-from PyQt5.QtCore import Qt, QRectF, QPointF, QTimer, QPoint
-from PyQt5.QtGui import (QPen, QColor, QBrush, QImage, QPainter, QPixmap,
-                         QFont, QCursor)
-from PyQt5.QtWidgets import QGraphicsRectItem, QGraphicsSimpleTextItem, QGraphicsItem
+from PyQt5.QtCore import Qt, QRectF, QPointF, QTimer
+from PyQt5.QtGui import QImage, QPainter, QPixmap
+from PyQt5.QtWidgets import QGraphicsRectItem
 
-from .constants import (
-    MIN_RECT_SIZE,
-    CROP_LABEL_MARGIN, CROP_LABEL_PADDING,
-    CROP_LABEL_FONT_SIZE,
-    CROP_OVERLAY_Z, CROP_RECT_Z, CROP_LABEL_Z,
-    CROP_BG_COLOR, CROP_OVERLAY_COLOR, CROP_RECT_COLOR,
-    CROP_LABEL_TEXT_COLOR, CROP_LABEL_BG_COLOR,
-    STATUS_STYLE_NORMAL,
-)
+from .constants import MIN_RECT_SIZE, CROP_BG_COLOR
 from .controllers.crop_cursor_factory import CropCursorFactory
+from .controllers.crop_overlay_controller import CropOverlayController
 from .controllers.status_bar_manager import StatusBarManager
 from .history import (CropCommand, RotateCommand,
                       CropPastedImageCommand, RotatePastedImageCommand)
 from .image_processing import crop_pixmap, rotate_pixmap
-from .items.crop_handles import CropHandles
 from .items.pasted_image_item import PastedImageItem
+from .items.blur_region_item import BlurRegionItem   # добавлено
 
 
 class ImageEditController:
@@ -42,17 +34,15 @@ class ImageEditController:
         self.background_item = None
         self.crop_target_item = None
         self.crop_mode = False
-        self.crop_rect_item = None
         self.crop_rect = None
-        self.crop_overlay_items = []
         self.temp_crop_start = None
-        self.handles = None
         self.active_handle = None
-        self.crop_size_label = None
-        self.crop_size_bg = None
 
         # Менеджер статусной строки
         self.status_bar_manager = StatusBarManager(self.view)
+
+        # Контроллер визуальных элементов обрезки
+        self.overlay = CropOverlayController(self.view, self.status_bar_manager)
 
     # --------------------------------------------------------------
     # Установка фонового элемента и сброс
@@ -64,8 +54,8 @@ class ImageEditController:
 
     def reset_state(self):
         self.crop_mode = False
-        self._clear_crop_preview()
-        self._remove_handles()
+        self.overlay.clear()
+        self.overlay.remove_handles()
         self.crop_rect = None
         self.temp_crop_start = None
         self.active_handle = None
@@ -81,19 +71,6 @@ class ImageEditController:
     @staticmethod
     def _is_deleted(obj):
         return obj is None or sip.isdeleted(obj)
-
-    # --------------------------------------------------------------
-    # Маркеры рамки обрезки
-    # --------------------------------------------------------------
-    def _remove_handles(self):
-        if self.handles:
-            self.handles.remove_handles()
-            self.handles = None
-
-    def _create_handles_for_rect(self, rect):
-        self._remove_handles()
-        self.handles = CropHandles(self.view)
-        self.handles.create_handles(rect)
 
     # --------------------------------------------------------------
     # Ограничение точки пределами целевого изображения
@@ -144,15 +121,15 @@ class ImageEditController:
         else:
             self.crop_rect = self.view.sceneRect()
 
-        self._clear_crop_preview()
-        self._create_handles_for_rect(self.crop_rect)
-        self._update_crop_overlay(self.crop_rect)
+        self.overlay.clear()
+        self.overlay.create_handles(self.crop_rect)
+        self.overlay.update(self.crop_rect)
+        self.overlay.update_resolution_text(self.crop_rect, self.crop_target_item)
 
         self.view.crop_mode_changed.emit(True)
         self.view._update_floating_widgets_visibility()
 
         # Обновляем статусную строку ПОСЛЕ всех виджетов
-        # (отложенно через таймер, чтобы гарантировать перерисовку)
         QTimer.singleShot(0, self._update_status_bar_for_crop_target)
 
     def cancel_crop_mode(self):
@@ -160,8 +137,8 @@ class ImageEditController:
 
     def disable_crop_mode(self):
         self.crop_mode = False
-        self._clear_crop_preview()
-        self._remove_handles()
+        self.overlay.clear()
+        self.overlay.remove_handles()
         self.crop_rect = None
         self.temp_crop_start = None
         self.active_handle = None
@@ -177,179 +154,8 @@ class ImageEditController:
         # Возвращаем статусную строку в обычное состояние
         self.status_bar_manager.reset_to_normal()
 
-    def _clear_crop_preview(self):
-        if self.crop_rect_item is not None and not self._is_deleted(self.crop_rect_item):
-            if self.crop_rect_item.scene() is self.view.scene():
-                self.view.scene().removeItem(self.crop_rect_item)
-        self.crop_rect_item = None
-
-        # Удаляем текст с разрешением и его фон
-        if self.crop_size_label is not None and not self._is_deleted(self.crop_size_label):
-            if self.crop_size_label.scene() is self.view.scene():
-                self.view.scene().removeItem(self.crop_size_label)
-        self.crop_size_label = None
-
-        if self.crop_size_bg is not None and not self._is_deleted(self.crop_size_bg):
-            if self.crop_size_bg.scene() is self.view.scene():
-                self.view.scene().removeItem(self.crop_size_bg)
-        self.crop_size_bg = None
-
-        for item in self.crop_overlay_items:
-            if item is not None and not self._is_deleted(item):
-                if item.scene() is self.view.scene():
-                    self.view.scene().removeItem(item)
-        self.crop_overlay_items.clear()
-
     def _update_status_bar_for_crop_target(self):
-        """Обновляет статусную строку при входе в режим обрезки.
-
-        Делегирует в StatusBarManager.
-        """
         self.status_bar_manager.set_crop_status(self.crop_target_item)
-
-    def _update_crop_overlay(self, rect):
-        crop = rect.normalized()
-        scene_rect = self.view.sceneRect()
-
-        if not self.crop_overlay_items:
-            for _ in range(4):
-                overlay = QGraphicsRectItem()
-                overlay.setPen(QPen(Qt.NoPen))
-                overlay.setBrush(CROP_OVERLAY_COLOR)
-                overlay.setZValue(CROP_OVERLAY_Z)
-                overlay.setAcceptedMouseButtons(Qt.NoButton)
-                self.view.scene().addItem(overlay)
-                self.crop_overlay_items.append(overlay)
-
-        top = QRectF(scene_rect.left(), scene_rect.top(),
-                     scene_rect.width(), crop.top() - scene_rect.top())
-        bottom = QRectF(scene_rect.left(), crop.bottom(),
-                        scene_rect.width(), scene_rect.bottom() - crop.bottom())
-        left = QRectF(scene_rect.left(), crop.top(),
-                      crop.left() - scene_rect.left(), crop.height())
-        right = QRectF(crop.right(), crop.top(),
-                       scene_rect.right() - crop.right(), crop.height())
-
-        self.crop_overlay_items[0].setRect(top)
-        self.crop_overlay_items[1].setRect(bottom)
-        self.crop_overlay_items[2].setRect(left)
-        self.crop_overlay_items[3].setRect(right)
-
-        if not self.crop_rect_item:
-            self.crop_rect_item = QGraphicsRectItem()
-            pen = QPen(CROP_RECT_COLOR, 2, Qt.DashLine)
-            pen.setCosmetic(True)
-            self.crop_rect_item.setPen(pen)
-            self.crop_rect_item.setBrush(QBrush(Qt.NoBrush))
-            self.crop_rect_item.setZValue(CROP_RECT_Z)
-            self.crop_rect_item.setAcceptedMouseButtons(Qt.NoButton)
-            self.view.scene().addItem(self.crop_rect_item)
-        self.crop_rect_item.setRect(crop)
-
-        if self.handles:
-            self.handles.update_handles(crop)
-
-        self._update_crop_resolution_text(crop)
-
-    def _update_crop_resolution_text(self, rect):
-        """Обновляет разрешение рядом с рамкой обрезки."""
-        if self.crop_target_item is None:
-            return
-
-        if isinstance(self.crop_target_item, PastedImageItem):
-            original = self.crop_target_item.original_pixmap
-            if original is None or original.isNull():
-                return
-            full_w = original.width()
-            full_h = original.height()
-
-            displayed = self.crop_target_item.pixmap()
-            full_scene_w = displayed.width()
-            full_scene_h = displayed.height()
-
-            if full_scene_w > 0 and full_scene_h > 0:
-                ratio_w = rect.width() / full_scene_w
-                ratio_h = rect.height() / full_scene_h
-            else:
-                ratio_w = 1.0
-                ratio_h = 1.0
-
-            crop_w = round(full_w * ratio_w)
-            crop_h = round(full_h * ratio_h)
-            crop_w = min(crop_w, full_w)
-            crop_h = min(crop_h, full_h)
-
-            # Обновляем статусную строку через менеджер
-            bg_resolution = self.status_bar_manager.get_background_resolution()
-            text = f"{bg_resolution} / {full_w}×{full_h}"
-            self.status_bar_manager.update_crop_status_text(text)
-        else:
-            crop_w = round(rect.width())
-            crop_h = round(rect.height())
-
-        if crop_w > 0 and crop_h > 0:
-            self._update_crop_size_label(rect, f"{crop_w}×{crop_h}")
-
-    def _update_crop_size_label(self, rect, text):
-        """Создаёт или обновляет текстовый элемент с разрешением рядом с рамкой обрезки.
-
-        Умное позиционирование:
-        - Если текст помещается под рамкой — показываем под рамкой
-        - Если текст выходит за пределы видимой области — показываем внутри рамки
-
-        Стиль: белый полупрозрачный фон с тёмным текстом (как у info_widget).
-        """
-        if self.crop_size_label is None:
-            self.crop_size_label = QGraphicsSimpleTextItem()
-            # Тёмный текст (как у info_widget)
-            self.crop_size_label.setBrush(CROP_LABEL_TEXT_COLOR)
-            self.crop_size_label.setZValue(CROP_LABEL_Z)
-            self.crop_size_label.setAcceptedMouseButtons(Qt.NoButton)
-            font = QFont()
-            font.setPointSize(CROP_LABEL_FONT_SIZE)
-            font.setBold(True)
-            self.crop_size_label.setFont(font)
-            self.crop_size_label.setFlag(QGraphicsItem.ItemIgnoresTransformations)
-
-            self.crop_size_bg = QGraphicsRectItem()
-            # Белый полупрозрачный фон (как у info_widget)
-            self.crop_size_bg.setBrush(CROP_LABEL_BG_COLOR)
-            self.crop_size_bg.setPen(QPen(Qt.NoPen))
-            self.crop_size_bg.setZValue(CROP_RECT_Z)
-            self.crop_size_bg.setAcceptedMouseButtons(Qt.NoButton)
-            self.crop_size_bg.setFlag(QGraphicsItem.ItemIgnoresTransformations)
-
-            self.view.scene().addItem(self.crop_size_bg)
-            self.view.scene().addItem(self.crop_size_label)
-
-        self.crop_size_label.setText(text)
-
-        label_rect = self.crop_size_label.boundingRect()
-
-        # Получаем видимую область viewport в координатах сцены
-        viewport_rect = self.view.viewport().rect()
-        visible_scene_rect = self.view.mapToScene(viewport_rect).boundingRect()
-
-        # Проверяем, помещается ли текст под рамкой
-        text_below_y = rect.bottom() + CROP_LABEL_MARGIN
-        text_fits_below = (text_below_y + label_rect.height() + CROP_LABEL_PADDING * 2) <= visible_scene_rect.bottom()
-
-        if text_fits_below:
-            # Текст под рамкой (по центру, с отступом)
-            x = rect.center().x() - label_rect.width() / 2
-            y = rect.bottom() + CROP_LABEL_MARGIN
-        else:
-            # Текст внутри рамки (в верхнем левом углу, с отступом)
-            x = rect.left() + CROP_LABEL_MARGIN
-            y = rect.top() + CROP_LABEL_MARGIN
-
-        self.crop_size_label.setPos(x, y)
-
-        # Обновляем фон под текстом (относительно позиции текста)
-        self.crop_size_bg.setRect(QRectF(-CROP_LABEL_PADDING, -CROP_LABEL_PADDING,
-                                          label_rect.width() + CROP_LABEL_PADDING * 2,
-                                          label_rect.height() + CROP_LABEL_PADDING * 2))
-        self.crop_size_bg.setPos(x, y)
 
     def _apply_handle_drag(self, handle_id, new_scene_pos):
         rect = self.crop_rect.normalized()
@@ -390,84 +196,121 @@ class ImageEditController:
         crop = self.crop_rect.normalized()
         if self.crop_target_item is self.background_item:
             items_to_remove = []
+            items_to_shift = []
+            old_positions = []
+            new_positions = []
+
+            overlay_items = self.overlay.get_all_overlay_items()
+            handle_items = self.overlay.get_handle_items()
+
             for item in self.view.scene().items():
                 if item is self.background_item:
                     continue
-                if item in self.crop_overlay_items or item is self.crop_rect_item:
+                if item in overlay_items or item in handle_items.values():
                     continue
-                if self.handles and item in self.handles.handle_items.values():
+                if isinstance(item, BlurRegionItem):
+                    # Зоны размытия обрабатываются отдельно через blur_controller
                     continue
-                if item is self.crop_size_label or item is self.crop_size_bg:
-                    continue
+
                 br = item.sceneBoundingRect()
                 if not crop.contains(br):
                     items_to_remove.append(item)
+                else:
+                    items_to_shift.append(item)
+                    old_pos = item.pos()
+                    old_positions.append(old_pos)
+                    new_positions.append(old_pos - crop.topLeft())
 
             old_pixmap = self.background_item.pixmap()
             new_pixmap = crop_pixmap(old_pixmap, crop)
             if new_pixmap.isNull():
-                self._clear_crop_preview()
+                self.overlay.clear()
                 return
 
             command = CropCommand(
                 self.view.scene(), self.background_item,
                 old_pixmap, new_pixmap, items_to_remove,
-                controller=self, crop_rect=crop
+                controller=self, crop_rect=crop,
+                items_to_shift=items_to_shift,
+                old_positions=old_positions,
+                new_positions=new_positions
             )
             self.view.history.push(command)
 
-            self._clear_crop_preview()
-            self._remove_handles()
+            self.overlay.clear()
+            self.overlay.remove_handles()
             self.crop_rect = None
             self.temp_crop_start = None
             self.active_handle = None
             self.crop_mode = False
-            # Возвращаем обычный курсор
             self.view.setCursor(Qt.CrossCursor)
             self.view.setBackgroundBrush(self.view.normal_background_color)
             self.view.crop_mode_changed.emit(False)
             self.view._update_floating_widgets_visibility()
             self.crop_target_item = None
 
-            # Обновляем разрешение подложки после обрезки
             self.view.update_resolution_from_background()
-            # Возвращаем статусную строку в обычное состояние
             self.status_bar_manager.reset_to_normal()
 
         else:
             old_original = self.crop_target_item.original_pixmap
+            old_scale = self.crop_target_item.scale
+            old_pos = self.crop_target_item.pos()
             displayed_pixmap = self.crop_target_item.pixmap()
-            local_crop = self.crop_target_item.mapRectFromScene(crop)
-            new_original = crop_pixmap(displayed_pixmap, local_crop)
+
+            local_crop_display = self.crop_target_item.mapRectFromScene(crop)
+
+            disp_w = displayed_pixmap.width()
+            disp_h = displayed_pixmap.height()
+            orig_w = old_original.width()
+            orig_h = old_original.height()
+
+            if disp_w > 0 and disp_h > 0 and orig_w > 0 and orig_h > 0:
+                scale_x = orig_w / disp_w
+                scale_y = orig_h / disp_h
+                crop_orig_rect = QRectF(
+                    round(local_crop_display.x() * scale_x),
+                    round(local_crop_display.y() * scale_y),
+                    round(local_crop_display.width() * scale_x),
+                    round(local_crop_display.height() * scale_y)
+                )
+            else:
+                crop_orig_rect = local_crop_display
+
+            new_original = crop_pixmap(old_original, crop_orig_rect)
             if new_original.isNull():
-                self._clear_crop_preview()
+                self.overlay.clear()
                 return
 
-            old_pos = self.crop_target_item.pos()
-            old_scale = self.crop_target_item.scale
+            new_width = new_original.width()
+            new_height = new_original.height()
+            if new_width > 0 and new_height > 0:
+                new_scale = min(crop.width() / new_width, crop.height() / new_height)
+                if new_scale <= 0:
+                    new_scale = 1.0
+            else:
+                new_scale = 1.0
+
             crop_scene_pos = crop.topLeft()
             command = CropPastedImageCommand(
                 self.crop_target_item, old_original, new_original,
-                old_pos, old_scale, crop_scene_pos
+                old_pos, old_scale, new_scale, crop_scene_pos
             )
             self.view.history.push(command)
 
-            self._clear_crop_preview()
-            self._remove_handles()
+            self.overlay.clear()
+            self.overlay.remove_handles()
             self.crop_rect = None
             self.temp_crop_start = None
             self.active_handle = None
             self.crop_mode = False
-            # Возвращаем обычный курсор
             self.view.setCursor(Qt.CrossCursor)
             self.view.setBackgroundBrush(self.view.normal_background_color)
             self.view.crop_mode_changed.emit(False)
             self.view._update_floating_widgets_visibility()
             self.crop_target_item = None
 
-            # Обновляем разрешение подложки после обрезки
             self.view.update_resolution_from_background()
-            # Возвращаем статусную строку в обычное состояние
             self.status_bar_manager.reset_to_normal()
 
     # --------------------------------------------------------------
@@ -522,19 +365,18 @@ class ImageEditController:
     # --------------------------------------------------------------
     def handle_mouse_press(self, event):
         if self.crop_mode and event.button() == Qt.LeftButton:
-            if self.handles:
-                handle_id = self.handles.hit_test(QPointF(event.pos()))
-                if handle_id:
-                    self.active_handle = handle_id
-                    return True
+            handle_id = self.overlay.hit_test_handle(QPointF(event.pos()))
+            if handle_id:
+                self.active_handle = handle_id
+                return True
             sp = self.view.mapToScene(event.pos())
-            # Ограничиваем точку старта пределами картинки
             sp = self._clamp_to_target(sp)
             self.temp_crop_start = sp
             self.crop_rect = QRectF(sp, sp)
-            self._clear_crop_preview()
-            self._remove_handles()
-            self._update_crop_overlay(self.crop_rect)
+            self.overlay.clear()
+            self.overlay.remove_handles()
+            self.overlay.update(self.crop_rect)
+            self.overlay.update_resolution_text(self.crop_rect, self.crop_target_item)
             return True
         return False
 
@@ -543,25 +385,21 @@ class ImageEditController:
             if self.active_handle is not None:
                 sp = self.view.mapToScene(event.pos())
                 self.crop_rect = self._apply_handle_drag(self.active_handle, sp)
-                self._update_crop_overlay(self.crop_rect)
+                self.overlay.update(self.crop_rect)
+                self.overlay.update_resolution_text(self.crop_rect, self.crop_target_item)
                 return True
             if self.temp_crop_start is not None:
                 sp = self.view.mapToScene(event.pos())
-                # Ограничиваем текущую точку пределами картинки
                 sp = self._clamp_to_target(sp)
                 self.crop_rect = QRectF(self.temp_crop_start, sp).normalized()
-                self._update_crop_overlay(self.crop_rect)
+                self.overlay.update(self.crop_rect)
+                self.overlay.update_resolution_text(self.crop_rect, self.crop_target_item)
                 return True
-            if self.handles:
-                handle_id = self.handles.hit_test(QPointF(event.pos()))
-                if handle_id:
-                    self.view.viewport().setCursor(
-                        self.handles.get_cursor_for_handle(handle_id))
-                else:
-                    # Кастомный контрастный курсор из фабрики
-                    self.view.viewport().setCursor(CropCursorFactory.get_cursor())
+            handle_id = self.overlay.hit_test_handle(QPointF(event.pos()))
+            if handle_id:
+                self.view.viewport().setCursor(
+                    self.overlay.get_handle_cursor(handle_id))
             else:
-                # Кастомный контрастный курсор из фабрики
                 self.view.viewport().setCursor(CropCursorFactory.get_cursor())
             return True
         return False
@@ -573,7 +411,6 @@ class ImageEditController:
                 return True
             if self.temp_crop_start is not None:
                 sp = self.view.mapToScene(event.pos())
-                # Ограничиваем точку отпускания пределами картинки
                 sp = self._clamp_to_target(sp)
                 self.crop_rect = QRectF(self.temp_crop_start, sp).normalized()
                 if (self.crop_rect.width() < MIN_RECT_SIZE or
@@ -583,14 +420,16 @@ class ImageEditController:
                             QRectF(self.crop_target_item.pixmap().rect()))
                     else:
                         self.crop_rect = self.view.sceneRect()
-                    self._clear_crop_preview()
-                    self._remove_handles()
-                    self._create_handles_for_rect(self.crop_rect)
-                    self._update_crop_overlay(self.crop_rect)
+                    self.overlay.clear()
+                    self.overlay.remove_handles()
+                    self.overlay.create_handles(self.crop_rect)
+                    self.overlay.update(self.crop_rect)
+                    self.overlay.update_resolution_text(self.crop_rect, self.crop_target_item)
                 else:
-                    self._remove_handles()
-                    self._create_handles_for_rect(self.crop_rect)
-                    self._update_crop_overlay(self.crop_rect)
+                    self.overlay.remove_handles()
+                    self.overlay.create_handles(self.crop_rect)
+                    self.overlay.update(self.crop_rect)
+                    self.overlay.update_resolution_text(self.crop_rect, self.crop_target_item)
                 self.temp_crop_start = None
                 return True
         return False
