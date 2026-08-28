@@ -3,12 +3,15 @@
 Описание: Контроллер манипуляций с элементами редактора.
           Обрабатывает перетаскивание, выделение рамкой, панорамирование,
           изменение размера вставленных изображений, временный указатель и курсор.
+          Также реализует циклическое переключение подрежимов инструментов по ПКМ
+          с поддержкой рамки выделения при перетаскивании ПКМ.
 """
 
 from PyQt5 import sip
 from PyQt5.QtCore import Qt, QRectF, QPointF, QPoint, QTimer
 from PyQt5.QtGui import QPen, QColor, QCursor
-from PyQt5.QtWidgets import QGraphicsRectItem, QGraphicsItem, QApplication
+from PyQt5.QtWidgets import (QGraphicsRectItem, QGraphicsItem, QApplication,
+                             QGraphicsView)
 
 from ..items import (RectangleItem, EllipseItem, FilledRectItem, CloudItem,
                      LineItem, WavyLineItem, ArrowItem, CurvedArrowItem,
@@ -64,36 +67,55 @@ class ManipulationController:
         self._last_cursor_pos = None
         self._last_cursor_item = None
 
+        # Для различия клика и перетаскивания ПКМ при активном инструменте
+        self._right_click_from_tool = False
+        self._right_click_had_selection = False
+        self._right_click_press_pos = None
+
     # ==============================================================
     # Три главных метода — вызываются из view.py
     # ==============================================================
 
     def handle_mouse_press(self, event) -> bool:
         """Обрабатывает нажатие кнопки мыши. Возвращает True, если обработано."""
-        if self._handle_resize_press(event): return True
-        if self._handle_blur_region_press(event): return True
-        if self._handle_pan_press(event): return True
-        if self._handle_right_click_press(event): return True
-        if self._handle_left_click_press(event): return True
-        if self._handle_temp_pointer_press(event): return True
+        if self._handle_resize_press(event):
+            return True
+        if self._handle_blur_region_press(event):
+            return True
+        if self._handle_pan_press(event):
+            return True
+        if self._handle_right_click_press(event):
+            return True
+        if self._handle_left_click_press(event):
+            return True
+        if self._handle_temp_pointer_press(event):
+            return True
         return False
 
     def handle_mouse_move(self, event) -> bool:
         """Обрабатывает движение мыши. Возвращает True, если обработано."""
-        if self._handle_resize_move(event): return True
-        if self._handle_pan_move(event): return True
-        if self._handle_drag_move(event): return True
-        if self._handle_rubber_band_move(event): return True
+        if self._handle_resize_move(event):
+            return True
+        if self._handle_pan_move(event):
+            return True
+        if self._handle_drag_move(event):
+            return True
+        if self._handle_rubber_band_move(event):
+            return True
         return False
 
     def handle_mouse_release(self, event) -> bool:
         """Обрабатывает отпускание кнопки мыши. Возвращает True, если обработано."""
-        if self._handle_resize_release(event): return True
-        if self._handle_pan_release(event): return True
-        if self._handle_drag_release(event): return True
-        if self._handle_rubber_band_release(event): return True
+        if self._handle_resize_release(event):
+            return True
+        if self._handle_pan_release(event):
+            return True
+        if self._handle_drag_release(event):
+            return True
+        if self._handle_rubber_band_release(event):
+            return True
 
-        # 5. Отпускание ПКМ (если временный указатель был активен, но рамки не было)
+        # Отпускание ПКМ (если временный указатель был активен, но рамки не было)
         if event.button() == Qt.RightButton and self.right_click_temp_pointer:
             self._restore_tool_if_needed()
             return True
@@ -113,7 +135,6 @@ class ManipulationController:
         """Определяет курсор по позиции мыши и элементу под курсором."""
         view = self.view
 
-        # Кэширование: если позиция не изменилась, используем кэш
         if pos == self._last_cursor_pos:
             item = self._last_cursor_item
         else:
@@ -243,12 +264,61 @@ class ManipulationController:
         return True
 
     def _handle_right_click_press(self, event) -> bool:
-        """Правая кнопка — выделение элемента или начало рамки."""
+        """Правая кнопка — выделение, рамка или циклическое переключение подрежимов."""
         if event.button() != Qt.RightButton:
             return False
         if self.view.active_text_item and self.view.active_text_item._editable:
             return False
 
+        # При активном инструменте рисования ПКМ может либо переключить подрежим,
+        # либо (при перетаскивании) запустить рамку выделения
+        if self.view.current_tool is not None:
+            return self._start_tool_right_click(event)
+
+        # Стандартное поведение для указателя
+        return self._start_pointer_right_click(event)
+
+    def _start_tool_right_click(self, event) -> bool:
+        """Начало ПКМ при активном инструменте.
+
+        Снимает выделение (если есть) и готовит возможность рамки.
+        Одиночный клик без движения будет обработан в release.
+        """
+        sp = self.view.mapToScene(event.pos())
+
+        # Проверяем выделение
+        selected = self.view.scene().selectedItems()
+        non_bg_selected = [it for it in selected if not self.view._is_background_item(it)]
+
+        if non_bg_selected:
+            self._right_click_had_selection = True
+            self.view.scene().clearSelection()
+            self.view._invalidate_cursor_cache()
+        else:
+            self._right_click_had_selection = False
+
+        # Устанавливаем флаг, что ПКМ был от активного инструмента
+        self._right_click_from_tool = True
+        self._right_click_press_pos = event.pos()
+
+        # Создаём рамку (она будет видна, если начнётся перетаскивание)
+        self.rubber_band_active = True
+        self.rubber_band_start = sp
+        pen = QPen(QColor(255, 200, 0), 3, Qt.DashLine)
+        pen.setCosmetic(True)
+        self.rubber_band_item = QGraphicsRectItem(QRectF(sp, sp))
+        self.rubber_band_item.setPen(pen)
+        self.rubber_band_item.setZValue(10000)
+        self.rubber_band_item.setFlag(QGraphicsRectItem.ItemIsMovable, False)
+        self.rubber_band_item.setFlag(QGraphicsRectItem.ItemIsSelectable, False)
+        self.view.scene().addItem(self.rubber_band_item)
+        QApplication.processEvents()
+        self.view.setViewportUpdateMode(QGraphicsView.FullViewportUpdate)
+        self.view.viewport().update()
+        return True
+
+    def _start_pointer_right_click(self, event) -> bool:
+        """Стандартный ПКМ для указателя."""
         sp = self.view.mapToScene(event.pos())
         right_item = None
         for it in self.view.scene().items(sp):
@@ -275,7 +345,7 @@ class ManipulationController:
             self.rubber_band_item.setFlag(QGraphicsRectItem.ItemIsSelectable, False)
             self.view.scene().addItem(self.rubber_band_item)
             QApplication.processEvents()
-            self.view.setViewportUpdateMode(self.view.FullViewportUpdate)
+            self.view.setViewportUpdateMode(QGraphicsView.FullViewportUpdate)
             self.view.viewport().update()
         return True
 
@@ -593,25 +663,129 @@ class ManipulationController:
         if not self.rubber_band_active or event.button() != Qt.RightButton:
             return False
 
-        if self.rubber_band_item:
-            self.view.scene().removeItem(self.rubber_band_item)
-            rect = self.rubber_band_item.rect()
-            self.rubber_band_item = None
+        # Сохраняем прямоугольник рамки до её удаления
+        rect = self.rubber_band_item.rect() if self.rubber_band_item else QRectF()
+        self.view.scene().removeItem(self.rubber_band_item)
+        self.rubber_band_item = None
+        self.rubber_band_active = False
+        self.rubber_band_start = None
+
+        # Проверяем, был ли ПКМ от активного инструмента
+        if self._right_click_from_tool:
+            # Определяем, было ли движение (рамка больше порога)
+            threshold = 5
+            significant_move = (rect.width() > threshold or rect.height() > threshold)
+
+            if significant_move:
+                # Выделяем элементы, пересекающие рамку
+                for item in self.view.scene().items():
+                    if self.view._is_background_item(item):
+                        continue
+                    li = self.view._item_for_manipulation(item)
+                    if li.sceneBoundingRect().intersects(rect):
+                        li.setSelected(True)
+            else:
+                # Одиночный клик: если было выделение, мы его уже сняли,
+                # поэтому просто переключаем режим
+                if not self._right_click_had_selection:
+                    self._handle_tool_mode_cycle()
+
+            # Сбрасываем флаги
+            self._right_click_from_tool = False
+            self._right_click_had_selection = False
+            self._right_click_press_pos = None
+        else:
+            # Обычная рамка для указателя
             for item in self.view.scene().items():
                 if self.view._is_background_item(item):
                     continue
                 li = self.view._item_for_manipulation(item)
                 if li.sceneBoundingRect().intersects(rect):
                     li.setSelected(True)
-        self.rubber_band_active = False
-        self.rubber_band_start = None
-        self.view.setViewportUpdateMode(self.view.SmartViewportUpdate)
+            self._restore_tool_if_needed()
+
+        self.view.setViewportUpdateMode(QGraphicsView.SmartViewportUpdate)
         self.view.viewport().update()
-        
-        # Восстанавливаем инструмент после завершения выделения рамкой
-        self._restore_tool_if_needed()
-        
         return True
+
+    # ==============================================================
+    # Циклическое переключение подрежимов при активном инструменте
+    # ==============================================================
+
+    def _handle_tool_mode_cycle(self) -> bool:
+        """ПКМ при активном инструменте рисования."""
+        selected = self.view.scene().selectedItems()
+        non_bg_selected = [it for it in selected if not self.view._is_background_item(it)]
+
+        # Если есть выделение — снимаем его и ничего не переключаем
+        if non_bg_selected:
+            self.view.scene().clearSelection()
+            self.view._invalidate_cursor_cache()
+            return True
+
+        # Выделения нет — циклируем подрежим активного инструмента
+        tool = self.view.current_tool
+        if tool == 'rect':
+            self._cycle_rect_mode()
+        elif tool == 'ellipse':
+            self._cycle_ellipse_mode()
+        elif tool == 'arrow':
+            self._cycle_arrow_mode()
+        elif tool == 'line':
+            self._cycle_line_mode()
+        elif tool == 'text':
+            self._cycle_text_bg()
+        else:
+            return False
+
+        self.view._invalidate_cursor_cache()
+        self.view.widget_manager.update_floating_widgets_visibility()
+        return True
+
+    def _cycle_rect_mode(self):
+        modes = ['rect', 'square', 'filled']
+        current = self.view.shape_mode
+        idx = modes.index(current) if current in modes else 0
+        new_mode = modes[(idx + 1) % len(modes)]
+        self.view.shape_mode = new_mode
+        self.view.shape_mode_widget.set_current_mode(new_mode)
+
+    def _cycle_ellipse_mode(self):
+        modes = ['ellipse', 'circle', 'cloud']
+        current = self.view.ellipse_mode
+        idx = modes.index(current) if current in modes else 0
+        new_mode = modes[(idx + 1) % len(modes)]
+        self.view.ellipse_mode = new_mode
+        self.view.ellipse_mode_widget.set_current_mode(new_mode)
+
+    def _cycle_arrow_mode(self):
+        modes = ['straight', 'curved', 'dimension']
+        current = self.view.arrow_mode
+        idx = modes.index(current) if current in modes else 0
+        new_mode = modes[(idx + 1) % len(modes)]
+        self.view.arrow_mode = new_mode
+        self.view.arrow_mode_widget.set_current_mode(new_mode)
+
+    def _cycle_line_mode(self):
+        modes = ['straight', 'dashed', 'wavy']
+        current = self.view.line_mode
+        idx = modes.index(current) if current in modes else 0
+        new_mode = modes[(idx + 1) % len(modes)]
+        self.view.line_mode = new_mode
+        self.view.line_mode_widget.set_current_mode(new_mode)
+
+    def _cycle_text_bg(self):
+        backgrounds = [None, 'white', 'black']
+        widget = self.view.text_format_widget
+        current = widget._current_bg
+        if current not in backgrounds:
+            current = None
+        idx = backgrounds.index(current)
+        new_bg_key = backgrounds[(idx + 1) % len(backgrounds)]
+
+        # Обновляем виджет и текущее значение фона
+        widget.set_current_bg(new_bg_key)
+        self.view.widget_manager._on_text_bg_changed(new_bg_key)
 
     # ==============================================================
     # Вспомогательные методы
@@ -627,7 +801,7 @@ class ManipulationController:
                 self.modifier_temp_pointer = True
                 self.previous_tool_for_modifier = self.view.current_tool
         self.view.current_tool = None
-        self.view.setDragMode(self.view.NoDrag)
+        self.view.setDragMode(QGraphicsView.NoDrag)
         # Скрываем виджеты инструментов при активации временного указателя
         self.view.widget_manager.update_floating_widgets_visibility()
 
