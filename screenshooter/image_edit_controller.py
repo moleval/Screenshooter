@@ -352,10 +352,18 @@ class ImageEditController:
             self._update_crop_size_label(rect, f"{crop_w}×{crop_h}")
 
     def _update_crop_size_label(self, rect, text):
-        """Создаёт или обновляет текстовый элемент с разрешением рядом с рамкой обрезки."""
+        """Создаёт или обновляет текстовый элемент с разрешением рядом с рамкой обрезки.
+
+        Умное позиционирование:
+        - Если текст помещается под рамкой — показываем под рамкой
+        - Если текст выходит за пределы видимой области — показываем внутри рамки
+
+        Стиль: белый полупрозрачный фон с тёмным текстом (как у info_widget).
+        """
         if self.crop_size_label is None:
             self.crop_size_label = QGraphicsSimpleTextItem()
-            self.crop_size_label.setBrush(QColor(255, 255, 255))
+            # Тёмный текст (как у info_widget)
+            self.crop_size_label.setBrush(QColor(51, 51, 51))  # #333
             self.crop_size_label.setZValue(1002)
             self.crop_size_label.setAcceptedMouseButtons(Qt.NoButton)
             font = QFont()
@@ -365,7 +373,8 @@ class ImageEditController:
             self.crop_size_label.setFlag(QGraphicsItem.ItemIgnoresTransformations)
 
             self.crop_size_bg = QGraphicsRectItem()
-            self.crop_size_bg.setBrush(QColor(0, 0, 0, 180))
+            # Белый полупрозрачный фон (как у info_widget)
+            self.crop_size_bg.setBrush(QColor(255, 255, 255, 180))
             self.crop_size_bg.setPen(QPen(Qt.NoPen))
             self.crop_size_bg.setZValue(1001)
             self.crop_size_bg.setAcceptedMouseButtons(Qt.NoButton)
@@ -377,11 +386,29 @@ class ImageEditController:
         self.crop_size_label.setText(text)
 
         label_rect = self.crop_size_label.boundingRect()
-        x = rect.center().x() - label_rect.width() / 2
-        y = rect.bottom() + 5
+        padding = 6  # Увеличенный отступ внутри фона
+        margin = 10  # Отступ от рамки
+
+        # Получаем видимую область viewport в координатах сцены
+        viewport_rect = self.view.viewport().rect()
+        visible_scene_rect = self.view.mapToScene(viewport_rect).boundingRect()
+
+        # Проверяем, помещается ли текст под рамкой
+        text_below_y = rect.bottom() + margin
+        text_fits_below = (text_below_y + label_rect.height() + padding * 2) <= visible_scene_rect.bottom()
+
+        if text_fits_below:
+            # Текст под рамкой (по центру, с отступом)
+            x = rect.center().x() - label_rect.width() / 2
+            y = rect.bottom() + margin
+        else:
+            # Текст внутри рамки (в верхнем левом углу, с отступом)
+            x = rect.left() + margin
+            y = rect.top() + margin
+
         self.crop_size_label.setPos(x, y)
 
-        padding = 4
+        # Обновляем фон под текстом (относительно позиции текста)
         self.crop_size_bg.setRect(QRectF(-padding, -padding,
                                           label_rect.width() + padding * 2,
                                           label_rect.height() + padding * 2))

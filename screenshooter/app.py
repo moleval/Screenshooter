@@ -80,6 +80,10 @@ class ScreenshotApp(QMainWindow):
         self.capture_btn.clicked.connect(self.capture_screen)
         left_group_layout.addWidget(self.capture_btn)
 
+        self.clear_btn = QPushButton("Очистить")
+        self.clear_btn.clicked.connect(self.clear_scene_action)
+        left_group_layout.addWidget(self.clear_btn)
+
         top_actions_layout.addWidget(left_group_widget)
         top_actions_layout.addStretch(1)
 
@@ -316,6 +320,7 @@ class ScreenshotApp(QMainWindow):
 
         self.view.crop_mode_changed.connect(self._on_crop_mode_changed)
         self.view.blur_mode_changed.connect(self._on_blur_mode_changed)
+        self.view.background_changed.connect(self._update_image_actions_enabled)
 
         self.setup_global_hotkeys()
 
@@ -332,7 +337,11 @@ class ScreenshotApp(QMainWindow):
         if path:
             pixmap = QPixmap(path)
             if not pixmap.isNull():
-                self.view.add_pasted_image(pixmap)
+                # Если подложки нет — картинка становится подложкой
+                if self.view.background_item is None or sip.isdeleted(self.view.background_item):
+                    self.view.set_background_from_pixmap(pixmap)
+                else:
+                    self.view.add_pasted_image(pixmap)
 
     def insert_image_from_clipboard(self):
         clipboard = QApplication.clipboard()
@@ -343,7 +352,11 @@ class ScreenshotApp(QMainWindow):
             if not image.isNull():
                 pixmap = QPixmap.fromImage(image)
                 if not pixmap.isNull():
-                    self.view.add_pasted_image(pixmap)
+                    # Если подложки нет — картинка становится подложкой
+                    if self.view.background_item is None or sip.isdeleted(self.view.background_item):
+                        self.view.set_background_from_pixmap(pixmap)
+                    else:
+                        self.view.add_pasted_image(pixmap)
                     return
 
         if mime.hasUrls():
@@ -352,10 +365,51 @@ class ScreenshotApp(QMainWindow):
                 if local_path and os.path.isfile(local_path):
                     pixmap = QPixmap(local_path)
                     if not pixmap.isNull():
-                        self.view.add_pasted_image(pixmap)
+                        # Если подложки нет — картинка становится подложкой
+                        if self.view.background_item is None or sip.isdeleted(self.view.background_item):
+                            self.view.set_background_from_pixmap(pixmap)
+                        else:
+                            self.view.add_pasted_image(pixmap)
                         return
 
         self.view.show_status_message("Не удалось вставить изображение из буфера.", 5000)
+
+    # --------------------------------------------------------------
+    # Очистка сцены
+    # --------------------------------------------------------------
+    def clear_scene_action(self):
+        """Очищает сцену с подтверждением.
+
+        Если сцена пустая — ничего не делает.
+        """
+        # Проверяем, есть ли что очищать
+        has_bg = self.view.background_item is not None and not sip.isdeleted(self.view.background_item)
+        has_items = len(self.view.scene().items()) > 0
+
+        if not has_bg and not has_items:
+            # Сцена пустая — ничего не делаем
+            return
+
+        # Создаём диалог с русскими кнопками
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("Очистить сцену")
+        msg_box.setText("Вы уверены, что хотите очистить сцену?")
+        msg_box.setInformativeText("Все изображения, аннотации и история будут удалены.")
+        msg_box.setIcon(QMessageBox.Question)
+
+        # Добавляем кнопки на русском
+        yes_btn = msg_box.addButton("Да", QMessageBox.YesRole)
+        no_btn = msg_box.addButton("Нет", QMessageBox.NoRole)
+
+        # Кнопка "Нет" по умолчанию
+        msg_box.setDefaultButton(no_btn)
+
+        msg_box.exec_()
+
+        if msg_box.clickedButton() == yes_btn:
+            self.view.clear_scene()
+            self._update_image_actions_enabled()
+            self._update_undo_buttons()
 
     # --------------------------------------------------------------
     # Активация кнопок тулбара изображения

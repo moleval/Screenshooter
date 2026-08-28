@@ -44,6 +44,7 @@ class EditorView(QGraphicsView):
     zoomChangedByWheel = pyqtSignal(int)
     crop_mode_changed = pyqtSignal(bool)
     blur_mode_changed = pyqtSignal(bool)
+    background_changed = pyqtSignal()
 
     def __init__(self, scene):
         super().__init__(scene)
@@ -286,6 +287,73 @@ class EditorView(QGraphicsView):
     def set_background_item(self, item):
         self.image_editor.set_background_item(item)
 
+    def set_background_from_pixmap(self, pixmap):
+        """Устанавливает pixmap как подложку.
+
+        Используется при загрузке первого изображения (из файла или буфера).
+        """
+        # Очищаем сцену
+        self.clear_pasted_images()
+        self.scene().clear()
+        self.active_text_item = None
+        self.history.clear()
+
+        # Создаём элемент подложки
+        item = QGraphicsPixmapItem(pixmap)
+        item.setTransformationMode(Qt.SmoothTransformation)
+        item.setAcceptedMouseButtons(Qt.NoButton)
+        item.setZValue(-1)
+
+        self.scene().addItem(item)
+        self.set_background_item(item)
+
+        # Устанавливаем размер сцены и подгоняем вид
+        self.setSceneRect(QRectF(pixmap.rect()))
+        self.auto_fit = True
+        self.fitInView(item, Qt.KeepAspectRatio)
+        scale = self.transform().m11() * 100
+        self.zoom_widget.set_zoom(scale)
+
+        # Обновляем разрешение
+        self.set_resolution_text(f"{pixmap.width()}×{pixmap.height()}")
+
+        # Сбрасываем режимы
+        self.image_editor.crop_mode = False
+        self.blur_controller.blur_mode = False
+
+        # Включаем кнопки тулбара
+        self.crop_mode_changed.emit(False)
+        self.blur_mode_changed.emit(False)
+        self._update_floating_widgets_visibility()
+
+        # Сигнал об изменении подложки (для активации тулбара в app.py)
+        self.background_changed.emit()
+
+    def clear_scene(self):
+        """Очищает сцену: подложку, вставленные изображения, аннотации, историю."""
+        # Очищаем вставленные изображения
+        self.clear_pasted_images()
+
+        # Очищаем сцену (scene() — это метод, вызываем со скобками)
+        self.scene().clear()
+
+        # Сбрасываем состояния
+        self.active_text_item = None
+        self.history.clear()
+
+        # Сбрасываем режимы
+        self.image_editor.reset_state()
+        self.blur_controller.reset_state()
+
+        # Очищаем статусную строку
+        self.set_resolution_text("")
+
+        # Отключаем кнопки тулбара
+        self._update_floating_widgets_visibility()
+
+        # Сигнал об изменении подложки (для деактивации тулбара в app.py)
+        self.background_changed.emit()
+
     def start_crop_mode(self):
         selected_pasted = [it for it in self.scene().selectedItems()
                            if isinstance(it, PastedImageItem)]
@@ -390,7 +458,11 @@ class EditorView(QGraphicsView):
                     path = url.toLocalFile()
                     pixmap = QPixmap(path)
                     if not pixmap.isNull():
-                        self.add_pasted_image(pixmap)
+                        # Если подложки нет — картинка становится подложкой
+                        if self.background_item is None or sip.isdeleted(self.background_item):
+                            self.set_background_from_pixmap(pixmap)
+                        else:
+                            self.add_pasted_image(pixmap)
             e.acceptProposedAction()
         else:
             e.ignore()
