@@ -13,15 +13,14 @@ from PyQt5.QtWidgets import QGraphicsRectItem, QGraphicsSimpleTextItem, QGraphic
 
 from .constants import (
     MIN_RECT_SIZE,
-    CROP_CURSOR_SIZE, CROP_LABEL_MARGIN, CROP_LABEL_PADDING,
-    CROP_LABEL_FONT_SIZE, CROP_STATUS_FONT_SIZE,
-    CROP_CURSOR_OUTLINE_WIDTH, CROP_CURSOR_LINE_WIDTH,
+    CROP_LABEL_MARGIN, CROP_LABEL_PADDING,
+    CROP_LABEL_FONT_SIZE,
     CROP_OVERLAY_Z, CROP_RECT_Z, CROP_LABEL_Z,
     CROP_BG_COLOR, CROP_OVERLAY_COLOR, CROP_RECT_COLOR,
     CROP_LABEL_TEXT_COLOR, CROP_LABEL_BG_COLOR,
-    CROP_CURSOR_OUTLINE_COLOR, CROP_CURSOR_LINE_COLOR,
     STATUS_STYLE_CROP, STATUS_STYLE_NORMAL,
 )
+from .controllers.crop_cursor_factory import CropCursorFactory
 from .history import (CropCommand, RotateCommand,
                       CropPastedImageCommand, RotatePastedImageCommand)
 from .image_processing import crop_pixmap, rotate_pixmap
@@ -51,9 +50,6 @@ class ImageEditController:
         self.crop_size_label = None
         self.crop_size_bg = None
 
-        # Кэшируем курсор обрезки, чтобы не создавать его каждый раз
-        self._crop_cursor = None
-
     # --------------------------------------------------------------
     # Установка фонового элемента и сброс
     # --------------------------------------------------------------
@@ -81,43 +77,6 @@ class ImageEditController:
     @staticmethod
     def _is_deleted(obj):
         return obj is None or sip.isdeleted(obj)
-
-    # --------------------------------------------------------------
-    # Кастомный курсор для режима обрезки
-    # --------------------------------------------------------------
-    def _create_crop_cursor(self):
-        """Создаёт контрастный курсор-перекрестие для режима обрезки.
-
-        Чёрные линии с белой обводкой, размер CROP_CURSOR_SIZE пикселей.
-        Видим на любом фоне.
-        """
-        if self._crop_cursor is not None:
-            return self._crop_cursor
-
-        size = CROP_CURSOR_SIZE
-        center = size // 2
-        pixmap = QPixmap(size, size)
-        pixmap.fill(Qt.transparent)
-
-        painter = QPainter(pixmap)
-        painter.setRenderHint(QPainter.Antialiasing)
-
-        # Белая обводка (толще)
-        pen_outline = QPen(CROP_CURSOR_OUTLINE_COLOR, CROP_CURSOR_OUTLINE_WIDTH)
-        painter.setPen(pen_outline)
-        painter.drawLine(center, 0, center, size)
-        painter.drawLine(0, center, size, center)
-
-        # Чёрные линии (тоньше, поверх белых)
-        pen_main = QPen(CROP_CURSOR_LINE_COLOR, CROP_CURSOR_LINE_WIDTH)
-        painter.setPen(pen_main)
-        painter.drawLine(center, 0, center, size)
-        painter.drawLine(0, center, size, center)
-
-        painter.end()
-
-        self._crop_cursor = QCursor(pixmap, center, center)
-        return self._crop_cursor
 
     # --------------------------------------------------------------
     # Маркеры рамки обрезки
@@ -167,8 +126,8 @@ class ImageEditController:
         self.crop_mode = True
         self.temp_crop_start = None
         self.active_handle = None
-        # Устанавливаем кастомный контрастный курсор
-        self.view.setCursor(self._create_crop_cursor())
+        # Устанавливаем кастомный контрастный курсор из фабрики
+        self.view.setCursor(CropCursorFactory.get_cursor())
         self.view.setBackgroundBrush(CROP_BG_COLOR)
 
         # Fallback, если контроллер вызван напрямую (без view.start_crop_mode)
@@ -642,11 +601,11 @@ class ImageEditController:
                     self.view.viewport().setCursor(
                         self.handles.get_cursor_for_handle(handle_id))
                 else:
-                    # Кастомный контрастный курсор
-                    self.view.viewport().setCursor(self._create_crop_cursor())
+                    # Кастомный контрастный курсор из фабрики
+                    self.view.viewport().setCursor(CropCursorFactory.get_cursor())
             else:
-                # Кастомный контрастный курсор
-                self.view.viewport().setCursor(self._create_crop_cursor())
+                # Кастомный контрастный курсор из фабрики
+                self.view.viewport().setCursor(CropCursorFactory.get_cursor())
             return True
         return False
 
