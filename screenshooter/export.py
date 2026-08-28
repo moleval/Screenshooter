@@ -21,10 +21,18 @@ class Exporter:
     - быстрое сохранение в папку
     """
 
-    def __init__(self, view, scene):
+    def __init__(self, view, scene, settings=None):
         self.view = view
         self.scene = scene
-        self.save_directory = None
+        self.settings = settings
+
+        # Если настройки не переданы, создаём локально (для обратной совместимости)
+        if self.settings is None:
+            from .settings import AppSettings
+            self.settings = AppSettings()
+
+        # Загружаем папку быстрого сохранения из настроек
+        self.load_save_directory_from_settings()
 
     def render_scene_to_image(self):
         """Рендерит сцену в QImage без служебных элементов."""
@@ -77,7 +85,7 @@ class Exporter:
             self.view.show_status_message("Нет изображения для сохранения.", 15000)
             return
 
-        if self.save_directory is None:
+        if not self.save_directory:
             if not self.choose_save_directory():
                 return
 
@@ -105,9 +113,8 @@ class Exporter:
         )
         if directory:
             self.save_directory = directory
-            from PyQt5.QtCore import QSettings
-            settings = QSettings("Screenshooter", "Screenshooter")
-            settings.setValue("save_directory", directory)
+            if self.settings:
+                self.settings.set_save_directory(directory)
             return True
         return False
 
@@ -121,8 +128,9 @@ class Exporter:
 
     def load_save_directory_from_settings(self):
         """Загружает папку быстрого сохранения из настроек."""
-        from PyQt5.QtCore import QSettings
-        settings = QSettings("Screenshooter", "Screenshooter")
-        self.save_directory = settings.value("save_directory", None)
-        if self.save_directory and not os.path.isdir(self.save_directory):
-            self.save_directory = None
+        if self.settings:
+            self.save_directory = self.settings.save_directory
+            if self.save_directory and not os.path.isdir(self.save_directory):
+                self.save_directory = ""
+        else:
+            self.save_directory = ""

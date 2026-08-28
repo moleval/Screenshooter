@@ -53,3 +53,9 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
+
+Application Icon
+----------------
+Author: Soremba
+Source: Screenshooter\screenshooter\resources\icon.png
+License: Used with permission (or specify license if known)

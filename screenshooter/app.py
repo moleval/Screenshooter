@@ -2,8 +2,7 @@
 Модуль: app.py
 Описание: Главное окно приложения ScreenshotApp.
           Создаёт тулбары с инструментами аннотаций, кнопки захвата,
-          управляет горячими клавишами. Захват экрана делегирован в
-          ScreenCapture, экспорт изображения — в Exporter.
+          управляет горячими клавишами. Интегрирует настройки и системный трей.
 """
 
 import sys
@@ -11,7 +10,7 @@ import os
 import time
 import keyboard
 from PyQt5 import sip
-from PyQt5.QtCore import Qt, QRectF, QSize, QTimer, pyqtSignal, QDir, QSettings
+from PyQt5.QtCore import Qt, QRectF, QSize, QTimer, pyqtSignal, QDir, QSettings, QEvent
 from PyQt5.QtGui import QPixmap, QPainter, QImage, QColor, QIcon, QKeySequence
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                              QGraphicsScene, QGraphicsPixmapItem, QToolBar, QActionGroup,
@@ -29,6 +28,9 @@ from .widgets.tool_icons import (
     create_rotate_icon,
     create_blur_icon
 )
+from .settings import AppSettings
+from .tray import TrayManager
+from .utils import resource_path, load_app_icon
 
 
 class ScreenshotApp(QMainWindow):
@@ -43,6 +45,16 @@ class ScreenshotApp(QMainWindow):
         self.setWindowTitle("Скриншотер с редактором")
         self.setGeometry(100, 100, 1000, 750)
         self.setMinimumSize(950, 650)
+
+        # Настройки приложения
+        self.settings = AppSettings()
+
+        # Иконка окна из ресурсов
+        from .utils import load_app_icon
+        self.setWindowIcon(load_app_icon())
+
+        # Флаг для различения закрытия и сворачивания
+        self._force_quit = False
 
         self._printscreen_hook = None
         self._alt_printscreen_hotkey = None
@@ -93,8 +105,11 @@ class ScreenshotApp(QMainWindow):
 
         # Контроллеры захвата и экспорта
         self.capture = ScreenCapture(self)
-        self.exporter = Exporter(self.view, self.scene)
+        self.exporter = Exporter(self.view, self.scene, self.settings)
         self.exporter.load_save_directory_from_settings()
+
+        # Инициализация трея после создания основного окна
+        self.tray_manager = TrayManager(self)
 
         self.undo_shortcut = QShortcut(QKeySequence("Ctrl+Z"), self)
         self.undo_shortcut.activated.connect(self._on_undo_shortcut)
@@ -329,6 +344,48 @@ class ScreenshotApp(QMainWindow):
         self.view.setFocus()
 
     # --------------------------------------------------------------
+    # Интеграция с системным треем
+    # --------------------------------------------------------------
+    def changeEvent(self, event):
+        """Обрабатывает сворачивание окна в трей."""
+        if event.type() == QEvent.WindowStateChange and self.isMinimized():
+            QTimer.singleShot(0, self.hide)
+            self.tray_manager.show_message(
+                "Скриншотер",
+                "Приложение свёрнуто в трей"
+            )
+        super().changeEvent(event)
+
+    def closeEvent(self, event):
+        """Завершает приложение при закрытии окна (крестик)."""
+        self.settings.save()
+        self._remove_keyboard_hooks()
+        event.accept()
+
+    def quit_app(self):
+        """Полностью завершает приложение из трея или меню."""
+        self._force_quit = True
+        self.settings.save()
+        self._remove_keyboard_hooks()
+        QApplication.quit()
+
+    def apply_theme(self, theme_key: str):
+        """Применяет выбранную тему оформления.
+
+        На данном этапе реализована только заглушка: сохраняет выбор
+        в настройках и показывает сообщение. В будущем здесь будет
+        применяться QSS или палитра.
+        """
+        self.settings.set_theme(theme_key)
+        theme_names = {
+            "light": "Светлая",
+            "dark": "Тёмная",
+            "system": "Системная",
+        }
+        label = theme_names.get(theme_key, theme_key)
+        self.view.show_status_message(f"Тема: {label} (заглушка)", 2000)
+
+    # --------------------------------------------------------------
     # Вставка изображений
     # --------------------------------------------------------------
     def insert_image_from_file(self):
@@ -337,7 +394,6 @@ class ScreenshotApp(QMainWindow):
         if path:
             pixmap = QPixmap(path)
             if not pixmap.isNull():
-                # Если подложки нет — картинка становится подложкой
                 if self.view.background_item is None or sip.isdeleted(self.view.background_item):
                     self.view.set_background_from_pixmap(pixmap)
                 else:
@@ -352,7 +408,6 @@ class ScreenshotApp(QMainWindow):
             if not image.isNull():
                 pixmap = QPixmap.fromImage(image)
                 if not pixmap.isNull():
-                    # Если подложки нет — картинка становится подложкой
                     if self.view.background_item is None or sip.isdeleted(self.view.background_item):
                         self.view.set_background_from_pixmap(pixmap)
                     else:
@@ -365,7 +420,6 @@ class ScreenshotApp(QMainWindow):
                 if local_path and os.path.isfile(local_path):
                     pixmap = QPixmap(local_path)
                     if not pixmap.isNull():
-                        # Если подложки нет — картинка становится подложкой
                         if self.view.background_item is None or sip.isdeleted(self.view.background_item):
                             self.view.set_background_from_pixmap(pixmap)
                         else:
@@ -378,32 +432,22 @@ class ScreenshotApp(QMainWindow):
     # Очистка сцены
     # --------------------------------------------------------------
     def clear_scene_action(self):
-        """Очищает сцену с подтверждением.
-
-        Если сцена пустая — ничего не делает.
-        """
-        # Проверяем, есть ли что очищать
         has_bg = self.view.background_item is not None and not sip.isdeleted(self.view.background_item)
         has_items = len(self.view.scene().items()) > 0
 
         if not has_bg and not has_items:
-            # Сцена пустая — ничего не делаем
             return
 
-        # Создаём диалог с русскими кнопками
         msg_box = QMessageBox(self)
         msg_box.setWindowTitle("Очистить сцену")
         msg_box.setText("Вы уверены, что хотите очистить сцену?")
         msg_box.setInformativeText("Все изображения, аннотации и история будут удалены.")
         msg_box.setIcon(QMessageBox.Question)
 
-        # Добавляем кнопки на русском
         yes_btn = msg_box.addButton("Да", QMessageBox.YesRole)
         no_btn = msg_box.addButton("Нет", QMessageBox.NoRole)
 
-        # Кнопка "Нет" по умолчанию
         msg_box.setDefaultButton(no_btn)
-
         msg_box.exec_()
 
         if msg_box.clickedButton() == yes_btn:
@@ -430,9 +474,7 @@ class ScreenshotApp(QMainWindow):
         if self.view.crop_mode:
             self.view.cancel_crop_mode()
         else:
-            # Сначала запускаем режим обрезки, чтобы захватить выделенную картинку
             self.view.start_crop_mode()
-            # Затем отмечаем кнопку "Выбор" (это вызовет set_tool(None), но цель уже сохранена)
             self.pointer_action.setChecked(True)
 
     def _on_blur_action_triggered(self):
@@ -494,11 +536,9 @@ class ScreenshotApp(QMainWindow):
             return
         if self.view.active_text_item and self.view.active_text_item._editable:
             return
-        # Сначала пробуем вставить из внутреннего буфера (элементы редактора)
         if self.view.clipboard_controller.has_clipboard:
             self.view.clipboard_controller.paste()
         else:
-            # Если внутренний буфер пуст — вставляем изображение из системного буфера
             self.insert_image_from_clipboard()
 
     def undo_action(self):
@@ -573,7 +613,6 @@ class ScreenshotApp(QMainWindow):
         item = QGraphicsPixmapItem(self.screenshot_pixmap)
         item.setTransformationMode(Qt.SmoothTransformation)
 
-        # ИСПРАВЛЕНИЕ: фон не перехватывает события мыши и всегда ниже всех элементов
         item.setAcceptedMouseButtons(Qt.NoButton)
         item.setZValue(-1)
 
@@ -663,43 +702,9 @@ class ScreenshotApp(QMainWindow):
                 pass
             self._ctrl_printscreen_hotkey = None
 
-    def closeEvent(self, e):
-        # Останавливаем все таймеры перед закрытием
-        try:
-            if hasattr(self, 'view'):
-                # Таймер пересчёта размытия
-                if hasattr(self.view, 'blur_controller'):
-                    self.view.blur_controller._blur_recompute_timer.stop()
-                # Таймер батчинга выделения (Этап 3)
-                if hasattr(self.view, '_selection_update_timer'):
-                    self.view._selection_update_timer.stop()
-                # Таймер дебаунса layout_manager (Этап 3)
-                if hasattr(self.view, 'layout_manager') and hasattr(self.view.layout_manager, '_update_timer'):
-                    self.view.layout_manager._update_timer.stop()
-                # Таймер статусной метки (в widget_manager)
-                if hasattr(self.view, 'widget_manager') and hasattr(self.view.widget_manager, '_status_timer'):
-                    self.view.widget_manager._status_timer.stop()
-        except (RuntimeError, AttributeError):
-            pass
-
-        try:
-            self.scene.selectionChanged.disconnect(self._on_scene_selection_changed)
-        except (TypeError, RuntimeError):
-            pass
-
-        try:
-            if not sip.isdeleted(self.scene):
-                self.scene.clear()
-        except RuntimeError:
-            pass
-
-        try:
-            self._remove_keyboard_hooks()
-        except Exception:
-            pass
-
-        e.accept()
-
+    # --------------------------------------------------------------
+    # Прочие методы
+    # --------------------------------------------------------------
     def _create_tool_action(self, text, tool_name, group, toolbar, icon=None, tooltip=None):
         act = QAction(text, self)
         act.setCheckable(True)
