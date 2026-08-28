@@ -1,57 +1,84 @@
+# Структура проекта: D:\Screenshooter
+# ============================================================
+
 D:\Screenshooter\
-├── main.py                             # Точка входа
-├── requirements.txt                    # Зависимости
-├── LICENSES.txt                        # Лицензии сторонних библиотек
+├── screenshooter/                              # Основной пакет приложения
+│   ├── capture/                               # Захват экрана
+│   │   ├── __init__.py                        # Инициализация пакета
+│   │   ├── region_overlay.py                  # Оверлей выделения области (Ctrl+PrtScr)
+│   │   ├── screen_overlay.py                  # Оверлей выбора монитора (PrtScr)
+│   │   ├── virtual_screen.py                  # Виртуальный экран (мультимониторность)
+│   │   └── window_capture.py                  # Захват активного окна (Alt+PrtScr)
+│   │
+│   ├── controllers/                           # Контроллеры (MVC-подобная архитектура)
+│   │   ├── __init__.py                        # Экспорт контроллеров
+│   │   ├── blur_controller.py                 # Управление размытием (Blur)
+│   │   ├── clipboard_controller.py            # Внутренний буфер обмена (копировать/вставить)
+│   │   ├── crop_cursor_factory.py             # Фабрика курсора для режима обрезки
+│   │   ├── floating_widget_manager.py         # Управление плавающими виджетами
+│   │   ├── keyboard_manager.py                # Обработка клавиатуры
+│   │   ├── manipulation_controller.py         # Манипуляции мышью (перетаскивание, рамка, панорамирование)
+│   │   ├── pasted_image_controller.py         # Управление вставленными изображениями
+│   │   └── status_bar_manager.py              # Управление статусной строкой
+│   │
+│   ├── history/                               # Undo/Redo (команды)
+│   │   ├── __init__.py                        # HistoryManager + реэкспорт команд
+│   │   ├── background_commands.py             # Команды для фона (Crop, Rotate, Blur)
+│   │   ├── blur_commands.py                   # Команды для зон размытия
+│   │   ├── composite_commands.py              # Составные команды (удаление, вставка)
+│   │   ├── image_commands.py                  # Команды для вставленных изображений
+│   │   └── item_commands.py                   # Команды для обычных аннотаций
+│   │
+│   ├── image_processing/                      # Низкоуровневая обработка изображений
+│   │   └── __init__.py                        # crop_pixmap, rotate_pixmap, blur_region (cv2/оптимизация)
+│   │
+│   ├── items/                                 # Графические элементы
+│   │   ├── __init__.py                        # Реэкспорт всех элементов
+│   │   ├── arrow_items.py                     # ArrowItem, CurvedArrowItem, DimensionItem
+│   │   ├── blur_region_item.py                # BlurRegionItem (зона размытия)
+│   │   ├── crop_handles.py                    # CropHandles (маркеры изменения размера)
+│   │   ├── line_items.py                      # LineItem, WavyLineItem
+│   │   ├── pasted_image_item.py               # PastedImageItem
+│   │   ├── shape_items.py                     # RectangleItem, EllipseItem, FilledRectItem, CloudItem
+│   │   └── text_item.py                       # TextItem, DimensionTextItem
+│   │
+│   ├── tools/                                 # Инструменты рисования (стратегия)
+│   │   ├── __init__.py                        # Экспорт инструментов
+│   │   ├── arrow_tool.py                      # Стрелка (прямая, кривая, размерная)
+│   │   ├── base_tool.py                       # Базовый класс инструмента
+│   │   ├── ellipse_tool.py                    # Эллипс/круг/облако
+│   │   ├── line_tool.py                       # Линия (прямая, пунктирная, волнистая)
+│   │   ├── rect_tool.py                       # Прямоугольник/квадрат/заливка
+│   │   └── text_tool.py                       # Текст
+│   │
+│   ├── ui/                                    # Вспомогательные UI-компоненты
+│   │   ├── __init__.py                        # Инициализация пакета
+│   │   └── layout_manager.py                  # Позиционирование плавающих виджетов (дебаунс)
+│   │
+│   ├── widgets/                               # Пользовательские виджеты
+│   │   ├── __init__.py                        # Инициализация пакета
+│   │   ├── color_palette.py                   # Палитра цветов (пресеты + QColorDialog)
+│   │   ├── info_widget.py                     # Индикатор текущего цвета и толщины
+│   │   ├── mode_widgets.py                    # Панели выбора режимов инструментов
+│   │   ├── text_format_widget.py              # Выбор фона текста
+│   │   ├── thickness.py                       # Управление толщиной линии (пресеты, слайдер, поле)
+│   │   ├── tool_icons.py                      # Генерация иконок инструментов
+│   │   └── zoom_widget.py                     # Управление масштабом
+│   │
+│   ├── __init__.py                            # Версия пакета
+│   ├── app.py                                 # Главное окно (тулбары, меню, координация)
+│   ├── constants.py                           # Константы (размеры, цвета, стили)
+│   ├── export.py                              # Экспорт изображения (рендер, сохранение, буфер)
+│   ├── image_edit_controller.py               # Контроллер обрезки и поворота
+│   ├── screen_capture.py                      # Захват экрана (обёртка над capture/*)
+│   ├── utils.py                               # Вспомогательные функции (resource_path, SelectAllLineEdit)
+│   └── view.py                                # EditorView — центральный виджет (тонкий координатор)
 │
-└── screenshooter/
-    ├── __init__.py
-    ├── app.py                          # Главное окно (панель инструментов, горячие клавиши)
-    ├── constants.py                    # Константы (размеры, цвета, отступы)
-    ├── view.py                         # EditorView — тонкий координатор (~400 строк)
-    ├── image_edit_controller.py        # Обрезка, размытие, поворот изображения
-    │
-    ├── history/
-    │   └── __init__.py                 # Undo/Redo команды (все типы операций)
-    │
-    ├── items/
-    │   ├── __init__.py
-    │   ├── shape_items.py              # RectangleItem, EllipseItem, FilledRectItem, CloudItem
-    │   ├── arrow_items.py              # ArrowItem, CurvedArrowItem, DimensionItem
-    │   ├── line_items.py               # LineItem, WavyLineItem
-    │   ├── text_item.py                # TextItem, DimensionTextItem
-    │   ├── pasted_image_item.py        # PastedImageItem
-    │   ├── blur_region_item.py         # BlurRegionItem
-    │   └── crop_handles.py             # CropHandles (маркеры обрезки/размера)
-    │
-    ├── tools/                          # Шаг 2: паттерн «Стратегия»
-    │   ├── __init__.py
-    │   ├── base_tool.py                # BaseTool (абстрактный)
-    │   ├── rect_tool.py                # RectTool
-    │   ├── ellipse_tool.py             # EllipseTool
-    │   ├── line_tool.py                # LineTool
-    │   ├── arrow_tool.py               # ArrowTool
-    │   └── text_tool.py                # TextTool
-    │
-    ├── widgets/
-    │   ├── __init__.py
-    │   ├── color_palette.py            # Палитра цветов
-    │   ├── thickness_slider.py         # Слайдер толщины
-    │   ├── text_size_slider.py         # Слайдер размера текста
-    │   ├── info_widget.py              # Виджет информации (цвет, толщина)
-    │   ├── zoom_widget.py              # Виджет масштаба
-    │   ├── text_format_widget.py       # Виджет формата текста (фон)
-    │   └── mode_widgets.py             # Виджеты режимов (4 типа)
-    │
-    ├── ui/                             # Шаг 1: позиционирование
-    │   ├── __init__.py
-    │   └── layout_manager.py           # LayoutManager (дебаунс 16 мс)
-    │
-    ├── image_processing/
-    │   └── __init__.py                 # crop_pixmap, rotate_pixmap, blur_region (cv2)
-    │
-    └── controllers/                    # Шаги 3–5: контроллеры
-        ├── __init__.py
-        ├── clipboard_controller.py     # Копирование/вырезание/вставка элементов
-        ├── manipulation_controller.py  # Перетаскивание, выделение, рамка, панорамирование
-        ├── keyboard_manager.py         # Горячие клавиши (кроме Ctrl+Z/Y)
-        └── floating_widget_manager.py  # Видимость виджетов, синхронизация свойств
+├── .gitignore                                 # Игнорируемые файлы и папки
+├── export_project.py                          # Скрипт экспорта кода и структуры
+├── LICENSES.txt                               # Лицензии сторонних библиотек
+├── main.py                                    # Точка входа (High DPI, QApplication)
+├── promt.txt                                  # Описание проекта, задач, планов
+├── requirements.txt                           # Зависимости Python
+├── structure.txt                              # Описание структуры (с комментариями)
+└── Картинка.jpeg                              # Ресурс (возможно, иконка приложения)
