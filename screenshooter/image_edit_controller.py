@@ -11,7 +11,17 @@ from PyQt5.QtGui import (QPen, QColor, QBrush, QImage, QPainter, QPixmap,
                          QFont, QCursor)
 from PyQt5.QtWidgets import QGraphicsRectItem, QGraphicsSimpleTextItem, QGraphicsItem
 
-from .constants import MIN_RECT_SIZE
+from .constants import (
+    MIN_RECT_SIZE,
+    CROP_CURSOR_SIZE, CROP_LABEL_MARGIN, CROP_LABEL_PADDING,
+    CROP_LABEL_FONT_SIZE, CROP_STATUS_FONT_SIZE,
+    CROP_CURSOR_OUTLINE_WIDTH, CROP_CURSOR_LINE_WIDTH,
+    CROP_OVERLAY_Z, CROP_RECT_Z, CROP_LABEL_Z,
+    CROP_BG_COLOR, CROP_OVERLAY_COLOR, CROP_RECT_COLOR,
+    CROP_LABEL_TEXT_COLOR, CROP_LABEL_BG_COLOR,
+    CROP_CURSOR_OUTLINE_COLOR, CROP_CURSOR_LINE_COLOR,
+    STATUS_STYLE_CROP, STATUS_STYLE_NORMAL,
+)
 from .history import (CropCommand, RotateCommand,
                       CropPastedImageCommand, RotatePastedImageCommand)
 from .image_processing import crop_pixmap, rotate_pixmap
@@ -78,13 +88,13 @@ class ImageEditController:
     def _create_crop_cursor(self):
         """Создаёт контрастный курсор-перекрестие для режима обрезки.
 
-        Чёрные линии с белой обводкой, размер 32×32 пикселя.
+        Чёрные линии с белой обводкой, размер CROP_CURSOR_SIZE пикселей.
         Видим на любом фоне.
         """
         if self._crop_cursor is not None:
             return self._crop_cursor
 
-        size = 32
+        size = CROP_CURSOR_SIZE
         center = size // 2
         pixmap = QPixmap(size, size)
         pixmap.fill(Qt.transparent)
@@ -93,13 +103,13 @@ class ImageEditController:
         painter.setRenderHint(QPainter.Antialiasing)
 
         # Белая обводка (толще)
-        pen_outline = QPen(QColor(255, 255, 255), 3)
+        pen_outline = QPen(CROP_CURSOR_OUTLINE_COLOR, CROP_CURSOR_OUTLINE_WIDTH)
         painter.setPen(pen_outline)
         painter.drawLine(center, 0, center, size)
         painter.drawLine(0, center, size, center)
 
         # Чёрные линии (тоньше, поверх белых)
-        pen_main = QPen(QColor(0, 0, 0), 1)
+        pen_main = QPen(CROP_CURSOR_LINE_COLOR, CROP_CURSOR_LINE_WIDTH)
         painter.setPen(pen_main)
         painter.drawLine(center, 0, center, size)
         painter.drawLine(0, center, size, center)
@@ -123,6 +133,26 @@ class ImageEditController:
         self.handles.create_handles(rect)
 
     # --------------------------------------------------------------
+    # Ограничение точки пределами целевого изображения
+    # --------------------------------------------------------------
+    def _clamp_to_target(self, scene_pos):
+        """Ограничивает точку пределами целевого изображения.
+
+        Если точка выходит за пределы картинки — возвращает ближайшую
+        допустимую точку на границе картинки.
+        """
+        if self.crop_target_item is None:
+            return scene_pos
+
+        image_rect = self.crop_target_item.mapRectToScene(
+            QRectF(self.crop_target_item.pixmap().rect()))
+
+        x = max(image_rect.left(), min(image_rect.right(), scene_pos.x()))
+        y = max(image_rect.top(), min(image_rect.bottom(), scene_pos.y()))
+
+        return QPointF(x, y)
+
+    # --------------------------------------------------------------
     # Режим обрезки
     # --------------------------------------------------------------
     def start_crop_mode(self):
@@ -139,7 +169,7 @@ class ImageEditController:
         self.active_handle = None
         # Устанавливаем кастомный контрастный курсор
         self.view.setCursor(self._create_crop_cursor())
-        self.view.setBackgroundBrush(QColor(90, 90, 90))
+        self.view.setBackgroundBrush(CROP_BG_COLOR)
 
         # Fallback, если контроллер вызван напрямую (без view.start_crop_mode)
         if self.crop_target_item is None:
@@ -183,10 +213,7 @@ class ImageEditController:
         self.view.update_resolution_from_background()
         # Принудительно обновляем статусную строку
         if hasattr(self.view, 'status_label') and self.view.status_label is not None:
-            self.view.status_label.setStyleSheet(
-                "background-color: rgba(255,255,255,180); color: #333; "
-                "border-radius: 6px; padding: 4px 8px;"
-            )
+            self.view.status_label.setStyleSheet(STATUS_STYLE_NORMAL)
             self.view.status_label.repaint()
 
     def _clear_crop_preview(self):
@@ -241,11 +268,7 @@ class ImageEditController:
         if hasattr(self.view, 'status_label') and self.view.status_label is not None:
             self.view.status_label.setText(text)
             self.view.status_label.setVisible(True)
-            self.view.status_label.setStyleSheet(
-                "background-color: rgba(0, 0, 0, 180); color: white; "
-                "font-size: 14px; font-weight: bold; "
-                "border-radius: 4px; padding: 4px 8px;"
-            )
+            self.view.status_label.setStyleSheet(STATUS_STYLE_CROP)
             self.view.layout_manager.update_status_label_position()
             self.view.status_label.raise_()
             self.view.status_label.update()
@@ -266,8 +289,8 @@ class ImageEditController:
             for _ in range(4):
                 overlay = QGraphicsRectItem()
                 overlay.setPen(QPen(Qt.NoPen))
-                overlay.setBrush(QColor(0, 0, 0, 120))
-                overlay.setZValue(1000)
+                overlay.setBrush(CROP_OVERLAY_COLOR)
+                overlay.setZValue(CROP_OVERLAY_Z)
                 overlay.setAcceptedMouseButtons(Qt.NoButton)
                 self.view.scene().addItem(overlay)
                 self.crop_overlay_items.append(overlay)
@@ -288,11 +311,11 @@ class ImageEditController:
 
         if not self.crop_rect_item:
             self.crop_rect_item = QGraphicsRectItem()
-            pen = QPen(QColor(0, 120, 215), 2, Qt.DashLine)
+            pen = QPen(CROP_RECT_COLOR, 2, Qt.DashLine)
             pen.setCosmetic(True)
             self.crop_rect_item.setPen(pen)
             self.crop_rect_item.setBrush(QBrush(Qt.NoBrush))
-            self.crop_rect_item.setZValue(1001)
+            self.crop_rect_item.setZValue(CROP_RECT_Z)
             self.crop_rect_item.setAcceptedMouseButtons(Qt.NoButton)
             self.view.scene().addItem(self.crop_rect_item)
         self.crop_rect_item.setRect(crop)
@@ -335,11 +358,7 @@ class ImageEditController:
             if hasattr(self.view, 'status_label') and self.view.status_label is not None:
                 self.view.status_label.setText(text)
                 self.view.status_label.setVisible(True)
-                self.view.status_label.setStyleSheet(
-                    "background-color: rgba(0, 0, 0, 180); color: white; "
-                    "font-size: 14px; font-weight: bold; "
-                    "border-radius: 4px; padding: 4px 8px;"
-                )
+                self.view.status_label.setStyleSheet(STATUS_STYLE_CROP)
                 self.view.layout_manager.update_status_label_position()
                 self.view.status_label.raise_()
                 self.view.status_label.update()
@@ -363,20 +382,20 @@ class ImageEditController:
         if self.crop_size_label is None:
             self.crop_size_label = QGraphicsSimpleTextItem()
             # Тёмный текст (как у info_widget)
-            self.crop_size_label.setBrush(QColor(51, 51, 51))  # #333
-            self.crop_size_label.setZValue(1002)
+            self.crop_size_label.setBrush(CROP_LABEL_TEXT_COLOR)
+            self.crop_size_label.setZValue(CROP_LABEL_Z)
             self.crop_size_label.setAcceptedMouseButtons(Qt.NoButton)
             font = QFont()
-            font.setPointSize(12)
+            font.setPointSize(CROP_LABEL_FONT_SIZE)
             font.setBold(True)
             self.crop_size_label.setFont(font)
             self.crop_size_label.setFlag(QGraphicsItem.ItemIgnoresTransformations)
 
             self.crop_size_bg = QGraphicsRectItem()
             # Белый полупрозрачный фон (как у info_widget)
-            self.crop_size_bg.setBrush(QColor(255, 255, 255, 180))
+            self.crop_size_bg.setBrush(CROP_LABEL_BG_COLOR)
             self.crop_size_bg.setPen(QPen(Qt.NoPen))
-            self.crop_size_bg.setZValue(1001)
+            self.crop_size_bg.setZValue(CROP_RECT_Z)
             self.crop_size_bg.setAcceptedMouseButtons(Qt.NoButton)
             self.crop_size_bg.setFlag(QGraphicsItem.ItemIgnoresTransformations)
 
@@ -386,32 +405,30 @@ class ImageEditController:
         self.crop_size_label.setText(text)
 
         label_rect = self.crop_size_label.boundingRect()
-        padding = 6  # Увеличенный отступ внутри фона
-        margin = 10  # Отступ от рамки
 
         # Получаем видимую область viewport в координатах сцены
         viewport_rect = self.view.viewport().rect()
         visible_scene_rect = self.view.mapToScene(viewport_rect).boundingRect()
 
         # Проверяем, помещается ли текст под рамкой
-        text_below_y = rect.bottom() + margin
-        text_fits_below = (text_below_y + label_rect.height() + padding * 2) <= visible_scene_rect.bottom()
+        text_below_y = rect.bottom() + CROP_LABEL_MARGIN
+        text_fits_below = (text_below_y + label_rect.height() + CROP_LABEL_PADDING * 2) <= visible_scene_rect.bottom()
 
         if text_fits_below:
             # Текст под рамкой (по центру, с отступом)
             x = rect.center().x() - label_rect.width() / 2
-            y = rect.bottom() + margin
+            y = rect.bottom() + CROP_LABEL_MARGIN
         else:
             # Текст внутри рамки (в верхнем левом углу, с отступом)
-            x = rect.left() + margin
-            y = rect.top() + margin
+            x = rect.left() + CROP_LABEL_MARGIN
+            y = rect.top() + CROP_LABEL_MARGIN
 
         self.crop_size_label.setPos(x, y)
 
         # Обновляем фон под текстом (относительно позиции текста)
-        self.crop_size_bg.setRect(QRectF(-padding, -padding,
-                                          label_rect.width() + padding * 2,
-                                          label_rect.height() + padding * 2))
+        self.crop_size_bg.setRect(QRectF(-CROP_LABEL_PADDING, -CROP_LABEL_PADDING,
+                                          label_rect.width() + CROP_LABEL_PADDING * 2,
+                                          label_rect.height() + CROP_LABEL_PADDING * 2))
         self.crop_size_bg.setPos(x, y)
 
     def _apply_handle_drag(self, handle_id, new_scene_pos):
@@ -419,31 +436,30 @@ class ImageEditController:
         left, top, right, bottom = rect.left(), rect.top(), rect.right(), rect.bottom()
         image_rect = self.crop_target_item.mapRectToScene(
             QRectF(self.crop_target_item.pixmap().rect()))
-        min_size = MIN_RECT_SIZE
 
         x = max(image_rect.left(), min(image_rect.right(), new_scene_pos.x()))
         y = max(image_rect.top(), min(image_rect.bottom(), new_scene_pos.y()))
 
         if handle_id == 'tl':
-            left = min(x, right - min_size)
-            top = min(y, bottom - min_size)
+            left = min(x, right - MIN_RECT_SIZE)
+            top = min(y, bottom - MIN_RECT_SIZE)
         elif handle_id == 'tr':
-            right = max(x, left + min_size)
-            top = min(y, bottom - min_size)
+            right = max(x, left + MIN_RECT_SIZE)
+            top = min(y, bottom - MIN_RECT_SIZE)
         elif handle_id == 'bl':
-            left = min(x, right - min_size)
-            bottom = max(y, top + min_size)
+            left = min(x, right - MIN_RECT_SIZE)
+            bottom = max(y, top + MIN_RECT_SIZE)
         elif handle_id == 'br':
-            right = max(x, left + min_size)
-            bottom = max(y, top + min_size)
+            right = max(x, left + MIN_RECT_SIZE)
+            bottom = max(y, top + MIN_RECT_SIZE)
         elif handle_id == 'tm':
-            top = min(y, bottom - min_size)
+            top = min(y, bottom - MIN_RECT_SIZE)
         elif handle_id == 'bm':
-            bottom = max(y, top + min_size)
+            bottom = max(y, top + MIN_RECT_SIZE)
         elif handle_id == 'lm':
-            left = min(x, right - min_size)
+            left = min(x, right - MIN_RECT_SIZE)
         elif handle_id == 'rm':
-            right = max(x, left + min_size)
+            right = max(x, left + MIN_RECT_SIZE)
 
         return QRectF(left, top, right - left, bottom - top).normalized()
 
@@ -497,10 +513,7 @@ class ImageEditController:
             self.view.update_resolution_from_background()
             # Принудительно обновляем статусную строку (БЕЗ скрытия)
             if hasattr(self.view, 'status_label') and self.view.status_label is not None:
-                self.view.status_label.setStyleSheet(
-                    "background-color: rgba(255,255,255,180); color: #333; "
-                    "border-radius: 6px; padding: 4px 8px;"
-                )
+                self.view.status_label.setStyleSheet(STATUS_STYLE_NORMAL)
                 self.view.status_label.repaint()
 
         else:
@@ -538,10 +551,7 @@ class ImageEditController:
             self.view.update_resolution_from_background()
             # Принудительно обновляем статусную строку
             if hasattr(self.view, 'status_label') and self.view.status_label is not None:
-                self.view.status_label.setStyleSheet(
-                    "background-color: rgba(255,255,255,180); color: #333; "
-                    "border-radius: 6px; padding: 4px 8px;"
-                )
+                self.view.status_label.setStyleSheet(STATUS_STYLE_NORMAL)
                 self.view.status_label.repaint()
 
     # --------------------------------------------------------------
@@ -602,6 +612,8 @@ class ImageEditController:
                     self.active_handle = handle_id
                     return True
             sp = self.view.mapToScene(event.pos())
+            # Ограничиваем точку старта пределами картинки
+            sp = self._clamp_to_target(sp)
             self.temp_crop_start = sp
             self.crop_rect = QRectF(sp, sp)
             self._clear_crop_preview()
@@ -619,6 +631,8 @@ class ImageEditController:
                 return True
             if self.temp_crop_start is not None:
                 sp = self.view.mapToScene(event.pos())
+                # Ограничиваем текущую точку пределами картинки
+                sp = self._clamp_to_target(sp)
                 self.crop_rect = QRectF(self.temp_crop_start, sp).normalized()
                 self._update_crop_overlay(self.crop_rect)
                 return True
@@ -643,6 +657,8 @@ class ImageEditController:
                 return True
             if self.temp_crop_start is not None:
                 sp = self.view.mapToScene(event.pos())
+                # Ограничиваем точку отпускания пределами картинки
+                sp = self._clamp_to_target(sp)
                 self.crop_rect = QRectF(self.temp_crop_start, sp).normalized()
                 if (self.crop_rect.width() < MIN_RECT_SIZE or
                         self.crop_rect.height() < MIN_RECT_SIZE):
