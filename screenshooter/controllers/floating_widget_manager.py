@@ -160,32 +160,34 @@ class FloatingWidgetManager:
             self.update_info_widget_content(QColor(0, 0, 0), 0)
 
     def update_resolution_for_selection(self):
-        """Обновляет разрешение в статусной строке в зависимости от выделения.
+        """Обновляет статусную строку при изменении выделения.
 
-        Если выбрано вставленное изображение — показываем его разрешение.
-        Иначе — показываем разрешение подложки.
+        Логика:
+        - Нет выделения → разрешение подложки.
+        - Выбран один объект:
+            * если это вставленная картинка → её разрешение;
+            * иначе → разрешение подложки.
+        - Выбрано несколько объектов → «Выбрано: N».
         """
         view = self.view
         selected = view.scene().selectedItems()
+        non_bg_selected = [it for it in selected if not view._is_background_item(it)]
 
-        # Ищем вставленное изображение среди выделенных
-        from ..items.pasted_image_item import PastedImageItem
-        pasted = None
-        for item in selected:
+        if len(non_bg_selected) > 1:
+            count = len(non_bg_selected)
+            self.set_resolution_text(f"Выбрано: {count}")
+            return
+
+        if len(non_bg_selected) == 1:
+            item = non_bg_selected[0]
+            from ..items.pasted_image_item import PastedImageItem
             if isinstance(item, PastedImageItem):
-                pasted = item
-                break
+                pixmap = item.original_pixmap
+                if pixmap is not None and not pixmap.isNull():
+                    self.set_resolution_text(f"{pixmap.width()}×{pixmap.height()}")
+                    return
 
-        if pasted is not None:
-            # Показываем разрешение вставленного изображения
-            pixmap = pasted.original_pixmap
-            if pixmap is not None and not pixmap.isNull():
-                w = pixmap.width()
-                h = pixmap.height()
-                self.set_resolution_text(f"{w}×{h}")
-                return
-
-        # Иначе показываем разрешение подложки
+        # Нет выделения или выбран один объект, но не картинка
         view.update_resolution_from_background()
 
     def update_floating_widgets_visibility(self):
