@@ -2,9 +2,8 @@
 Модуль: app.py
 Описание: Главное окно приложения ScreenshotApp.
           Создаёт тулбары с инструментами аннотаций, кнопки захвата,
-          управляет горячими клавишами, сохранением и вставкой изображений.
-          Координирует взаимодействие между виджетом редактора, контроллером
-          изображения и историей.
+          управляет горячими клавишами. Захват экрана делегирован в
+          ScreenCapture, экспорт изображения — в Exporter.
 """
 
 import sys
@@ -19,9 +18,8 @@ from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPu
                              QAction, QFileDialog, QMessageBox, QApplication, QSizePolicy, QDialog,
                              QStyle, QMenu, QLabel, QShortcut)
 
-from .capture.screen_overlay import ScreenCaptureOverlay
-from .capture.region_overlay import RegionCaptureOverlay
-from .capture.window_capture import capture_active_window
+from .screen_capture import ScreenCapture
+from .export import Exporter
 from .view import EditorView
 from .widgets.thickness import ThicknessWidget
 from .widgets.color_palette import ColorPaletteWidget
@@ -49,13 +47,6 @@ class ScreenshotApp(QMainWindow):
         self._printscreen_hook = None
         self._alt_printscreen_hotkey = None
         self._ctrl_printscreen_hotkey = None
-        self._capture_in_progress = False
-        self._window_state_before_capture = None
-
-        settings = QSettings("Screenshooter", "Screenshooter")
-        self.save_directory = settings.value("save_directory", None)
-        if self.save_directory and not os.path.isdir(self.save_directory):
-            self.save_directory = None
 
         cw = QWidget()
         self.setCentralWidget(cw)
@@ -95,6 +86,11 @@ class ScreenshotApp(QMainWindow):
         self.scene = QGraphicsScene()
         self.view = EditorView(self.scene)
         self.view.zoomChangedByWheel.connect(self._on_view_zoom_changed)
+
+        # Контроллеры захвата и экспорта
+        self.capture = ScreenCapture(self)
+        self.exporter = Exporter(self.view, self.scene)
+        self.exporter.load_save_directory_from_settings()
 
         self.undo_shortcut = QShortcut(QKeySequence("Ctrl+Z"), self)
         self.undo_shortcut.activated.connect(self._on_undo_shortcut)
@@ -468,62 +464,89 @@ class ScreenshotApp(QMainWindow):
             self.redo_btn.setEnabled(False)
 
     # --------------------------------------------------------------
-    # Остальные методы
+    # Захват экрана — делегирование в ScreenCapture
     # --------------------------------------------------------------
-    def choose_save_directory(self):
-        directory = QFileDialog.getExistingDirectory(
-            self,
-            "Выберите папку для сохранения скриншотов",
-            self.save_directory or os.path.expanduser("~")
-        )
-        if directory:
-            self.save_directory = directory
-            settings = QSettings("Screenshooter", "Screenshooter")
-            settings.setValue("save_directory", directory)
-            return True
-        return False
+    def capture_screen(self):
+        self.capture.capture_screen()
 
-    def show_quick_save_menu(self, pos):
-        menu = QMenu(self)
-        choose_action = menu.addAction("Выбрать папку...")
-        chosen = menu.exec_(self.quick_save_btn.mapToGlobal(pos))
-        if chosen == choose_action:
-            self.choose_save_directory()
+    def capture_monitor(self):
+        if self.capture.is_capturing():
+            return
+        self.capture.capture_monitor()
+
+    def capture_window(self):
+        if self.capture.is_capturing():
+            return
+        self.capture.capture_window()
+
+    def capture_region(self):
+        if self.capture.is_capturing():
+            return
+        self.capture.capture_region()
+
+    # --------------------------------------------------------------
+    # Экспорт — делегирование в Exporter
+    # --------------------------------------------------------------
+    def render_scene_to_image(self):
+        return self.exporter.render_scene_to_image()
+
+    def save_image(self):
+        self.exporter.save_image()
+
+    def copy_to_clipboard(self):
+        self.exporter.copy_to_clipboard()
 
     def quick_save(self):
-        img = self.render_scene_to_image()
-        if img is None:
-            self.view.show_status_message("Нет изображения для сохранения.", 15000)
-            return
+        self.exporter.quick_save()
 
-        if self.save_directory is None:
-            if not self.choose_save_directory():
-                return
+    def choose_save_directory(self):
+        return self.exporter.choose_save_directory()
 
-        timestamp = time.strftime("%Y-%m-%d %H-%M-%S")
-        filename = f"{timestamp}.png"
-        full_path = os.path.join(self.save_directory, filename)
+    def show_quick_save_menu(self, pos):
+        self.exporter.show_quick_save_menu(pos, self.quick_save_btn)
 
-        if img.save(full_path, "PNG"):
-            try:
-                os.startfile(self.save_directory)
-            except Exception:
-                pass
+    # --------------------------------------------------------------
+    # Отображение скриншота
+    # --------------------------------------------------------------
+    def display_screenshot(self):
+        self.view.clear_pasted_images()
+        self.scene.clear()
+        self.view.active_text_item = None
+        self.view.history.clear()
 
-            native_path = QDir.toNativeSeparators(full_path)
-            self.view.show_status_message(native_path, 15000)
+        item = QGraphicsPixmapItem(self.screenshot_pixmap)
+        item.setTransformationMode(Qt.SmoothTransformation)
+
+        # ИСПРАВЛЕНИЕ: фон не перехватывает события мыши и всегда ниже всех элементов
+        item.setAcceptedMouseButtons(Qt.NoButton)
+        item.setZValue(-1)
+
+        self.scene.addItem(item)
+        self.view.set_background_item(item)
+
+        self.view.setSceneRect(QRectF(self.screenshot_pixmap.rect()))
+        self.view.auto_fit = True
+        self.user_zoomed = False
+        self.view.fitInView(item, Qt.KeepAspectRatio)
+        scale = self.view.transform().m11() * 100
+        self.view.zoom_widget.set_zoom(scale)
+
+        if self.screenshot_pixmap:
+            w = self.screenshot_pixmap.width()
+            h = self.screenshot_pixmap.height()
+            self.view.set_resolution_text(f"{w}×{h}")
         else:
-            self.view.show_status_message("Не удалось сохранить файл.", 15000)
+            self.view.set_resolution_text("")
 
-    def _on_scene_selection_changed(self):
-        if sip.isdeleted(self.scene):
-            return
-        self.view.update_text_format_widget_visibility()
-        sel = self.scene.selectedItems()
-        if not sel:
-            self.thickness_widget.set_value_silent(self.view.pen_width)
-            self.color_palette.set_current_color(self.view.current_pen_color)
+        self.crop_action.setChecked(False)
+        self.blur_action.setChecked(False)
+        self.crop_buttons_widget.setVisible(False)
 
+        self._update_image_actions_enabled()
+
+    # --------------------------------------------------------------
+    # Горячие клавиши
+    # --------------------------------------------------------------
     def setup_global_hotkeys(self):
         self._remove_keyboard_hooks()
         try:
@@ -549,18 +572,18 @@ class ScreenshotApp(QMainWindow):
             return True
         if keyboard.is_pressed("ctrl") or keyboard.is_pressed("alt"):
             return True
-        if self._capture_in_progress:
+        if self.capture.is_capturing():
             return True
         self.capture_monitor_requested.emit()
         return True
 
     def _on_alt_printscreen_hotkey(self):
-        if self._capture_in_progress:
+        if self.capture.is_capturing():
             return
         self.capture_window_requested.emit()
 
     def _on_ctrl_printscreen_hotkey(self):
-        if self._capture_in_progress:
+        if self.capture.is_capturing():
             return
         self.capture_region_requested.emit()
 
@@ -663,178 +686,14 @@ class ScreenshotApp(QMainWindow):
     def _on_view_zoom_changed(self, p):
         self.set_zoom(p)
 
-    def capture_screen(self):
-        screen = QApplication.primaryScreen()
-        if screen:
-            self.screenshot_pixmap = screen.grabWindow(0)
-            self.display_screenshot()
-
-    def display_screenshot(self):
-        self.view.clear_pasted_images()
-        self.scene.clear()
-        self.view.active_text_item = None
-        self.view.history.clear()
-
-        item = QGraphicsPixmapItem(self.screenshot_pixmap)
-        item.setTransformationMode(Qt.SmoothTransformation)
-
-        # ИСПРАВЛЕНИЕ: фон не перехватывает события мыши и всегда ниже всех элементов
-        item.setAcceptedMouseButtons(Qt.NoButton)
-        item.setZValue(-1)
-
-        self.scene.addItem(item)
-        self.view.set_background_item(item)
-
-        self.view.setSceneRect(QRectF(self.screenshot_pixmap.rect()))
-        self.view.auto_fit = True
-        self.user_zoomed = False
-        self.view.fitInView(item, Qt.KeepAspectRatio)
-        scale = self.view.transform().m11() * 100
-        self.view.zoom_widget.set_zoom(scale)
-
-        if self.screenshot_pixmap:
-            w = self.screenshot_pixmap.width()
-            h = self.screenshot_pixmap.height()
-            self.view.set_resolution_text(f"{w}×{h}")
-        else:
-            self.view.set_resolution_text("")
-
-        self.crop_action.setChecked(False)
-        self.blur_action.setChecked(False)
-        self.crop_buttons_widget.setVisible(False)
-
-        self._update_image_actions_enabled()
-
-    def render_scene_to_image(self):
-        bg = self.view.background_item
-        if bg is None or sip.isdeleted(bg):
-            return None
-        bg_pixmap = bg.pixmap()
-        if bg_pixmap.isNull():
-            return None
-
-        self.view.blur_controller.hide_blur_regions_for_render()
-        self.view.hide_pasted_image_handles_for_render()
-
-        target = bg_pixmap.rect()
-        img = QImage(target.size(), QImage.Format_ARGB32)
-        img.fill(Qt.transparent)
-        p = QPainter(img)
-        p.setRenderHint(QPainter.Antialiasing)
-        p.setRenderHint(QPainter.SmoothPixmapTransform)
-        self.scene.render(p, QRectF(img.rect()), QRectF(target))
-        p.end()
-
-        self.view.blur_controller.show_blur_regions_after_render()
-        self.view.show_pasted_image_handles_after_render()
-        return img
-
-    def save_image(self):
-        img = self.render_scene_to_image()
-        if img is None:
+    def _on_scene_selection_changed(self):
+        if sip.isdeleted(self.scene):
             return
-        path, _ = QFileDialog.getSaveFileName(self, "Сохранить изображение", "",
-                                              "PNG (*.png);;JPEG (*.jpg *.jpeg);;BMP (*.bmp)")
-        if path:
-            img.save(path)
-
-    def copy_to_clipboard(self):
-        img = self.render_scene_to_image()
-        if img is not None:
-            QApplication.clipboard().setImage(img)
+        self.view.update_text_format_widget_visibility()
+        sel = self.scene.selectedItems()
+        if not sel:
+            self.thickness_widget.set_value_silent(self.view.pen_width)
+            self.color_palette.set_current_color(self.view.current_pen_color)
 
     def delete_selected(self):
         self.view.delete_selected()
-
-    def _restore_main_window(self, force_maximized=False):
-        if force_maximized:
-            self.showMaximized()
-        else:
-            if self._window_state_before_capture and (self._window_state_before_capture & Qt.WindowMaximized):
-                self.showMaximized()
-            else:
-                self.showNormal()
-        self.activateWindow()
-        self.raise_()
-        QApplication.processEvents()
-        self.view.setFocus()
-
-    def capture_monitor(self):
-        if self._capture_in_progress:
-            return
-        self._capture_in_progress = True
-        try:
-            self._window_state_before_capture = self.windowState()
-            self.hide()
-            QApplication.processEvents()
-            overlay = ScreenCaptureOverlay()
-            overlay.activateWindow()
-            overlay.raise_()
-            QApplication.processEvents()
-            res = overlay.exec_()
-            self._restore_main_window(force_maximized=True)
-            if res == QDialog.Accepted:
-                pm = overlay.get_pixmap()
-                if pm is not None:
-                    self.screenshot_pixmap = pm
-                    self.display_screenshot()
-        except Exception as e:
-            self._restore_main_window(force_maximized=True)
-            print(f"Ошибка захвата монитора: {e}")
-        finally:
-            self._capture_in_progress = False
-
-    def capture_region(self):
-        if self._capture_in_progress:
-            return
-        self._capture_in_progress = True
-        try:
-            self._window_state_before_capture = self.windowState()
-            self.hide()
-            QApplication.processEvents()
-            QTimer.singleShot(30, self._start_region_capture)
-        except Exception as e:
-            self._capture_in_progress = False
-            self._restore_main_window()
-            print(f"Ошибка запуска захвата области: {e}")
-
-    def _start_region_capture(self):
-        try:
-            overlay = RegionCaptureOverlay()
-            overlay.activateWindow()
-            overlay.raise_()
-            QApplication.processEvents()
-            res = overlay.exec_()
-            self._restore_main_window()
-            if res == QDialog.Accepted:
-                pm = overlay.get_pixmap()
-                if pm is not None:
-                    self.screenshot_pixmap = pm
-                    self.display_screenshot()
-        except Exception as e:
-            self._restore_main_window()
-            print(f"Ошибка захвата области: {e}")
-        finally:
-            self._capture_in_progress = False
-
-    def capture_window(self):
-        if self._capture_in_progress:
-            return
-        self._capture_in_progress = True
-        try:
-            self._window_state_before_capture = self.windowState()
-            self.hide()
-            QApplication.processEvents()
-            pixmap = capture_active_window()
-            QTimer.singleShot(0, self._restore_main_window)
-            if pixmap is not None:
-                self.screenshot_pixmap = pixmap
-                self.display_screenshot()
-            else:
-                self.view.show_status_message("Не удалось захватить активное окно.", 15000)
-        except Exception as e:
-            QTimer.singleShot(0, self._restore_main_window)
-            print(f"Ошибка захвата активного окна: {e}")
-            self.view.show_status_message("Не удалось захватить активное окно.", 15000)
-        finally:
-            self._capture_in_progress = False
