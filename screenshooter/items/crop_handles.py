@@ -1,8 +1,6 @@
 """
 Модуль: crop_handles.py
-Описание: Класс CropHandles для создания и управления 8 маркерами изменения размера
-          (по углам и сторонам рамки). Маркеры не масштабируются вместе с видом.
-          Используется в режимах обрезки, размытия и в будущем для обычных аннотаций.
+Описание: Класс CropHandles для создания и управления 8 маркерами изменения размера.
 """
 
 from PyQt5 import sip
@@ -10,19 +8,16 @@ from PyQt5.QtCore import Qt, QPointF, QRectF
 from PyQt5.QtGui import QPen, QColor, QBrush
 from PyQt5.QtWidgets import QGraphicsEllipseItem, QGraphicsItem
 
+from ..theme import theme_manager
+
 
 class CropHandles:
-    """
-    Управляющие точки на рамке: 8 круглых маркеров.
-    Точки не масштабируются при изменении масштаба просмотра.
-    """
-
     HANDLE_RADIUS = 5
     HIT_RADIUS = 7
 
-    def __init__(self, view, fill_color=QColor(0, 120, 215), show_midpoints=True):
+    def __init__(self, view, fill_color=None, show_midpoints=True):
         self.view = view
-        self.fill_color = fill_color
+        self.fill_color = fill_color or theme_manager.get_color('crop_rect')
         self.show_midpoints = show_midpoints
         self.handle_items = {}
         self.positions = {}
@@ -53,7 +48,6 @@ class CropHandles:
                 self.positions[handle_id] = pos
 
     def remove_handles(self):
-        # ЭТАП 1: защита от удалённых C++ объектов при закрытии
         for handle in self.handle_items.values():
             try:
                 if sip.isdeleted(handle):
@@ -66,9 +60,6 @@ class CropHandles:
         self.positions.clear()
 
     def hit_test(self, device_pos: QPointF):
-        """Возвращает id маркера или None, если мышь не над маркером.
-        Используем mapFromScene, потому что он учитывает и трансформацию,
-        и прокрутку вида. transform.map() учитывает только трансформацию."""
         device_pos = QPointF(device_pos)
         for handle_id, scene_pos in self.positions.items():
             handle_device_pos = QPointF(self.view.mapFromScene(scene_pos))

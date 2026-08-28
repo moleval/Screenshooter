@@ -9,29 +9,20 @@ from PyQt5.QtGui import QPen, QPixmap, QPainter, QCursor
 
 from ..constants import (
     CROP_CURSOR_SIZE,
-    CROP_CURSOR_OUTLINE_COLOR,
-    CROP_CURSOR_LINE_COLOR,
     CROP_CURSOR_OUTLINE_WIDTH,
     CROP_CURSOR_LINE_WIDTH,
 )
+from ..theme import theme_manager
 
 
 class CropCursorFactory:
-    """Создаёт и кэширует курсоры для режима обрезки.
-
-    Курсор создаётся только один раз при первом обращении
-    и кэшируется для повторного использования.
-    """
+    """Создаёт и кэширует курсоры для режима обрезки."""
 
     _cursor = None
 
     @classmethod
     def get_cursor(cls):
-        """Возвращает курсор-перекрестие для режима обрезки.
-
-        Курсор: чёрные линии с белой обводкой, размер CROP_CURSOR_SIZE.
-        Видим на любом фоне.
-        """
+        """Возвращает курсор-перекрестие для режима обрезки."""
         if cls._cursor is not None:
             return cls._cursor
 
@@ -43,14 +34,15 @@ class CropCursorFactory:
         painter = QPainter(pixmap)
         painter.setRenderHint(QPainter.Antialiasing)
 
-        # Белая обводка (толще)
-        pen_outline = QPen(CROP_CURSOR_OUTLINE_COLOR, CROP_CURSOR_OUTLINE_WIDTH)
+        outline_color = theme_manager.get_color('crop_cursor_outline')
+        line_color = theme_manager.get_color('crop_cursor_line')
+
+        pen_outline = QPen(outline_color, CROP_CURSOR_OUTLINE_WIDTH)
         painter.setPen(pen_outline)
         painter.drawLine(center, 0, center, size)
         painter.drawLine(0, center, size, center)
 
-        # Чёрные линии (тоньше, поверх белых)
-        pen_main = QPen(CROP_CURSOR_LINE_COLOR, CROP_CURSOR_LINE_WIDTH)
+        pen_main = QPen(line_color, CROP_CURSOR_LINE_WIDTH)
         painter.setPen(pen_main)
         painter.drawLine(center, 0, center, size)
         painter.drawLine(0, center, size, center)
@@ -62,5 +54,5 @@ class CropCursorFactory:
 
     @classmethod
     def reset(cls):
-        """Сбрасывает кэш курсора (для тестов)."""
+        """Сбрасывает кэш курсора, чтобы он пересоздался с новыми цветами."""
         cls._cursor = None

@@ -2,7 +2,8 @@
 Модуль: app.py
 Описание: Главное окно приложения ScreenshotApp.
           Создаёт тулбары с инструментами аннотаций, кнопки захвата,
-          управляет горячими клавишами. Интегрирует настройки и системный трей.
+          управляет горячими клавишами. Интегрирует настройки, системный трей
+          и темы оформления.
 """
 
 import sys
@@ -30,7 +31,9 @@ from .widgets.tool_icons import (
 )
 from .settings import AppSettings
 from .tray import TrayManager
-from .utils import resource_path, load_app_icon
+from .utils import load_app_icon
+from .theme import theme_manager
+from .controllers.crop_cursor_factory import CropCursorFactory
 
 
 class ScreenshotApp(QMainWindow):
@@ -49,8 +52,11 @@ class ScreenshotApp(QMainWindow):
         # Настройки приложения
         self.settings = AppSettings()
 
+        # Загружаем сохранённую тему и применяем её ДО создания виджетов
+        theme_manager.set_theme(self.settings.theme)
+        theme_manager.apply(QApplication.instance())
+
         # Иконка окна из ресурсов
-        from .utils import load_app_icon
         self.setWindowIcon(load_app_icon())
 
         # Флаг для различения закрытия и сворачивания
@@ -125,21 +131,13 @@ class ScreenshotApp(QMainWindow):
 
         self.apply_crop_btn = QPushButton("Применить")
         self.apply_crop_btn.setFixedWidth(80)
-        self.apply_crop_btn.setStyleSheet(
-            "QPushButton { background-color: #4CAF50; color: white; border: none; padding: 5px; border-radius: 3px; }"
-            "QPushButton:hover { background-color: #45a049; }"
-            "QPushButton:pressed { background-color: #3d8b40; }"
-        )
+        self.apply_crop_btn.setObjectName("applyCropBtn")
         self.apply_crop_btn.clicked.connect(self.view.apply_crop)
         crop_buttons_layout.addWidget(self.apply_crop_btn)
 
         self.cancel_crop_btn = QPushButton("Отмена")
         self.cancel_crop_btn.setFixedWidth(60)
-        self.cancel_crop_btn.setStyleSheet(
-            "QPushButton { background-color: #F44336; color: white; border: none; padding: 5px; border-radius: 3px; }"
-            "QPushButton:hover { background-color: #d32f2f; }"
-            "QPushButton:pressed { background-color: #b71c1c; }"
-        )
+        self.cancel_crop_btn.setObjectName("cancelCropBtn")
         self.cancel_crop_btn.clicked.connect(self.view.cancel_crop_mode)
         crop_buttons_layout.addWidget(self.cancel_crop_btn)
 
@@ -194,9 +192,6 @@ class ScreenshotApp(QMainWindow):
         self.top_toolbar.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
         self.top_toolbar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         self.top_toolbar.setContentsMargins(0, 0, 0, 0)
-        self.top_toolbar.setStyleSheet(
-            "QToolButton { padding: 2px; } "
-            "QToolButton:checked { background-color: #b0d4f1; border: 2px solid #005a9e; border-radius: 4px; }")
         self.addToolBar(Qt.TopToolBarArea, self.top_toolbar)
 
         left_spacer = QWidget()
@@ -210,9 +205,6 @@ class ScreenshotApp(QMainWindow):
         toolbar_tools.setFloatable(False)
         toolbar_tools.setContentsMargins(0, 0, 0, 0)
         toolbar_tools.layout().setSpacing(0)
-        toolbar_tools.setStyleSheet(
-            "QToolButton { padding: 0px; margin: 0px; spacing: 0px; font-size: 8pt; } "
-            "QToolButton:checked { background-color: #b0d4f1; border: 2px solid #005a9e; border-radius: 4px; }")
 
         action_group = QActionGroup(self)
         action_group.setExclusive(True)
@@ -239,7 +231,6 @@ class ScreenshotApp(QMainWindow):
                 btn.setFixedWidth(self.TOOL_BUTTON_WIDTH)
 
         self.top_toolbar.addWidget(toolbar_tools)
-
         self.top_toolbar.addSeparator()
 
         self.image_toolbar = QToolBar("Изображение")
@@ -249,9 +240,6 @@ class ScreenshotApp(QMainWindow):
         self.image_toolbar.setFloatable(False)
         self.image_toolbar.setContentsMargins(0, 0, 0, 0)
         self.image_toolbar.layout().setSpacing(0)
-        self.image_toolbar.setStyleSheet(
-            "QToolButton { padding: 0px; margin: 0px; spacing: 0px; font-size: 8pt; } "
-            "QToolButton:checked { background-color: #b0d4f1; border: 2px solid #005a9e; border-radius: 4px; }")
 
         self.crop_action = QAction("Обрезать", self)
         self.crop_action.setCheckable(True)
@@ -369,21 +357,23 @@ class ScreenshotApp(QMainWindow):
         self._remove_keyboard_hooks()
         QApplication.quit()
 
+    # --------------------------------------------------------------
+    # Применение темы
+    # --------------------------------------------------------------
     def apply_theme(self, theme_key: str):
-        """Применяет выбранную тему оформления.
-
-        На данном этапе реализована только заглушка: сохраняет выбор
-        в настройках и показывает сообщение. В будущем здесь будет
-        применяться QSS или палитра.
-        """
+        """Применяет выбранную тему оформления."""
+        theme_manager.set_theme(theme_key)
+        theme_manager.apply(QApplication.instance())
+        self.view.update_theme_colors()
         self.settings.set_theme(theme_key)
-        theme_names = {
-            "light": "Светлая",
-            "dark": "Тёмная",
-            "system": "Системная",
-        }
+
+        # Сбрасываем кэш курсора обрезки, чтобы он пересоздался с новыми цветами
+        from .controllers.crop_cursor_factory import CropCursorFactory
+        CropCursorFactory.reset()
+
+        theme_names = {"light": "Светлая", "dark": "Тёмная", "system": "Системная"}
         label = theme_names.get(theme_key, theme_key)
-        self.view.show_status_message(f"Тема: {label} (заглушка)", 2000)
+        self.view.show_status_message(f"Тема: {label}", 2000)
 
     # --------------------------------------------------------------
     # Вставка изображений

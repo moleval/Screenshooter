@@ -4,6 +4,7 @@ from PyQt5.QtCore import Qt, QRectF, QPointF
 from PyQt5.QtGui import QPixmap, QColor, QTransform
 from PyQt5.QtWidgets import QGraphicsPixmapItem
 from .crop_handles import CropHandles
+from ..theme import theme_manager
 
 
 class PastedImageItem(QGraphicsPixmapItem):
@@ -12,7 +13,7 @@ class PastedImageItem(QGraphicsPixmapItem):
     Поддерживает перемещение, изменение размера, удаление.
     """
 
-    HANDLE_COLOR = QColor(0, 120, 215)
+    HANDLE_COLOR = None  # Будет заменён цветом из темы при необходимости
     MIN_SIZE = 10
 
     def __init__(self, pixmap: QPixmap, view):
@@ -31,7 +32,6 @@ class PastedImageItem(QGraphicsPixmapItem):
         if scale <= 0:
             return
         self.scale = scale
-        # Вызываем prepareGeometryChange, чтобы boundingRect обновился корректно
         self.prepareGeometryChange()
         new_pixmap = self.original_pixmap.scaled(
             int(self.original_pixmap.width() * scale),
@@ -69,8 +69,13 @@ class PastedImageItem(QGraphicsPixmapItem):
 
     def show_handles(self):
         if self.handles is None:
-            # Показываем только угловые маркеры
-            self.handles = CropHandles(self.view, fill_color=self.HANDLE_COLOR, show_midpoints=False)
+            # Используем цвет из темы, если HANDLE_COLOR не задан
+            handle_color = self.HANDLE_COLOR or theme_manager.get_color('crop_rect')
+            self.handles = CropHandles(
+                self.view,
+                fill_color=handle_color,
+                show_midpoints=False
+            )
             scene_rect = self.mapRectToScene(self.boundingRect())
             self.handles.create_handles(scene_rect)
         else:

@@ -8,8 +8,10 @@
 from PyQt5 import sip
 from PyQt5.QtCore import Qt, QRectF, QPointF, QTimer
 from PyQt5.QtGui import QImage, QPainter, QPixmap
+from PyQt5.QtWidgets import QGraphicsRectItem
 
-from .constants import MIN_RECT_SIZE, CROP_BG_COLOR
+from .constants import MIN_RECT_SIZE
+from .theme import theme_manager
 from .controllers.crop_cursor_factory import CropCursorFactory
 from .controllers.crop_overlay_controller import CropOverlayController
 from .controllers.status_bar_manager import StatusBarManager
@@ -102,7 +104,7 @@ class ImageEditController:
         self.active_handle = None
 
         self.view.setCursor(CropCursorFactory.get_cursor())
-        self.view.setBackgroundBrush(CROP_BG_COLOR)
+        self.view.setBackgroundBrush(theme_manager.get_color('crop_bg'))
 
         if self.crop_target_item is None:
             self.crop_target_item = self.background_item
@@ -264,7 +266,6 @@ class ImageEditController:
         self._finish_crop_operation()
 
     def _collect_items_for_crop(self, crop):
-        """Собирает элементы сцены, которые удаляются или сдвигаются при обрезке подложки."""
         items_to_remove = []
         items_to_shift = []
         old_positions = []
@@ -292,7 +293,6 @@ class ImageEditController:
         return items_to_remove, items_to_shift, old_positions, new_positions
 
     def _finish_crop_operation(self):
-        """Общая часть после применения обрезки: очистка состояния и виджетов."""
         self.overlay.clear()
         self.overlay.remove_handles()
         self.crop_rect = None

@@ -36,6 +36,7 @@ from .tools import RectTool, EllipseTool, LineTool, ArrowTool, TextTool
 from .controllers import (ClipboardController, ManipulationController,
                           KeyboardManager, FloatingWidgetManager,
                           PastedImageController, BlurController)
+from .theme import theme_manager
 
 
 class EditorView(QGraphicsView):
@@ -56,7 +57,7 @@ class EditorView(QGraphicsView):
         self.pen_width = 2
         self.text_size = 10
         self.auto_fit = True
-        self.normal_background_color = QColor(235, 242, 250)
+        self.normal_background_color = theme_manager.get_color('editor_bg')
         self.setRenderHint(QPainter.Antialiasing)
         self.setBackgroundBrush(self.normal_background_color)
         self.setFocusPolicy(Qt.StrongFocus)
@@ -95,6 +96,7 @@ class EditorView(QGraphicsView):
         self.info_widget.setVisible(True)
 
         self.status_label = QLabel(self)
+        self.status_label.setObjectName("statusLabel")
         self.status_label.setAttribute(Qt.WA_TranslucentBackground)
         self.status_label.setStyleSheet(
             "background-color: rgba(255,255,255,180); color: #333; "
@@ -887,3 +889,12 @@ class EditorView(QGraphicsView):
     def showEvent(self, e):
         super().showEvent(e)
         QTimer.singleShot(0, self.layout_manager.update_all)
+
+    def update_theme_colors(self):
+        """Обновляет цвета, зависящие от текущей темы."""
+        self.normal_background_color = theme_manager.get_color('editor_bg')
+        self.setBackgroundBrush(self.normal_background_color)
+        self.viewport().update()
+        # Пересоздаём курсор обрезки с новыми цветами
+        from .controllers.crop_cursor_factory import CropCursorFactory
+        CropCursorFactory.reset()    

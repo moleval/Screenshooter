@@ -60,16 +60,20 @@ class ThicknessWidget(QWidget):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
+
         self.preset_buttons = []
         presets = [1, 2, 5, 10, 20]
         for value in presets:
             button = QPushButton(f"x{value}")
             button.setFixedSize(36, 32)
             button.setFont(QFont("Arial", 11))
+            button.setCheckable(True)
             button.clicked.connect(lambda _, v=value: self._set_value(v))
             layout.addWidget(button)
             self.preset_buttons.append(button)
+
         layout.addStretch(1)
+
         self.slider = ThicknessSlider(Qt.Horizontal)
         self.slider.setRange(1, 100)
         self.slider.setValue(3)
@@ -78,14 +82,16 @@ class ThicknessWidget(QWidget):
         self.slider.valueChanged.connect(self._on_slider_changed)
         self.slider.customEditRequested.connect(self._open_value_dialog)
         layout.addWidget(self.slider)
+
         layout.addStretch(1)
+
         self.value_edit = SelectAllLineEdit("3")
         self.value_edit.setFixedSize(32, 32)
         self.value_edit.setAlignment(Qt.AlignCenter)
         self.value_edit.setFont(QFont("Arial", 10))
-        self.value_edit.setStyleSheet("QLineEdit { background-color: white; border: 1px solid gray; }")
         self.value_edit.returnPressed.connect(self._on_edit)
         layout.addWidget(self.value_edit)
+
         self._value = 3
         self._update_preset_highlight(3)
 
@@ -133,14 +139,11 @@ class ThicknessWidget(QWidget):
         presets = [1, 2, 5, 10, 20]
         for button, preset in zip(self.preset_buttons, presets):
             if value == preset:
-                button.setStyleSheet("border: 2px solid #005a9e; background-color: #b0d4f1;")
+                # Используем глобальный стиль с подсветкой выбранного
+                button.setProperty("active", True)
+                button.setStyleSheet(
+                    "QPushButton[active=\"true\"] { border: 2px solid #005a9e; }"
+                )
             else:
-                button.setStyleSheet("border: 2px solid transparent; background-color: none;")
-
-    def enterEvent(self, event):
-        self.setStyleSheet("background-color: #e0e0e0; border-radius: 3px;")
-        super().enterEvent(event)
-
-    def leaveEvent(self, event):
-        self.setStyleSheet("")
-        super().leaveEvent(event)
+                button.setProperty("active", False)
+                button.setStyleSheet("")

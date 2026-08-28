@@ -1,34 +1,16 @@
 """
 Модуль: blur_region_item.py
 Описание: Графический элемент зоны размытия (BlurRegionItem).
-          Представляет собой прямоугольник с разными визуальными состояниями:
-          drawing, active (с маркерами изменения размера) и inactive.
-          Используется контроллером редактирования изображения для
-          отображения и манипулирования областями размытия.
 """
 
 from PyQt5.QtCore import Qt, QRectF
 from PyQt5.QtGui import QPen, QColor, QBrush
 from PyQt5.QtWidgets import QGraphicsRectItem
 from .crop_handles import CropHandles
+from ..theme import theme_manager
 
 
 class BlurRegionItem(QGraphicsRectItem):
-    """
-    Прямоугольник зоны размытия.
-    Режимы:
-    - drawing: красная полупрозрачная заливка, пунктирная красная граница (без маркеров)
-    - active: без заливки, синяя пунктирная граница + 8 маркеров
-    - inactive: тонкая красная пунктирная рамка, полупрозрачная заливка (постоянное состояние)
-    """
-
-    DRAWING_PEN_COLOR = QColor(255, 0, 0)
-    DRAWING_BRUSH_COLOR = QColor(255, 0, 0, 60)
-    ACTIVE_PEN_COLOR = QColor(0, 120, 215)
-    ACTIVE_HANDLE_COLOR = QColor(0, 120, 215)
-    INACTIVE_PEN_COLOR = QColor(255, 0, 0)
-    INACTIVE_BRUSH_COLOR = QColor(255, 0, 0, 20)
-
     def __init__(self, rect: QRectF, view, mode: str = 'active'):
         super().__init__(rect)
         self.view = view
@@ -43,27 +25,27 @@ class BlurRegionItem(QGraphicsRectItem):
 
     def _apply_mode(self):
         if self.mode == 'drawing':
-            pen = QPen(self.DRAWING_PEN_COLOR, 2, Qt.DashLine)
+            pen = QPen(theme_manager.get_color('crop_rect'), 2, Qt.DashLine)
             pen.setCosmetic(True)
             self.setPen(pen)
-            self.setBrush(self.DRAWING_BRUSH_COLOR)
+            self.setBrush(QColor(255, 0, 0, 60))
             self._remove_handles()
         elif self.mode == 'active':
-            pen = QPen(self.ACTIVE_PEN_COLOR, 2, Qt.DashLine)
+            pen = QPen(theme_manager.get_color('crop_rect'), 2, Qt.DashLine)
             pen.setCosmetic(True)
             self.setPen(pen)
             self.setBrush(QBrush(Qt.NoBrush))
             self._create_handles()
         elif self.mode == 'inactive':
-            pen = QPen(self.INACTIVE_PEN_COLOR, 1, Qt.DashLine)
+            pen = QPen(theme_manager.get_color('crop_rect'), 1, Qt.DashLine)
             pen.setCosmetic(True)
             self.setPen(pen)
-            self.setBrush(self.INACTIVE_BRUSH_COLOR)
+            self.setBrush(QColor(255, 0, 0, 20))
             self._remove_handles()
 
     def _create_handles(self):
         self._remove_handles()
-        self.handles = CropHandles(self.view, fill_color=self.ACTIVE_HANDLE_COLOR)
+        self.handles = CropHandles(self.view, fill_color=theme_manager.get_color('crop_rect'))
         self.handles.create_handles(self.rect())
 
     def _remove_handles(self):
@@ -77,8 +59,6 @@ class BlurRegionItem(QGraphicsRectItem):
             self._apply_mode()
 
     def update_rect(self, rect: QRectF):
-        # ЭТАП 1, ШАГ 1.1: уведомляем сцену об изменении геометрии
-        # ДО фактического изменения. Необходимо для SmartViewportUpdate.
         self.prepareGeometryChange()
         self.setRect(rect)
         if self.handles:

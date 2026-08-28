@@ -1,9 +1,8 @@
 """
 Модуль: widgets/mode_widgets.py
 Описание: Плавающие тулбары выбора подрежимов инструментов.
-          Реализованы виджеты для прямоугольника (прямоугольник/квадрат/заливка),
-          эллипса (эллипс/круг/облако), стрелки (прямая/изогнутая/размерная),
-          линии (прямая/пунктирная/волнистая).
+          Реализованы виджеты для прямоугольника, эллипса, стрелки и линии.
+          Все стили задаются глобально через ThemeManager.
 """
 
 from PyQt5.QtCore import Qt, pyqtSignal
@@ -16,9 +15,6 @@ from .tool_icons import (create_shape_mode_icon, create_ellipse_mode_icon,
 class BaseModeWidget(QFrame):
     """Базовый класс для тулбаров выбора режима."""
     modeChanged = pyqtSignal(str)
-    BG_COLOR = "rgba(200,200,200,100)"
-    BORDER_RADIUS = 12
-    BORDER_COLOR = "rgba(80,80,80,180)"
     PADDING = 3
     BUTTON_SIZE = 28
 
@@ -26,9 +22,7 @@ class BaseModeWidget(QFrame):
         super().__init__(parent)
         self.setFrameShape(QFrame.StyledPanel)
         self.setAutoFillBackground(True)
-        self.setStyleSheet(
-            f"QFrame {{ background-color: {self.BG_COLOR}; border-radius: {self.BORDER_RADIUS}px; "
-            f"border: 2px solid {self.BORDER_COLOR}; padding: {self.PADDING}px; }}")
+        # Все стили задаются глобальным QSS (см. ThemeManager)
         self.layout = QHBoxLayout(self)
         self.layout.setContentsMargins(self.PADDING, self.PADDING, self.PADDING, self.PADDING)
         self.layout.setSpacing(4)
@@ -53,9 +47,6 @@ class BaseModeWidget(QFrame):
 
     def set_current_mode(self, mode):
         self._current_mode = mode
-        for button in self.button_group.buttons():
-            # Определяем, какой кнопке соответствует режим, можно хранить свойство
-            pass
 
     def get_mode(self):
         return self._current_mode
