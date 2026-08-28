@@ -18,7 +18,7 @@ from .history import (CropCommand, RotateCommand,
                       CropPastedImageCommand, RotatePastedImageCommand)
 from .image_processing import crop_pixmap, rotate_pixmap
 from .items.pasted_image_item import PastedImageItem
-from .items.blur_region_item import BlurRegionItem   # добавлено
+from .items.blur_region_item import BlurRegionItem
 
 
 class ImageEditController:
@@ -76,11 +76,7 @@ class ImageEditController:
     # Ограничение точки пределами целевого изображения
     # --------------------------------------------------------------
     def _clamp_to_target(self, scene_pos):
-        """Ограничивает точку пределами целевого изображения.
-
-        Если точка выходит за пределы картинки — возвращает ближайшую
-        допустимую точку на границе картинки.
-        """
+        """Ограничивает точку пределами целевого изображения."""
         if self.crop_target_item is None:
             return scene_pos
 
@@ -100,18 +96,14 @@ class ImageEditController:
             return
         self.view.blur_controller.disable_blur_mode()
 
-        # Не вычисляем выделение заново — view.start_crop_mode() уже установил
-        # self.crop_target_item до вызова этого метода.
         self.view.set_tool(None)
 
         self.crop_mode = True
         self.temp_crop_start = None
         self.active_handle = None
-        # Устанавливаем кастомный контрастный курсор из фабрики
         self.view.setCursor(CropCursorFactory.get_cursor())
         self.view.setBackgroundBrush(CROP_BG_COLOR)
 
-        # Fallback, если контроллер вызван напрямую (без view.start_crop_mode)
         if self.crop_target_item is None:
             self.crop_target_item = self.background_item
 
@@ -129,7 +121,6 @@ class ImageEditController:
         self.view.crop_mode_changed.emit(True)
         self.view._update_floating_widgets_visibility()
 
-        # Обновляем статусную строку ПОСЛЕ всех виджетов
         QTimer.singleShot(0, self._update_status_bar_for_crop_target)
 
     def cancel_crop_mode(self):
@@ -142,16 +133,13 @@ class ImageEditController:
         self.crop_rect = None
         self.temp_crop_start = None
         self.active_handle = None
-        # Возвращаем обычный курсор
         self.view.setCursor(Qt.CrossCursor)
         self.view.setBackgroundBrush(self.view.normal_background_color)
         self.view.crop_mode_changed.emit(False)
         self.view._update_floating_widgets_visibility()
         self.crop_target_item = None
 
-        # Восстанавливаем разрешение подложки в статусной строке
         self.view.update_resolution_from_background()
-        # Возвращаем статусную строку в обычное состояние
         self.status_bar_manager.reset_to_normal()
 
     def _update_status_bar_for_crop_target(self):
@@ -209,7 +197,6 @@ class ImageEditController:
                 if item in overlay_items or item in handle_items.values():
                     continue
                 if isinstance(item, BlurRegionItem):
-                    # Зоны размытия обрабатываются отдельно через blur_controller
                     continue
 
                 br = item.sceneBoundingRect()
@@ -217,9 +204,8 @@ class ImageEditController:
                     items_to_remove.append(item)
                 else:
                     items_to_shift.append(item)
-                    old_pos = item.pos()
-                    old_positions.append(old_pos)
-                    new_positions.append(old_pos - crop.topLeft())
+                    old_positions.append(item.pos())
+                    new_positions.append(item.pos() - crop.topLeft())
 
             old_pixmap = self.background_item.pixmap()
             new_pixmap = crop_pixmap(old_pixmap, crop)
@@ -230,7 +216,7 @@ class ImageEditController:
             command = CropCommand(
                 self.view.scene(), self.background_item,
                 old_pixmap, new_pixmap, items_to_remove,
-                controller=self, crop_rect=crop,
+                blur_controller=self.view.blur_controller, crop_rect=crop,
                 items_to_shift=items_to_shift,
                 old_positions=old_positions,
                 new_positions=new_positions
@@ -356,7 +342,7 @@ class ImageEditController:
         command = RotateCommand(
             self.view.scene(), self.background_item,
             old_pixmap, rotated_pixmap, items_to_remove,
-            controller=self
+            blur_controller=self.view.blur_controller
         )
         self.view.history.push(command)
 
@@ -433,45 +419,3 @@ class ImageEditController:
                 self.temp_crop_start = None
                 return True
         return False
-
-    # --------------------------------------------------------------
-    # Делегирование обработки зон размытия ВНЕ режима в blur_controller
-    # --------------------------------------------------------------
-    def handle_blur_region_press_outside(self, event):
-        return self.view.blur_controller.handle_blur_region_press_outside(event)
-
-    def handle_blur_region_move_outside(self, event):
-        return self.view.blur_controller.handle_blur_region_move_outside(event)
-
-    def handle_blur_region_release_outside(self, event):
-        return self.view.blur_controller.handle_blur_region_release_outside(event)
-
-    # --------------------------------------------------------------
-    # Делегаты для blur_controller — нужны для команд в history/__init__.py
-    # --------------------------------------------------------------
-    def _get_blur_state(self):
-        return self.view.blur_controller._get_blur_state()
-
-    def _restore_blur_state(self, state):
-        self.view.blur_controller._restore_blur_state(state)
-
-    def _apply_crop_to_blur_regions(self, crop_rect):
-        self.view.blur_controller._apply_crop_to_blur_regions(crop_rect)
-
-    def _clear_blur_regions(self):
-        self.view.blur_controller._clear_blur_regions()
-
-    def _add_blur_region_internal(self, rect):
-        self.view.blur_controller._add_blur_region_internal(rect)
-
-    def _remove_blur_region_at(self, index):
-        return self.view.blur_controller._remove_blur_region_at(index)
-
-    def _insert_blur_region_at(self, index, rect):
-        self.view.blur_controller._insert_blur_region_at(index, rect)
-
-    def _update_blur_region_rect(self, index, rect):
-        self.view.blur_controller._update_blur_region_rect(index, rect)
-
-    def _recompute_blurred_pixmap(self):
-        self.view.blur_controller._recompute_blurred_pixmap()
