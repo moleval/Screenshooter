@@ -18,9 +18,10 @@ from .constants import (
     CROP_OVERLAY_Z, CROP_RECT_Z, CROP_LABEL_Z,
     CROP_BG_COLOR, CROP_OVERLAY_COLOR, CROP_RECT_COLOR,
     CROP_LABEL_TEXT_COLOR, CROP_LABEL_BG_COLOR,
-    STATUS_STYLE_CROP, STATUS_STYLE_NORMAL,
+    STATUS_STYLE_NORMAL,
 )
 from .controllers.crop_cursor_factory import CropCursorFactory
+from .controllers.status_bar_manager import StatusBarManager
 from .history import (CropCommand, RotateCommand,
                       CropPastedImageCommand, RotatePastedImageCommand)
 from .image_processing import crop_pixmap, rotate_pixmap
@@ -49,6 +50,9 @@ class ImageEditController:
         self.active_handle = None
         self.crop_size_label = None
         self.crop_size_bg = None
+
+        # Менеджер статусной строки
+        self.status_bar_manager = StatusBarManager(self.view)
 
     # --------------------------------------------------------------
     # Установка фонового элемента и сброс
@@ -170,10 +174,8 @@ class ImageEditController:
 
         # Восстанавливаем разрешение подложки в статусной строке
         self.view.update_resolution_from_background()
-        # Принудительно обновляем статусную строку
-        if hasattr(self.view, 'status_label') and self.view.status_label is not None:
-            self.view.status_label.setStyleSheet(STATUS_STYLE_NORMAL)
-            self.view.status_label.repaint()
+        # Возвращаем статусную строку в обычное состояние
+        self.status_bar_manager.reset_to_normal()
 
     def _clear_crop_preview(self):
         if self.crop_rect_item is not None and not self._is_deleted(self.crop_rect_item):
@@ -198,47 +200,12 @@ class ImageEditController:
                     self.view.scene().removeItem(item)
         self.crop_overlay_items.clear()
 
-    def _get_background_resolution(self):
-        """Возвращает разрешение подложки в формате 'WxH'."""
-        bg = self.background_item
-        if bg is not None and not self._is_deleted(bg):
-            pixmap = bg.pixmap()
-            if not pixmap.isNull():
-                return f"{pixmap.width()}×{pixmap.height()}"
-        return "?"
-
     def _update_status_bar_for_crop_target(self):
         """Обновляет статусную строку при входе в режим обрезки.
 
-        Для вставленных изображений показываем: разрешение_подложки / разрешение_картинки.
-        Для подложки показываем только разрешение подложки.
+        Делегирует в StatusBarManager.
         """
-        if isinstance(self.crop_target_item, PastedImageItem):
-            bg_resolution = self._get_background_resolution()
-            if hasattr(self.crop_target_item, 'original_pixmap') and self.crop_target_item.original_pixmap is not None:
-                pixmap = self.crop_target_item.original_pixmap
-                img_resolution = f"{pixmap.width()}×{pixmap.height()}"
-            else:
-                img_resolution = "?"
-            text = f"{bg_resolution} / {img_resolution}"
-        else:
-            text = self._get_background_resolution()
-
-        if hasattr(self.view, 'status_label') and self.view.status_label is not None:
-            self.view.status_label.setText(text)
-            self.view.status_label.setVisible(True)
-            self.view.status_label.setStyleSheet(STATUS_STYLE_CROP)
-            self.view.layout_manager.update_status_label_position()
-            self.view.status_label.raise_()
-            self.view.status_label.update()
-            self.view.status_label.repaint()
-
-    def _force_repaint_status_label(self):
-        """Принудительно перерисовывает статусную строку."""
-        if hasattr(self.view, 'status_label') and self.view.status_label is not None:
-            self.view.status_label.update()
-            self.view.status_label.repaint()
-            self.view.viewport().update()
+        self.status_bar_manager.set_crop_status(self.crop_target_item)
 
     def _update_crop_overlay(self, rect):
         crop = rect.normalized()
@@ -312,16 +279,10 @@ class ImageEditController:
             crop_w = min(crop_w, full_w)
             crop_h = min(crop_h, full_h)
 
-            bg_resolution = self._get_background_resolution()
+            # Обновляем статусную строку через менеджер
+            bg_resolution = self.status_bar_manager.get_background_resolution()
             text = f"{bg_resolution} / {full_w}×{full_h}"
-            if hasattr(self.view, 'status_label') and self.view.status_label is not None:
-                self.view.status_label.setText(text)
-                self.view.status_label.setVisible(True)
-                self.view.status_label.setStyleSheet(STATUS_STYLE_CROP)
-                self.view.layout_manager.update_status_label_position()
-                self.view.status_label.raise_()
-                self.view.status_label.update()
-                self.view.status_label.repaint()
+            self.status_bar_manager.update_crop_status_text(text)
         else:
             crop_w = round(rect.width())
             crop_h = round(rect.height())
@@ -470,10 +431,8 @@ class ImageEditController:
 
             # Обновляем разрешение подложки после обрезки
             self.view.update_resolution_from_background()
-            # Принудительно обновляем статусную строку (БЕЗ скрытия)
-            if hasattr(self.view, 'status_label') and self.view.status_label is not None:
-                self.view.status_label.setStyleSheet(STATUS_STYLE_NORMAL)
-                self.view.status_label.repaint()
+            # Возвращаем статусную строку в обычное состояние
+            self.status_bar_manager.reset_to_normal()
 
         else:
             old_original = self.crop_target_item.original_pixmap
@@ -508,10 +467,8 @@ class ImageEditController:
 
             # Обновляем разрешение подложки после обрезки
             self.view.update_resolution_from_background()
-            # Принудительно обновляем статусную строку
-            if hasattr(self.view, 'status_label') and self.view.status_label is not None:
-                self.view.status_label.setStyleSheet(STATUS_STYLE_NORMAL)
-                self.view.status_label.repaint()
+            # Возвращаем статусную строку в обычное состояние
+            self.status_bar_manager.reset_to_normal()
 
     # --------------------------------------------------------------
     # Поворот
