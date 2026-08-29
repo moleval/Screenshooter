@@ -20,6 +20,8 @@ from ..theme import theme_manager
 
 
 class CropOverlayController:
+    """Управляет визуальными элементами режима обрезки."""
+
     def __init__(self, view, status_bar_manager):
         self.view = view
         self.status_bar_manager = status_bar_manager
@@ -34,9 +36,8 @@ class CropOverlayController:
         crop = rect.normalized()
         scene_rect = self.view.sceneRect()
 
-        overlay_color = theme_manager.get_color('crop_overlay')
-
         if not self.crop_overlay_items:
+            overlay_color = theme_manager.get_color('crop_overlay')
             for _ in range(4):
                 overlay = QGraphicsRectItem()
                 overlay.setPen(QPen(Qt.NoPen))
@@ -60,9 +61,8 @@ class CropOverlayController:
         self.crop_overlay_items[2].setRect(left)
         self.crop_overlay_items[3].setRect(right)
 
-        rect_color = theme_manager.get_color('crop_rect')
-
         if not self.crop_rect_item:
+            rect_color = theme_manager.get_color('crop_rect')
             self.crop_rect_item = QGraphicsRectItem()
             pen = QPen(rect_color, 2, Qt.DashLine)
             pen.setCosmetic(True)
@@ -149,18 +149,24 @@ class CropOverlayController:
             if disp_w > 0 and disp_h > 0 and orig_w > 0 and orig_h > 0:
                 scale_x = orig_w / disp_w
                 scale_y = orig_h / disp_h
-                crop_w = round(local_crop_display.width() * scale_x)
-                crop_h = round(local_crop_display.height() * scale_y)
+                crop_orig_rect = QRectF(
+                    round(local_crop_display.x() * scale_x),
+                    round(local_crop_display.y() * scale_y),
+                    round(local_crop_display.width() * scale_x),
+                    round(local_crop_display.height() * scale_y)
+                )
+                crop_w = crop_orig_rect.toRect().width()
+                crop_h = crop_orig_rect.toRect().height()
             else:
-                crop_w = round(rect.width())
-                crop_h = round(rect.height())
+                crop_w = rect.toRect().width()
+                crop_h = rect.toRect().height()
 
             bg_resolution = self.status_bar_manager.get_background_resolution()
             text = f"{bg_resolution} / {original.width()}×{original.height()}"
             self.status_bar_manager.update_crop_status_text(text)
         else:
-            crop_w = round(rect.width())
-            crop_h = round(rect.height())
+            crop_w = rect.toRect().width()
+            crop_h = rect.toRect().height()
 
         if crop_w > 0 and crop_h > 0:
             self._update_size_label(rect, f"{crop_w}×{crop_h}")

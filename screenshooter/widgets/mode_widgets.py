@@ -2,27 +2,30 @@
 Модуль: widgets/mode_widgets.py
 Описание: Плавающие тулбары выбора подрежимов инструментов.
           Реализованы виджеты для прямоугольника, эллипса, стрелки и линии.
-          Все стили задаются глобально через ThemeManager.
+          Все стили задаются локально и не зависят от глобальной темы.
 """
 
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import (QFrame, QHBoxLayout, QPushButton, QButtonGroup,
-                             QSizePolicy, QToolBar)
+                             QSizePolicy)
 from .tool_icons import (create_shape_mode_icon, create_ellipse_mode_icon,
                          create_arrow_mode_icon, create_line_mode_icon)
 
 
 class BaseModeWidget(QFrame):
-    """Базовый класс для тулбаров выбора режима."""
     modeChanged = pyqtSignal(str)
+    BG_COLOR = "rgba(200,200,200,100)"
+    BORDER_RADIUS = 12
+    BORDER_COLOR = "rgba(80,80,80,180)"
     PADDING = 3
     BUTTON_SIZE = 28
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setFrameShape(QFrame.StyledPanel)
-        self.setAutoFillBackground(True)
-        # Все стили задаются глобальным QSS (см. ThemeManager)
+        self.setStyleSheet(
+            f"QFrame {{ background-color: {self.BG_COLOR}; border-radius: {self.BORDER_RADIUS}px; "
+            f"border: 2px solid {self.BORDER_COLOR}; padding: {self.PADDING}px; }}")
         self.layout = QHBoxLayout(self)
         self.layout.setContentsMargins(self.PADDING, self.PADDING, self.PADDING, self.PADDING)
         self.layout.setSpacing(4)
@@ -36,6 +39,21 @@ class BaseModeWidget(QFrame):
         button.setIcon(icon)
         button.setCheckable(True)
         button.setToolTip(tooltip)
+        # Локальный стиль кнопки: прозрачный фон, рамка только при выделении
+        button.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: rgba(0, 0, 0, 20);
+            }
+            QPushButton:checked {
+                background-color: #b0d4f1;
+                border: 2px solid #005a9e;
+                border-radius: 4px;
+            }
+        """)
         button.clicked.connect(lambda: self._set_mode(mode))
         self.layout.addWidget(button)
         self.button_group.addButton(button)
@@ -46,7 +64,7 @@ class BaseModeWidget(QFrame):
         self.modeChanged.emit(mode)
 
     def set_current_mode(self, mode):
-        self._current_mode = mode
+        pass
 
     def get_mode(self):
         return self._current_mode

@@ -4,10 +4,14 @@
           Управляет внутренним буфером обмена (не системным).
           Сериализует выделенные элементы в словари и создаёт
           новые элементы при вставке со смещением.
+          При копировании во внутренний буфер также помещает
+          в системный буфер MIME-маркер, чтобы при вставке
+          можно было отличить наше копирование от внешнего.
 """
 
-from PyQt5.QtCore import Qt, QPointF, QRectF, QByteArray, QBuffer, QIODevice
+from PyQt5.QtCore import Qt, QPointF, QRectF, QByteArray, QBuffer, QIODevice, QMimeData
 from PyQt5.QtGui import QPen, QColor, QFont, QPixmap
+from PyQt5.QtWidgets import QApplication
 
 from ..items import (RectangleItem, EllipseItem, FilledRectItem, CloudItem,
                      LineItem, WavyLineItem, ArrowItem, CurvedArrowItem,
@@ -15,6 +19,9 @@ from ..items import (RectangleItem, EllipseItem, FilledRectItem, CloudItem,
 from ..items.pasted_image_item import PastedImageItem
 from ..items.blur_region_item import BlurRegionItem
 from ..history import PasteItemsCommand
+
+# Кастомный MIME-тип для маркера внутреннего копирования
+INTERNAL_MIME_TYPE = "application/x-screenshooter-internal"
 
 
 class ClipboardController:
@@ -53,6 +60,11 @@ class ClipboardController:
                 self._clipboard.append(data)
 
         if self._clipboard:
+            # Помечаем системный буфер нашим маркером
+            mime = QMimeData()
+            mime.setData(INTERNAL_MIME_TYPE, b"1")
+            QApplication.clipboard().setMimeData(mime)
+
             self.view.show_status_message(
                 f"Скопировано элементов: {len(self._clipboard)}", 3000)
             return True
@@ -72,7 +84,7 @@ class ClipboardController:
 
         self.view.scene().clearSelection()
         new_items = []
-        self._paste_count += 1  # Увеличиваем счётчик вставок
+        self._paste_count += 1
         offset = QPointF(self.PASTE_OFFSET * self._paste_count,
                          self.PASTE_OFFSET * self._paste_count)
         blur_added = False

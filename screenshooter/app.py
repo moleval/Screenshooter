@@ -46,8 +46,8 @@ class ScreenshotApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Скриншотер с редактором")
-        self.setGeometry(100, 100, 1000, 750)
-        self.setMinimumSize(950, 650)
+        self.setGeometry(100, 100, 1030, 750)
+        self.setMinimumSize(1030, 650)
 
         # Настройки приложения
         self.settings = AppSettings()
@@ -61,6 +61,7 @@ class ScreenshotApp(QMainWindow):
 
         # Флаг для различения закрытия и сворачивания
         self._force_quit = False
+        self._saved_window_state = None
 
         self._printscreen_hook = None
         self._alt_printscreen_hotkey = None
@@ -335,8 +336,8 @@ class ScreenshotApp(QMainWindow):
     # Интеграция с системным треем
     # --------------------------------------------------------------
     def changeEvent(self, event):
-        """Обрабатывает сворачивание окна в трей."""
         if event.type() == QEvent.WindowStateChange and self.isMinimized():
+            self._saved_window_state = self.windowState()
             QTimer.singleShot(0, self.hide)
             self.tray_manager.show_message(
                 "Скриншотер",
@@ -344,14 +345,20 @@ class ScreenshotApp(QMainWindow):
             )
         super().changeEvent(event)
 
+    def show_from_tray(self):
+        if self._saved_window_state and (self._saved_window_state & Qt.WindowMaximized):
+            self.showMaximized()
+        else:
+            self.showNormal()
+        self.raise_()
+        self.activateWindow()
+
     def closeEvent(self, event):
-        """Завершает приложение при закрытии окна (крестик)."""
         self.settings.save()
         self._remove_keyboard_hooks()
         event.accept()
 
     def quit_app(self):
-        """Полностью завершает приложение из трея или меню."""
         self._force_quit = True
         self.settings.save()
         self._remove_keyboard_hooks()
@@ -361,14 +368,13 @@ class ScreenshotApp(QMainWindow):
     # Применение темы
     # --------------------------------------------------------------
     def apply_theme(self, theme_key: str):
-        """Применяет выбранную тему оформления."""
         theme_manager.set_theme(theme_key)
         theme_manager.apply(QApplication.instance())
         self.view.update_theme_colors()
         self.settings.set_theme(theme_key)
 
-        # Сбрасываем кэш курсора обрезки, чтобы он пересоздался с новыми цветами
-        from .controllers.crop_cursor_factory import CropCursorFactory
+        self.view.image_editor.status_bar_manager.reset_to_normal()
+
         CropCursorFactory.reset()
 
         theme_names = {"light": "Светлая", "dark": "Тёмная", "system": "Системная"}
@@ -393,6 +399,7 @@ class ScreenshotApp(QMainWindow):
         clipboard = QApplication.clipboard()
         mime = clipboard.mimeData()
 
+        # Изображение
         if mime.hasImage():
             image = clipboard.image()
             if not image.isNull():
@@ -404,6 +411,7 @@ class ScreenshotApp(QMainWindow):
                         self.view.add_pasted_image(pixmap)
                     return
 
+        # URLs
         if mime.hasUrls():
             for url in mime.urls():
                 local_path = url.toLocalFile()
@@ -415,6 +423,21 @@ class ScreenshotApp(QMainWindow):
                         else:
                             self.view.add_pasted_image(pixmap)
                         return
+
+        # Текст (путь к файлу)
+        if mime.hasText():
+            text = mime.text().strip()
+            if text.startswith('file:///'):
+                text = text[8:]
+            text = os.path.normpath(text)
+            if os.path.isfile(text):
+                pixmap = QPixmap(text)
+                if not pixmap.isNull():
+                    if self.view.background_item is None or sip.isdeleted(self.view.background_item):
+                        self.view.set_background_from_pixmap(pixmap)
+                    else:
+                        self.view.add_pasted_image(pixmap)
+                    return
 
         self.view.show_status_message("Не удалось вставить изображение из буфера.", 5000)
 
@@ -437,7 +460,11 @@ class ScreenshotApp(QMainWindow):
         yes_btn = msg_box.addButton("Да", QMessageBox.YesRole)
         no_btn = msg_box.addButton("Нет", QMessageBox.NoRole)
 
-        msg_box.setDefaultButton(no_btn)
+        yes_btn.setMinimumSize(60, 24)
+        no_btn.setMinimumSize(60, 24)
+
+        msg_box.setDefaultButton(yes_btn)
+
         msg_box.exec_()
 
         if msg_box.clickedButton() == yes_btn:
@@ -526,10 +553,28 @@ class ScreenshotApp(QMainWindow):
             return
         if self.view.active_text_item and self.view.active_text_item._editable:
             return
+
+        clipboard = QApplication.clipboard()
+        mime = clipboard.mimeData()
+
+        # Проверяем маркер внутреннего копирования
+        if mime.hasFormat("application/x-screenshooter-internal"):
+            if self.view.clipboard_controller.has_clipboard:
+                self.view.clipboard_controller.paste()
+            else:
+                self.view.show_status_message("Буфер обмена пуст", 3000)
+            return
+
+        # Если маркера нет — работаем с системным буфером
+        if mime.hasImage() or mime.hasUrls() or mime.hasText():
+            self.insert_image_from_clipboard()
+            return
+
+        # Если системный буфер пуст, пробуем внутренний
         if self.view.clipboard_controller.has_clipboard:
             self.view.clipboard_controller.paste()
         else:
-            self.insert_image_from_clipboard()
+            self.view.show_status_message("Буфер обмена пуст", 3000)
 
     def undo_action(self):
         self.view.undo()

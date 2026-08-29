@@ -188,9 +188,10 @@ class ManipulationController:
             view.viewport().setCursor(Qt.SizeAllCursor)
             return
 
-        # 7. Инструменты рисования
+        # 7. Инструменты рисования — используем контрастный курсор
         if view.current_tool in ('rect', 'ellipse', 'arrow', 'line', 'text'):
-            view.viewport().setCursor(Qt.CrossCursor)
+            from ..controllers.crop_cursor_factory import CropCursorFactory
+            view.viewport().setCursor(CropCursorFactory.get_cursor())
         else:
             view.viewport().setCursor(Qt.ArrowCursor)
 

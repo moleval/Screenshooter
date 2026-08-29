@@ -1,9 +1,6 @@
 """
 Модуль: widgets/thickness.py
 Описание: Виджеты управления толщиной линии.
-          Содержит ThicknessSlider с поддержкой правого клика/двойного клика
-          для ввода произвольного значения, и ThicknessWidget с пресетами,
-          слайдером и полем ввода.
 """
 
 from PyQt5.QtCore import Qt, pyqtSignal
@@ -66,7 +63,7 @@ class ThicknessWidget(QWidget):
         for value in presets:
             button = QPushButton(f"x{value}")
             button.setFixedSize(36, 32)
-            button.setFont(QFont("Arial", 11))
+            button.setFont(QFont("Arial", 9))  # уменьшен шрифт
             button.setCheckable(True)
             button.clicked.connect(lambda _, v=value: self._set_value(v))
             layout.addWidget(button)
@@ -139,11 +136,6 @@ class ThicknessWidget(QWidget):
         presets = [1, 2, 5, 10, 20]
         for button, preset in zip(self.preset_buttons, presets):
             if value == preset:
-                # Используем глобальный стиль с подсветкой выбранного
-                button.setProperty("active", True)
-                button.setStyleSheet(
-                    "QPushButton[active=\"true\"] { border: 2px solid #005a9e; }"
-                )
+                button.setChecked(True)
             else:
-                button.setProperty("active", False)
-                button.setStyleSheet("")
+                button.setChecked(False)

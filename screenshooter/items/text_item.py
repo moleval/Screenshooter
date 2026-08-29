@@ -2,23 +2,16 @@
 Модуль: items/text_item.py
 Описание: Текстовые элементы.
           TextItem — обычный текст с возможностью редактирования и фоновой подложкой.
-          DimensionTextItem — текст размерной линии (устаревший, не используется в новой логике,
-                               оставлен для совместимости).
+          DimensionTextItem — текст размерной линии (устаревший).
 """
 
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtCore import Qt, QTimer, QRectF
 from PyQt5.QtGui import QPainter, QPen, QColor, QPainterPath
 from PyQt5.QtWidgets import QGraphicsTextItem, QGraphicsItem
 from ..constants import HIT_AREA_PADDING
 
 
 class TextItem(QGraphicsTextItem):
-    """
-    Текстовый элемент с возможностью редактирования.
-    Поддерживает фон (белый/чёрный/прозрачный).
-    При пустом тексте и потере фокуса удаляется автоматически.
-    """
-
     PADDING_LEFT, PADDING_TOP, PADDING_RIGHT, PADDING_BOTTOM = -16, 0, 16, 0
 
     def __init__(self, view, bg=None, *args, **kwargs):
@@ -32,10 +25,38 @@ class TextItem(QGraphicsTextItem):
         self.setFlags(QGraphicsTextItem.ItemIsMovable | QGraphicsTextItem.ItemIsSelectable)
         self.setTextInteractionFlags(Qt.NoTextInteraction)
 
+    def boundingRect(self):
+        rect = super().boundingRect()
+        return rect.adjusted(self.PADDING_LEFT, self.PADDING_TOP,
+                             self.PADDING_RIGHT, self.PADDING_BOTTOM)
+
+    def paint(self, painter, option, widget):
+        if self.bg_color is not None:
+            rect = self.boundingRect().adjusted(
+                self.PADDING_LEFT, self.PADDING_TOP, self.PADDING_RIGHT, self.PADDING_BOTTOM
+            )
+            painter.save()
+            painter.setBrush(self.bg_color)
+            painter.setPen(Qt.NoPen)
+            painter.drawRoundedRect(rect, 8, 8)
+            painter.restore()
+        super().paint(painter, option, widget)
+
+    def setPlainText(self, text):
+        self.prepareGeometryChange()
+        super().setPlainText(text)
+        self.update()
+
+    def setFont(self, font):
+        self.prepareGeometryChange()
+        super().setFont(font)
+        self.update()
+
+    def setDefaultTextColor(self, color):
+        super().setDefaultTextColor(color)
+        self.update()
+
     def setEditable(self, editable):
-        """
-        Включает/выключает режим редактирования текста.
-        """
         if editable == self._editable:
             return
         self._editable = editable
@@ -53,12 +74,10 @@ class TextItem(QGraphicsTextItem):
         super().mousePressEvent(event)
 
     def contextMenuEvent(self, event):
-        # Отключаем контекстное меню для простоты
         event.accept()
         return
 
     def keyPressEvent(self, event):
-        # Ctrl+Enter завершает редактирование
         if event.key() in (Qt.Key_Enter, Qt.Key_Return):
             if event.modifiers() & Qt.ControlModifier:
                 self.clearFocus()
@@ -69,16 +88,10 @@ class TextItem(QGraphicsTextItem):
         super().keyPressEvent(event)
 
     def focusOutEvent(self, event):
-        """
-        При потере фокуса:
-        - Если текст пустой — удаляем элемент.
-        - Если не пустой — завершаем редактирование и оставляем выделенным.
-        """
         cursor = self.textCursor()
         cursor.clearSelection()
         self.setTextCursor(cursor)
 
-        # Проверка на пустой текст
         if self.toPlainText().strip() == "":
             if not self._deleting:
                 self._deleting = True
@@ -90,32 +103,13 @@ class TextItem(QGraphicsTextItem):
         super().focusOutEvent(event)
 
     def _delete_self(self):
-        """Удаляет элемент со сцены и уведомляет view."""
         if self.scene():
             self.scene().removeItem(self)
         if self.view:
             self.view._remove_empty_text(self)
         self._deleting = False
 
-    def paint(self, painter, option, widget):
-        """
-        Отрисовывает фон (если задан) и сам текст.
-        """
-        if self.bg_color is not None:
-            rect = self.boundingRect().adjusted(
-                self.PADDING_LEFT, self.PADDING_TOP, self.PADDING_RIGHT, self.PADDING_BOTTOM
-            )
-            painter.save()
-            painter.setBrush(self.bg_color)
-            painter.setPen(Qt.NoPen)
-            painter.drawRoundedRect(rect, 8, 8)
-            painter.restore()
-        super().paint(painter, option, widget)
-
     def shape(self):
-        """
-        Расширяет область захвата для удобства выделения.
-        """
         path = QPainterPath()
         path.addRect(self.boundingRect().adjusted(
             -HIT_AREA_PADDING, -HIT_AREA_PADDING, HIT_AREA_PADDING, HIT_AREA_PADDING
@@ -124,10 +118,6 @@ class TextItem(QGraphicsTextItem):
 
 
 class DimensionTextItem(QGraphicsTextItem):
-    """
-    Устаревший класс для текста размерной линии.
-    Оставлен для обратной совместимости, но не используется в текущей логике.
-    """
     def __init__(self, parent_item, text, *args, **kwargs):
         super().__init__(text, *args, **kwargs)
         self.parent_dimension = parent_item

@@ -44,7 +44,7 @@ class ThemeManager:
         'status_crop_bg': QColor(0, 0, 0, 180),
         'status_crop_text': QColor(255, 255, 255),
 
-        'float_bg': QColor(200, 200, 200, 100),
+        'float_bg': QColor(255, 255, 255, 200),
         'float_border': QColor(80, 80, 80, 180),
 
         'text_bg_white': QColor(255, 255, 255, 200),
@@ -56,16 +56,16 @@ class ThemeManager:
     COLORS_DARK = {
         'window_bg': QColor(83, 83, 83),
         'panel_bg': QColor(83, 83, 83),
-        'text': QColor(220, 220, 220),
+        'text': QColor(255, 255, 255),
         'text_light': QColor(255, 255, 255),
-        'border': QColor(80, 80, 80),
+        'border': QColor(140, 140, 140),
         'selection_bg': QColor(0, 90, 158),
         'selection_border': QColor(176, 212, 241),
 
         'btn_bg': QColor(83, 83, 83),
         'btn_hover': QColor(100, 100, 100),
         'btn_pressed': QColor(120, 120, 120),
-        'btn_text': QColor(220, 220, 220),
+        'btn_text': QColor(255, 255, 255),
         'btn_green': QColor(76, 175, 80),
         'btn_red': QColor(244, 67, 54),
 
@@ -76,16 +76,16 @@ class ThemeManager:
         'crop_rect': QColor(0, 150, 255),
         'crop_label_text': QColor(220, 220, 220),
         'crop_label_bg': QColor(0, 0, 0, 180),
-        'crop_cursor_outline': QColor(0, 0, 0),
-        'crop_cursor_line': QColor(255, 255, 255),
+        'crop_cursor_outline': QColor(255, 255, 255),
+        'crop_cursor_line': QColor(0, 0, 0),
 
         'status_normal_bg': QColor(60, 60, 60, 200),
         'status_normal_text': QColor(220, 220, 220),
         'status_crop_bg': QColor(0, 0, 0, 180),
         'status_crop_text': QColor(255, 255, 255),
 
-        'float_bg': QColor(80, 80, 80, 160),
-        'float_border': QColor(150, 150, 150, 180),
+        'float_bg': QColor(240, 240, 240),
+        'float_border': QColor(80, 80, 80),
 
         'text_bg_white': QColor(255, 255, 255, 200),
         'text_bg_black': QColor(0, 0, 0, 200),
@@ -123,13 +123,10 @@ class ThemeManager:
     def get_qss(self) -> str:
         c = {k: self.get_color(k).name() for k in self.COLORS_LIGHT.keys()}
 
-        # Отдельно получаем QColor для цветов с альфой
-        float_bg = self.get_color('float_bg')
-        float_border = self.get_color('float_border')
-        status_normal_bg = self.get_color('status_normal_bg')
-        status_normal_text = self.get_color('status_normal_text')
         selection_bg = self.get_color('selection_bg')
         selection_border = self.get_color('selection_border')
+        text_bg_white = self.get_color('text_bg_white')
+        text_bg_black = self.get_color('text_bg_black')
 
         return f"""
         QMainWindow {{
@@ -150,6 +147,9 @@ class ThemeManager:
             border: none;
             color: {c['text']};
         }}
+        QToolButton:hover {{
+            background-color: rgba(0, 0, 0, 20);
+        }}
         QToolButton:checked {{
             background-color: {selection_bg.name()};
             border: 2px solid {selection_border.name()};
@@ -167,6 +167,10 @@ class ThemeManager:
         }}
         QPushButton:pressed {{
             background-color: {c['btn_pressed']};
+        }}
+        QPushButton:checked {{
+            background-color: {selection_bg.name()};
+            border: 2px solid {selection_border.name()};
         }}
         QPushButton#applyCropBtn {{
             background-color: {c['btn_green']};
@@ -190,6 +194,32 @@ class ThemeManager:
         QPushButton#cancelCropBtn:pressed {{
             background-color: #b71c1c;
         }}
+        QPushButton#bgWhiteBtn {{
+            background-color: rgba({text_bg_white.red()}, {text_bg_white.green()}, {text_bg_white.blue()}, {text_bg_white.alpha()});
+            border: 1px solid gray;
+            border-radius: 8px;
+        }}
+        QPushButton#bgWhiteBtn:checked {{
+            border: 2px solid {selection_border.name()};
+        }}
+        QPushButton#bgBlackBtn {{
+            background-color: rgba({text_bg_black.red()}, {text_bg_black.green()}, {text_bg_black.blue()}, {text_bg_black.alpha()});
+            border: 1px solid gray;
+            border-radius: 8px;
+        }}
+        QPushButton#bgBlackBtn:checked {{
+            border: 2px solid {selection_border.name()};
+        }}
+        QPushButton#bgNoneBtn {{
+            background-color: transparent;
+            border: 1px solid gray;
+            border-radius: 8px;
+            font-size: 18px;
+            color: {c['text']};
+        }}
+        QPushButton#bgNoneBtn:checked {{
+            border: 2px solid {selection_border.name()};
+        }}
         QLineEdit {{
             background-color: {c['btn_bg']};
             color: {c['text']};
@@ -208,27 +238,15 @@ class ThemeManager:
             margin: -5px 0;
             border-radius: 7px;
         }}
-        QFrame[frameShape="5"] {{
-            background-color: rgba({float_bg.red()}, {float_bg.green()}, {float_bg.blue()}, {float_bg.alpha()});
-            border-radius: 12px;
-            border: 2px solid rgba({float_border.red()}, {float_border.green()}, {float_border.blue()}, {float_border.alpha()});
-            padding: 2px;
-        }}
-        QLabel#statusLabel {{
-            background-color: rgba({status_normal_bg.red()}, {status_normal_bg.green()}, {status_normal_bg.blue()}, {status_normal_bg.alpha()});
-            color: {status_normal_text.name()};
-            border-radius: 6px;
-            padding: 4px 8px;
+        QGraphicsView {{
+            border: none;
+            border-radius: 0;
         }}
         QToolTip {{
             background-color: {c['panel_bg']};
             color: {c['text']};
             border: 1px solid {c['border']};
             padding: 2px;
-        }}
-        QWidget#zoomWidget {{
-            background-color: rgba({float_bg.red()}, {float_bg.green()}, {float_bg.blue()}, {float_bg.alpha()});
-            border-radius: 6px;
         }}
         """
 

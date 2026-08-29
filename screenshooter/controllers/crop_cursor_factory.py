@@ -22,7 +22,6 @@ class CropCursorFactory:
 
     @classmethod
     def get_cursor(cls):
-        """Возвращает курсор-перекрестие для режима обрезки."""
         if cls._cursor is not None:
             return cls._cursor
 
@@ -54,5 +53,4 @@ class CropCursorFactory:
 
     @classmethod
     def reset(cls):
-        """Сбрасывает кэш курсора, чтобы он пересоздался с новыми цветами."""
         cls._cursor = None

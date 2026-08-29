@@ -98,10 +98,6 @@ class EditorView(QGraphicsView):
         self.status_label = QLabel(self)
         self.status_label.setObjectName("statusLabel")
         self.status_label.setAttribute(Qt.WA_TranslucentBackground)
-        self.status_label.setStyleSheet(
-            "background-color: rgba(255,255,255,180); color: #333; "
-            "border-radius: 6px; padding: 4px 8px;"
-        )
         self.status_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self.status_label.setWordWrap(False)
         self.status_label.setVisible(False)
@@ -126,7 +122,6 @@ class EditorView(QGraphicsView):
                   self.info_widget, self.status_label):
             w.setCursor(Qt.ArrowCursor)
 
-        # ЭТАП 3: батчинг selectionChanged через таймер
         self.scene().selectionChanged.connect(self._schedule_selection_update)
 
         self._selection_update_timer = QTimer(self)
@@ -134,12 +129,19 @@ class EditorView(QGraphicsView):
         self._selection_update_timer.setInterval(0)
         self._selection_update_timer.timeout.connect(self._do_selection_update)
 
-        # Обработка смены режима обрезки (стиль статусной строки)
         self.crop_mode_changed.connect(self._on_crop_mode_changed)
 
     # ==============================================================
-    # ЭТАП 3: батчинг изменений выделения
+    # Вспомогательные
     # ==============================================================
+    def _is_point_inside_background(self, scene_pos):
+        """Проверяет, попадает ли точка в пределы подложки."""
+        if self.image_editor.background_item is None:
+            return False
+        bg_rect = self.image_editor.background_item.mapRectToScene(
+            QRectF(self.image_editor.background_item.pixmap().rect()))
+        return bg_rect.contains(scene_pos)
+
     def _schedule_selection_update(self):
         if not self._selection_update_timer.isActive():
             self._selection_update_timer.start()
@@ -153,22 +155,13 @@ class EditorView(QGraphicsView):
         except RuntimeError:
             pass
 
-    # ==============================================================
-    # Стиль статусной строки для режима обрезки
-    # ==============================================================
     def _on_crop_mode_changed(self, active):
-        """Обработчик смены режима обрезки."""
         if active:
             self._enable_crop_status_style()
         else:
             self._disable_crop_status_style()
 
     def _enable_crop_status_style(self):
-        """Включает стиль статусной строки для режима обрезки.
-
-        Добавляет полупрозрачный чёрный фон и увеличивает шрифт,
-        чтобы текст был читаем на затемнённом экране.
-        """
         if hasattr(self, 'status_label') and self.status_label is not None:
             self.status_label.setStyleSheet(
                 "QLabel {"
@@ -183,20 +176,10 @@ class EditorView(QGraphicsView):
             self.status_label.setVisible(True)
 
     def _disable_crop_status_style(self):
-        """Выключает стиль статусной строки для режима обрезки.
-
-        Возвращает обычный стиль и скрывает label.
-        """
         if hasattr(self, 'status_label') and self.status_label is not None:
-            self.status_label.setStyleSheet(
-                "background-color: rgba(255,255,255,180); color: #333; "
-                "border-radius: 6px; padding: 4px 8px;"
-            )
+            self.status_label.setStyleSheet("")
             self.status_label.setVisible(False)
 
-    # ==============================================================
-    # Вспомогательные
-    # ==============================================================
     def _is_background_item(self, item):
         if item is None:
             return False
@@ -290,17 +273,11 @@ class EditorView(QGraphicsView):
         self.image_editor.set_background_item(item)
 
     def set_background_from_pixmap(self, pixmap):
-        """Устанавливает pixmap как подложку.
-
-        Используется при загрузке первого изображения (из файла или буфера).
-        """
-        # Очищаем сцену
         self.clear_pasted_images()
         self.scene().clear()
         self.active_text_item = None
         self.history.clear()
 
-        # Создаём элемент подложки
         item = QGraphicsPixmapItem(pixmap)
         item.setTransformationMode(Qt.SmoothTransformation)
         item.setAcceptedMouseButtons(Qt.NoButton)
@@ -309,51 +286,35 @@ class EditorView(QGraphicsView):
         self.scene().addItem(item)
         self.set_background_item(item)
 
-        # Устанавливаем размер сцены и подгоняем вид
         self.setSceneRect(QRectF(pixmap.rect()))
         self.auto_fit = True
         self.fitInView(item, Qt.KeepAspectRatio)
         scale = self.transform().m11() * 100
         self.zoom_widget.set_zoom(scale)
 
-        # Обновляем разрешение
         self.set_resolution_text(f"{pixmap.width()}×{pixmap.height()}")
 
-        # Сбрасываем режимы
         self.image_editor.crop_mode = False
         self.blur_controller.blur_mode = False
 
-        # Включаем кнопки тулбара
         self.crop_mode_changed.emit(False)
         self.blur_mode_changed.emit(False)
         self._update_floating_widgets_visibility()
 
-        # Сигнал об изменении подложки (для активации тулбара в app.py)
         self.background_changed.emit()
 
     def clear_scene(self):
-        """Очищает сцену: подложку, вставленные изображения, аннотации, историю."""
-        # Очищаем вставленные изображения
         self.clear_pasted_images()
-
-        # Очищаем сцену (scene() — это метод, вызываем со скобками)
         self.scene().clear()
-
-        # Сбрасываем состояния
         self.active_text_item = None
         self.history.clear()
 
-        # Сбрасываем режимы
         self.image_editor.reset_state()
         self.blur_controller.reset_state()
 
-        # Очищаем статусную строку
         self.set_resolution_text("")
-
-        # Отключаем кнопки тулбара
         self._update_floating_widgets_visibility()
 
-        # Сигнал об изменении подложки (для деактивации тулбара в app.py)
         self.background_changed.emit()
 
     def start_crop_mode(self):
@@ -381,14 +342,44 @@ class EditorView(QGraphicsView):
         self.image_editor.rotate_image(angle)
 
     # ==============================================================
-    # Вставленные изображения — делегирование в PastedImageController
+    # Вставленные изображения
     # ==============================================================
     @property
     def pasted_images(self):
         return self.pasted_image_controller.pasted_images
 
-    def add_pasted_image(self, pixmap):
-        return self.pasted_image_controller.add_image(pixmap)
+    def add_pasted_image(self, pixmap, scene_pos=None):
+        """Добавляет изображение на сцену. Если scene_pos не задан,
+        размещает в центре viewport."""
+        if self.background_item is None or sip.isdeleted(self.background_item):
+            # Если подложки нет, делаем изображение подложкой
+            self.set_background_from_pixmap(pixmap)
+            return None
+
+        item = PastedImageItem(pixmap, self)
+        self.scene().addItem(item)
+        self.pasted_images.append(item)
+
+        # Определяем позицию вставки
+        if scene_pos is None:
+            center = self.mapToScene(self.viewport().rect().center())
+            scene_pos = center - QPointF(pixmap.width() / 2, pixmap.height() / 2)
+
+        item.setPos(scene_pos)
+
+        # Автоматическое масштабирование, как раньше
+        viewport_rect = self.viewport().rect()
+        max_w = viewport_rect.width() * 0.8
+        max_h = viewport_rect.height() * 0.8
+        if pixmap.width() > max_w or pixmap.height() > max_h:
+            scale = min(max_w / pixmap.width(), max_h / pixmap.height())
+            item.set_image_scale(scale)
+
+        self.history.push(AddPastedImageCommand(self.scene(), item, self))
+        self.scene().clearSelection()
+        item.setSelected(True)
+        item.show_handles()
+        return item
 
     def remove_pasted_image(self, item):
         self.pasted_image_controller.remove_image(item)
@@ -460,17 +451,19 @@ class EditorView(QGraphicsView):
                     path = url.toLocalFile()
                     pixmap = QPixmap(path)
                     if not pixmap.isNull():
-                        # Если подложки нет — картинка становится подложкой
+                        # Позиция вставки — точка под курсором при сбросе
+                        scene_pos = self.mapToScene(e.pos())
+                        scene_pos -= QPointF(pixmap.width() / 2, pixmap.height() / 2)
                         if self.background_item is None or sip.isdeleted(self.background_item):
                             self.set_background_from_pixmap(pixmap)
                         else:
-                            self.add_pasted_image(pixmap)
+                            self.add_pasted_image(pixmap, scene_pos)
             e.acceptProposedAction()
         else:
             e.ignore()
 
     # ==============================================================
-    # Статусный виджет — делегирование в FloatingWidgetManager
+    # Статусный виджет
     # ==============================================================
     def set_resolution_text(self, text):
         self.widget_manager.set_resolution_text(text)
@@ -479,10 +472,9 @@ class EditorView(QGraphicsView):
         self.widget_manager.show_status_message(message, duration)
 
     # ==============================================================
-    # Мышь — делегирование в контроллеры
+    # Мышь
     # ==============================================================
     def mousePressEvent(self, e):
-        # 1. Режим Размыть
         if self.blur_controller.blur_mode:
             sp = self.mapToScene(e.pos())
             item = self.scene().itemAt(sp, self.transform())
@@ -529,18 +521,15 @@ class EditorView(QGraphicsView):
                 e.accept()
                 return
 
-        # 2. Режим Обрезки
         elif self.image_editor.crop_mode:
             if self.image_editor.handle_mouse_press(e):
                 e.accept()
                 return
 
-        # 3. Манипуляции
         if self.manipulation_controller.handle_mouse_press(e):
             e.accept()
             return
 
-        # 4. Текст
         if self.current_tool == 'text':
             sp = self.mapToScene(e.pos())
             item = self.scene().itemAt(sp, self.transform())
@@ -558,6 +547,10 @@ class EditorView(QGraphicsView):
                 if self.active_text_item and self.active_text_item._editable:
                     self._deactivate_active_text()
                 if li is None or self._is_background_item(li):
+                    # Проверяем, что точка внутри подложки
+                    if not self._is_point_inside_background(sp):
+                        e.accept()
+                        return
                     if self._first_click_after_activation:
                         ti = TextItem(self, bg_color=self.current_text_bg)
                         ti.setDefaultTextColor(self.current_pen_color)
@@ -574,10 +567,13 @@ class EditorView(QGraphicsView):
                         e.accept()
                         return
 
-        # 5. Рисование инструментами
         if self.current_tool in ('rect', 'ellipse', 'arrow', 'line'):
             if self._tool is not None:
                 sp = self.mapToScene(e.pos())
+                # Ограничиваем точку подложкой
+                if not self._is_point_inside_background(sp):
+                    e.accept()
+                    return
                 self.start_point = sp
                 self.temp_item = self._tool.start_draw(sp)
                 if self.temp_item:
@@ -613,6 +609,14 @@ class EditorView(QGraphicsView):
 
         if self.temp_item and self._tool is not None and self.current_tool not in ('text',):
             sp = self.mapToScene(e.pos())
+            # Ограничиваем точку пределами подложки
+            if self.image_editor.background_item is not None:
+                bg_rect = self.image_editor.background_item.mapRectToScene(
+                    QRectF(self.image_editor.background_item.pixmap().rect()))
+                if not bg_rect.contains(sp):
+                    # Прижимаем точку к ближайшей границе
+                    sp.setX(max(bg_rect.left(), min(bg_rect.right(), sp.x())))
+                    sp.setY(max(bg_rect.top(), min(bg_rect.bottom(), sp.y())))
             self._tool.update_draw(self.temp_item, sp, e.modifiers())
             e.accept()
             return
@@ -674,6 +678,10 @@ class EditorView(QGraphicsView):
             return
 
         if self.current_tool == 'text' and (li is None or self._is_background_item(li)):
+            # Проверяем, что точка внутри подложки
+            if not self._is_point_inside_background(sp):
+                e.accept()
+                return
             self._deactivate_active_text()
             ti = TextItem(self, bg_color=self.current_text_bg)
             ti.setDefaultTextColor(self.current_pen_color)
@@ -693,7 +701,7 @@ class EditorView(QGraphicsView):
         super().mouseDoubleClickEvent(e)
 
     # ==============================================================
-    # Клавиатура — делегирование в KeyboardManager
+    # Клавиатура
     # ==============================================================
     def keyPressEvent(self, e):
         if self.keyboard_manager.handle_key_press(e):
@@ -763,7 +771,7 @@ class EditorView(QGraphicsView):
         self.manipulation_controller._restore_tool_if_needed()
 
     # ==============================================================
-    # Обёртки для совместимости с app.py и text_item.py
+    # Обёртки для совместимости
     # ==============================================================
     def _update_floating_widgets_visibility(self):
         self.widget_manager.update_floating_widgets_visibility()
@@ -876,6 +884,16 @@ class EditorView(QGraphicsView):
         return None
 
     # ==============================================================
+    # Обновление цветов темы
+    # ==============================================================
+    def update_theme_colors(self):
+        self.normal_background_color = theme_manager.get_color('editor_bg')
+        self.setBackgroundBrush(self.normal_background_color)
+        self.viewport().update()
+        from .controllers.crop_cursor_factory import CropCursorFactory
+        CropCursorFactory.reset()
+
+    # ==============================================================
     # Resize / Show
     # ==============================================================
     def resizeEvent(self, e):
@@ -889,12 +907,3 @@ class EditorView(QGraphicsView):
     def showEvent(self, e):
         super().showEvent(e)
         QTimer.singleShot(0, self.layout_manager.update_all)
-
-    def update_theme_colors(self):
-        """Обновляет цвета, зависящие от текущей темы."""
-        self.normal_background_color = theme_manager.get_color('editor_bg')
-        self.setBackgroundBrush(self.normal_background_color)
-        self.viewport().update()
-        # Пересоздаём курсор обрезки с новыми цветами
-        from .controllers.crop_cursor_factory import CropCursorFactory
-        CropCursorFactory.reset()    
