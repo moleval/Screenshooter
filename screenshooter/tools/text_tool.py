@@ -7,7 +7,7 @@
 """
 
 from PyQt5.QtCore import Qt, QPointF
-from PyQt5.QtGui import QFont
+from PyQt5.QtGui import QFont, QColor
 
 from .base_tool import BaseTool
 from ..items import TextItem
@@ -24,7 +24,8 @@ class TextTool(BaseTool):
             self.view.active_text_item = None
 
         ti = TextItem(self.view, bg_color=self.view.current_text_bg)
-        ti.setDefaultTextColor(self.view.current_pen_color)
+        # Жёлтый цвет, как жёлтый на палитре
+        ti.setDefaultTextColor(QColor("#F9D556"))
         font = QFont()
         font.setPointSize(self.view.text_size * 4)
         ti.setFont(font)
@@ -62,7 +63,6 @@ class TextTool(BaseTool):
                 ti.setSelected(True)
                 ti.setEditable(True)
                 self.view._first_click_after_activation = False
-                # Добавляем в историю
                 from ..history import AddItemCommand
                 self.view.history.push(AddItemCommand(self.view.scene(), ti))
                 return True

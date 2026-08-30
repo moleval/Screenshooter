@@ -193,18 +193,16 @@ class CurvedArrowItem(QGraphicsPathItem):
         return math.hypot(self._end.x() - self._start.x(), self._end.y() - self._start.y()) < 1
 
 
-# ==================== DimensionItem (исправленный с коэффициентом зазора) ====================
+# ==================== DimensionItem ====================
 class DimensionItem(QGraphicsItem):
     """
     Размерная линия с засечками и стрелками.
     Текст создаётся отдельно и не входит в состав.
-    Засечка симметрична относительно линии, центр смещён на величину,
-    пропорциональную толщине пера (pen_width * TICK_GAP_FACTOR).
     """
 
     # ------ НАСТРАИВАЕМЫЕ ПАРАМЕТРЫ ЗАСЕЧЕК ------
-    TICK_LENGTH_FACTOR = 1.2   # длина засечки = arrow_size * TICK_LENGTH_FACTOR
-    TICK_GAP_FACTOR = -0.5     # зазор = pen_width * TICK_GAP_FACTOR (отрицательное значение смещает засечку внутрь)
+    TICK_LENGTH_FACTOR = 1.2
+    TICK_GAP_FACTOR = -0.5
     # ----------------------------------------------
 
     def __init__(self, start, end, pen, text_color=None):
@@ -253,15 +251,16 @@ class DimensionItem(QGraphicsItem):
             return
         angle = math.atan2(dy, dx)
 
+        pen_color = self._pen.color()
         pen_width = self._pen.widthF()
         arrow_size = max(8, 8 + pen_width * 3)
         ar = math.radians(20)
 
-        # ----- Единичные векторы -----
-        e = QPointF(math.cos(angle), math.sin(angle))   # вдоль линии
-        perp = QPointF(-math.sin(angle), math.cos(angle))  # перпендикуляр (поворот на 90°)
+        # Единичные векторы
+        e = QPointF(math.cos(angle), math.sin(angle))
+        perp = QPointF(-math.sin(angle), math.cos(angle))
 
-        # ----- 1. Расчёт точек стрелок -----
+        # Точки стрелок
         back_offset = arrow_size * math.cos(ar)
         base_end = end - e * back_offset
         p2_end = end - QPointF(arrow_size * math.cos(angle - ar), arrow_size * math.sin(angle - ar))
@@ -271,38 +270,36 @@ class DimensionItem(QGraphicsItem):
         p2_start = start + QPointF(arrow_size * math.cos(angle - ar), arrow_size * math.sin(angle - ar))
         p3_start = start + QPointF(arrow_size * math.cos(angle + ar), arrow_size * math.sin(angle + ar))
 
-        # ----- 2. Основная линия (от основания до основания) -----
-        pen = QPen(QColor(160, 0, 0), pen_width)
+        # Основная линия
+        pen = QPen(pen_color, pen_width)
         pen.setCapStyle(Qt.RoundCap)
         pen.setJoinStyle(Qt.RoundJoin)
         painter.setPen(pen)
         painter.drawLine(base_start, base_end)
 
-        # ----- 3. Засечки (симметричные, с зазором, пропорциональным толщине) -----
+        # Засечки
         tick_length = arrow_size * self.TICK_LENGTH_FACTOR
         half_tick = tick_length / 2.0
-        tick_gap = pen_width * self.TICK_GAP_FACTOR   # зазор зависит от толщины
+        tick_gap = pen_width * self.TICK_GAP_FACTOR
 
-        # Засечка у начала
         tick_center_start = start + e * tick_gap
         tick_start1 = tick_center_start - perp * half_tick
         tick_end1 = tick_center_start + perp * half_tick
-        painter.setPen(QPen(QColor(160, 0, 0), pen_width))
+        painter.setPen(QPen(pen_color, pen_width))
         painter.drawLine(tick_start1, tick_end1)
 
-        # Засечка у конца
         tick_center_end = end - e * tick_gap
         tick_start2 = tick_center_end - perp * half_tick
         tick_end2 = tick_center_end + perp * half_tick
         painter.drawLine(tick_start2, tick_end2)
 
-        # ----- 4. Заливка стрелок -----
-        painter.setBrush(QColor(160, 0, 0))
-        painter.setPen(QPen(QColor(160, 0, 0), 1))
+        # Стрелки
+        painter.setBrush(pen_color)
+        painter.setPen(QPen(pen_color, 1))
         painter.drawPolygon(QPolygonF([p2_end, end, p3_end]))
         painter.drawPolygon(QPolygonF([p2_start, start, p3_start]))
 
-        # ----- 5. Рамка выделения -----
+        # Рамка выделения
         if option.state & QStyle.State_Selected:
             pen = QPen(QColor(0, 120, 215), 1, Qt.DashLine)
             painter.setPen(pen)

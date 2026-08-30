@@ -5,7 +5,7 @@
 """
 
 from PyQt5.QtCore import Qt, QRectF, QPointF
-from PyQt5.QtGui import QPen
+from PyQt5.QtGui import QPen, QColor
 
 from .base_tool import BaseTool
 from ..items import RectangleItem, FilledRectItem
@@ -19,10 +19,13 @@ class RectTool(BaseTool):
     def start_draw(self, scene_pos: QPointF):
         """Создаёт временный элемент в зависимости от режима shape_mode."""
         self.start_point = scene_pos
-        pen = QPen(self.view.current_pen_color, self.view.pen_width)
+
         if self.view.shape_mode == 'filled':
-            item = FilledRectItem(QRectF(scene_pos, scene_pos), self.view.current_pen_color)
+            # Жёлтый цвет, как жёлтый на палитре
+            item = FilledRectItem(QRectF(scene_pos, scene_pos), QColor("#F9D556"))
         else:
+            # Красный цвет (текущий цвет пера) для контура/квадрата
+            pen = QPen(self.view.current_pen_color, self.view.pen_width)
             item = RectangleItem(QRectF(scene_pos, scene_pos), pen)
         return item
 
@@ -30,7 +33,6 @@ class RectTool(BaseTool):
         """Обновляет геометрию с учётом режима квадрата или зажатого Shift."""
         if not self.start_point:
             return
-        # Если зажат Shift или включён режим 'square' – рисуем квадрат
         if (modifiers & Qt.ShiftModifier) or (self.view.shape_mode == 'square'):
             dx = scene_pos.x() - self.start_point.x()
             dy = scene_pos.y() - self.start_point.y()

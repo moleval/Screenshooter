@@ -1,11 +1,13 @@
 """
 Модуль: widgets/thickness.py
 Описание: Виджеты управления толщиной линии.
+          Содержит ThicknessSlider и ThicknessWidget с пресетами,
+          слайдером и полем ввода.
 """
 
 from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QPushButton, QSlider, QLineEdit,
-                             QToolTip, QInputDialog)
+from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QPushButton, QSlider,
+                             QLineEdit, QToolTip, QInputDialog, QSizePolicy)
 from PyQt5.QtGui import QFont
 from ..utils import SelectAllLineEdit
 from ..ui.layout_metrics import THICKNESS_WIDGET_WIDTH
@@ -54,7 +56,11 @@ class ThicknessWidget(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+
+        # Фиксированная ширина — как у палитры, чтобы панели совпадали
         self.setFixedWidth(THICKNESS_WIDGET_WIDTH)
+        self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
@@ -75,8 +81,8 @@ class ThicknessWidget(QWidget):
         self.slider = ThicknessSlider(Qt.Horizontal)
         self.slider.setRange(1, 100)
         self.slider.setValue(3)
-        self.slider.setFixedWidth(110)
         self.slider.setFixedHeight(26)
+        self.slider.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.slider.valueChanged.connect(self._on_slider_changed)
         self.slider.customEditRequested.connect(self._open_value_dialog)
         layout.addWidget(self.slider)

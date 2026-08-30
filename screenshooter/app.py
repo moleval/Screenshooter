@@ -198,6 +198,9 @@ class ScreenshotApp(QMainWindow):
         self.color_palette = ColorPaletteWidget()
         self.color_palette.colorSelected.connect(self.set_color_from_palette)
 
+        # Связываем изменение режима прямоугольника с обновлением цвета палитры
+        self.view.shape_mode_widget.modeChanged.connect(self._on_shape_mode_changed_for_color)
+
         action_group = QActionGroup(self)
         action_group.setExclusive(True)
 
@@ -286,8 +289,9 @@ class ScreenshotApp(QMainWindow):
 
         # Устанавливаем текущий инструмент
         self.pointer_action.setChecked(True)
+        self._sync_palette_to_tool(None)
 
-        self.color_palette.set_current_color(QColor("#FF0000"))
+        self.color_palette.set_current_color(QColor("#D25145"))
         self.screenshot_pixmap = None
         self.user_zoomed = False
         self.thickness_widget.set_value_silent(2)
@@ -322,6 +326,30 @@ class ScreenshotApp(QMainWindow):
         act.triggered.connect(lambda: self.set_tool(tool_name))
         group.addAction(act)
         return act
+
+    # --------------------------------------------------------------
+    # Синхронизация палитры с инструментом
+    # --------------------------------------------------------------
+    def _sync_palette_to_tool(self, tool_name):
+        """Устанавливает цвет пера и палитры в зависимости от выбранного инструмента."""
+        if tool_name == 'text':
+            new_color = QColor("#F9D556")
+        elif tool_name == 'rect':
+            new_color = QColor("#F9D556") if self.view.shape_mode == 'filled' else QColor("#D25145")
+        else:
+            new_color = QColor("#D25145")
+
+        # Обновляем текущий цвет пера
+        self.view.current_pen_color = new_color
+
+        # Обновляем палитру и информационный виджет
+        self.color_palette.set_current_color(new_color)
+        self.view.widget_manager.update_info_widget_content(new_color, self.view.pen_width)
+
+    def _on_shape_mode_changed_for_color(self, mode):
+        """Обрабатывает смену режима прямоугольника для обновления цвета."""
+        if self.view.current_tool == 'rect':
+            self._sync_palette_to_tool('rect')
 
     # --------------------------------------------------------------
     # Интеграция с системным треем
@@ -731,6 +759,7 @@ class ScreenshotApp(QMainWindow):
     def set_tool(self, tn):
         self.view.set_tool(tn)
         self.thickness_widget.set_value_silent(self.view.get_current_width())
+        self._sync_palette_to_tool(tn)
         self.view.setFocus()
 
     def change_width(self, v):

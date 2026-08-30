@@ -53,7 +53,7 @@ class EditorView(QGraphicsView):
         self.current_tool = None
         self.start_point = None
         self.temp_item = None
-        self.current_pen_color = QColor(255, 0, 0)
+        self.current_pen_color = QColor("#D25145")   # красный из палитры
         self.pen_width = 2
         self.text_size = 10
         self.auto_fit = True
@@ -553,7 +553,7 @@ class EditorView(QGraphicsView):
                         return
                     if self._first_click_after_activation:
                         ti = TextItem(self, bg_color=self.current_text_bg)
-                        ti.setDefaultTextColor(self.current_pen_color)
+                        ti.setDefaultTextColor(QColor("#F9D556"))
                         font = QFont()
                         font.setPointSize(self.text_size * 4)
                         ti.setFont(font)
@@ -684,7 +684,7 @@ class EditorView(QGraphicsView):
                 return
             self._deactivate_active_text()
             ti = TextItem(self, bg_color=self.current_text_bg)
-            ti.setDefaultTextColor(self.current_pen_color)
+            ti.setDefaultTextColor(QColor("#F9D556"))
             font = QFont()
             font.setPointSize(self.text_size * 4)
             ti.setFont(font)

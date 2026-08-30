@@ -29,7 +29,7 @@ class ArrowTool(BaseTool):
         elif mode == 'curved':
             return CurvedArrowItem(scene_pos, scene_pos, (scene_pos + scene_pos) / 2, pen)
         elif mode == 'dimension':
-            return DimensionItem(scene_pos, scene_pos, pen, self.view.current_pen_color)
+            return DimensionItem(scene_pos, scene_pos, pen)
         return None
 
     def update_draw(self, temp_item, scene_pos: QPointF, modifiers):

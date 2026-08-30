@@ -1,13 +1,15 @@
 """
 Модуль: widgets/color_palette.py
 Описание: Виджет палитры цветов.
+          Предоставляет предустановленные цвета и кнопку для выбора
+          произвольного цвета через диалог QColorDialog.
 """
 
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QPushButton, QColorDialog,
                              QSizePolicy)
 from PyQt5.QtGui import QColor
-from ..ui.layout_metrics import COLOR_PALETTE_WIDTH
+from ..ui.layout_metrics import THICKNESS_WIDGET_WIDTH
 
 
 class ColorPaletteWidget(QWidget):
@@ -15,8 +17,11 @@ class ColorPaletteWidget(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+
+        # Эталон ширины — палитра (совпадает с шириной ThicknessWidget)
         self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        self.setFixedWidth(COLOR_PALETTE_WIDTH)
+        self.setFixedWidth(THICKNESS_WIDGET_WIDTH)
+
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(2)
@@ -70,6 +75,7 @@ class ColorPaletteWidget(QWidget):
                 self.selected_button.setStyleSheet(
                     f"background-color: {old_color}; border-radius: 13px; border: 1px solid #888;"
                 )
+
         new_color = button.property("color_name")
         if new_color:
             button.setStyleSheet(
@@ -83,6 +89,7 @@ class ColorPaletteWidget(QWidget):
             if button.property("color_name") and button.property("color_name").upper() == target:
                 self._update_selected_button(button)
                 return
+
         if self.selected_button is not None:
             old_color = self.selected_button.property("color_name")
             if old_color:
