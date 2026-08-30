@@ -11,10 +11,10 @@ import os
 import time
 import keyboard
 from PyQt5 import sip
-from PyQt5.QtCore import Qt, QRectF, QSize, QTimer, pyqtSignal, QDir, QSettings, QEvent
+from PyQt5.QtCore import Qt, QRectF, QTimer, pyqtSignal, QDir, QSettings, QEvent
 from PyQt5.QtGui import QPixmap, QPainter, QImage, QColor, QIcon, QKeySequence
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-                             QGraphicsScene, QGraphicsPixmapItem, QToolBar, QActionGroup,
+                             QGraphicsScene, QGraphicsPixmapItem, QActionGroup,
                              QAction, QFileDialog, QMessageBox, QApplication, QSizePolicy, QDialog,
                              QStyle, QMenu, QLabel, QShortcut)
 
@@ -35,12 +35,9 @@ from .utils import load_app_icon
 from .theme import theme_manager
 from .controllers.crop_cursor_factory import CropCursorFactory
 from .ui.layout_metrics import (
-    TOOLBAR_ICON_SIZE,
     MAIN_LAYOUT_MARGIN,
     MAIN_LAYOUT_SPACING,
     TOP_ACTIONS_SPACING,
-    LEFT_SPACER_WIDTH,
-    RIGHT_SPACER_WIDTH,
     WINDOW_MIN_WIDTH,
     WINDOW_MIN_HEIGHT,
     WINDOW_INITIAL_WIDTH,
@@ -49,6 +46,7 @@ from .ui.layout_metrics import (
 from .ui.annotation_toolbar import AnnotationToolbar
 from .ui.image_toolbar import ImageToolbar
 from .ui.options_toolbar import OptionsToolbar
+from .ui.editor_toolbar_strip import EditorToolbarStrip
 
 
 class ScreenshotApp(QMainWindow):
@@ -189,8 +187,8 @@ class ScreenshotApp(QMainWindow):
 
         top_actions_layout.addWidget(right_group_widget)
         layout.addWidget(top_actions_widget)
-        layout.addWidget(self.view)
 
+        # ================== РЕДАКТОР ТУЛБАРОВ ==================
         self.view.history.stack.canUndoChanged.connect(self._update_undo_buttons)
         self.view.history.stack.canRedoChanged.connect(self._update_undo_buttons)
         self._update_undo_buttons()
@@ -200,20 +198,6 @@ class ScreenshotApp(QMainWindow):
         self.color_palette = ColorPaletteWidget()
         self.color_palette.colorSelected.connect(self.set_color_from_palette)
 
-        self.top_toolbar = QToolBar("Панель инструментов")
-        self.top_toolbar.setMovable(False)
-        self.top_toolbar.setFloatable(False)
-        self.top_toolbar.setIconSize(QSize(TOOLBAR_ICON_SIZE, TOOLBAR_ICON_SIZE))
-        self.top_toolbar.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
-        self.top_toolbar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        self.top_toolbar.setContentsMargins(0, 0, 0, 0)
-        self.addToolBar(Qt.TopToolBarArea, self.top_toolbar)
-
-        left_spacer = QWidget()
-        left_spacer.setFixedWidth(LEFT_SPACER_WIDTH)
-        self.top_toolbar.addWidget(left_spacer)
-
-        # ------------------- Toolbar components -------------------
         action_group = QActionGroup(self)
         action_group.setExclusive(True)
 
@@ -283,26 +267,24 @@ class ScreenshotApp(QMainWindow):
 
         image_actions = [crop_action, rotate_cw_action, rotate_ccw_action, blur_action]
 
-        # Создаём компоненты
+        # Создаём компоненты тулбаров
         annotation_toolbar = AnnotationToolbar(annotation_actions)
         image_toolbar = ImageToolbar(image_actions)
         options_toolbar = OptionsToolbar(self.thickness_widget, self.color_palette)
 
-        # Добавляем в существующий top_toolbar (временная компоновка)
-        self.top_toolbar.addWidget(annotation_toolbar)
-        self.top_toolbar.addWidget(image_toolbar)
+        # Создаём плоскую панель
+        editor_toolbar_strip = EditorToolbarStrip(
+            annotation_toolbar,
+            image_toolbar,
+            options_toolbar,
+            parent=cw
+        )
 
-        expanding_spacer = QWidget()
-        expanding_spacer.setMinimumWidth(0)
-        expanding_spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        self.top_toolbar.addWidget(expanding_spacer)
+        # Добавляем панель между MainActionBar и EditorView
+        layout.addWidget(editor_toolbar_strip)
+        layout.addWidget(self.view)
 
-        self.top_toolbar.addWidget(options_toolbar)
-
-        right_spacer = QWidget()
-        right_spacer.setFixedWidth(RIGHT_SPACER_WIDTH)
-        self.top_toolbar.addWidget(right_spacer)
-
+        # Устанавливаем текущий инструмент
         self.pointer_action.setChecked(True)
 
         self.color_palette.set_current_color(QColor("#FF0000"))
