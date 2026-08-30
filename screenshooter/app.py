@@ -34,10 +34,24 @@ from .tray import TrayManager
 from .utils import load_app_icon
 from .theme import theme_manager
 from .controllers.crop_cursor_factory import CropCursorFactory
+from .ui.layout_metrics import (
+    TOOL_BUTTON_WIDTH,
+    TOOLBAR_ICON_SIZE,
+    MAIN_LAYOUT_MARGIN,
+    MAIN_LAYOUT_SPACING,
+    TOP_ACTIONS_SPACING,
+    LEFT_SPACER_WIDTH,
+    RIGHT_SPACER_WIDTH,
+    WINDOW_MIN_WIDTH,
+    WINDOW_MIN_HEIGHT,
+    WINDOW_INITIAL_WIDTH,
+    WINDOW_INITIAL_HEIGHT,
+)
 
 
 class ScreenshotApp(QMainWindow):
-    TOOL_BUTTON_WIDTH = 59
+    # Ширина кнопки инструмента (взята из layout_metrics)
+    TOOL_BUTTON_WIDTH = TOOL_BUTTON_WIDTH
 
     capture_monitor_requested = pyqtSignal()
     capture_window_requested = pyqtSignal()
@@ -46,8 +60,8 @@ class ScreenshotApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Скриншотер с редактором")
-        self.setGeometry(100, 100, 1030, 750)
-        self.setMinimumSize(1030, 650)
+        self.setGeometry(100, 100, WINDOW_INITIAL_WIDTH, WINDOW_INITIAL_HEIGHT)
+        self.setMinimumSize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
 
         # Настройки приложения
         self.settings = AppSettings()
@@ -70,13 +84,14 @@ class ScreenshotApp(QMainWindow):
         cw = QWidget()
         self.setCentralWidget(cw)
         layout = QVBoxLayout(cw)
-        layout.setContentsMargins(9, 9, 9, 9)
-        layout.setSpacing(4)
+        layout.setContentsMargins(MAIN_LAYOUT_MARGIN, MAIN_LAYOUT_MARGIN,
+                                  MAIN_LAYOUT_MARGIN, MAIN_LAYOUT_MARGIN)
+        layout.setSpacing(MAIN_LAYOUT_SPACING)
 
         top_actions_widget = QWidget()
         top_actions_layout = QHBoxLayout(top_actions_widget)
         top_actions_layout.setContentsMargins(0, 0, 0, 0)
-        top_actions_layout.setSpacing(6)
+        top_actions_layout.setSpacing(TOP_ACTIONS_SPACING)
 
         left_group_widget = QWidget()
         left_group_layout = QHBoxLayout(left_group_widget)
@@ -189,18 +204,18 @@ class ScreenshotApp(QMainWindow):
         self.top_toolbar = QToolBar("Панель инструментов")
         self.top_toolbar.setMovable(False)
         self.top_toolbar.setFloatable(False)
-        self.top_toolbar.setIconSize(QSize(32, 32))
+        self.top_toolbar.setIconSize(QSize(TOOLBAR_ICON_SIZE, TOOLBAR_ICON_SIZE))
         self.top_toolbar.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
         self.top_toolbar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         self.top_toolbar.setContentsMargins(0, 0, 0, 0)
         self.addToolBar(Qt.TopToolBarArea, self.top_toolbar)
 
         left_spacer = QWidget()
-        left_spacer.setFixedWidth(9)
+        left_spacer.setFixedWidth(LEFT_SPACER_WIDTH)
         self.top_toolbar.addWidget(left_spacer)
 
         toolbar_tools = QToolBar("Аннотации")
-        toolbar_tools.setIconSize(QSize(32, 32))
+        toolbar_tools.setIconSize(QSize(TOOLBAR_ICON_SIZE, TOOLBAR_ICON_SIZE))
         toolbar_tools.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
         toolbar_tools.setMovable(False)
         toolbar_tools.setFloatable(False)
@@ -229,13 +244,13 @@ class ScreenshotApp(QMainWindow):
         for act in action_group.actions():
             btn = toolbar_tools.widgetForAction(act)
             if btn:
-                btn.setFixedWidth(self.TOOL_BUTTON_WIDTH)
+                btn.setFixedWidth(TOOL_BUTTON_WIDTH)
 
         self.top_toolbar.addWidget(toolbar_tools)
         self.top_toolbar.addSeparator()
 
         self.image_toolbar = QToolBar("Изображение")
-        self.image_toolbar.setIconSize(QSize(32, 32))
+        self.image_toolbar.setIconSize(QSize(TOOLBAR_ICON_SIZE, TOOLBAR_ICON_SIZE))
         self.image_toolbar.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
         self.image_toolbar.setMovable(False)
         self.image_toolbar.setFloatable(False)
@@ -271,7 +286,7 @@ class ScreenshotApp(QMainWindow):
         for act in self.image_toolbar.actions():
             btn = self.image_toolbar.widgetForAction(act)
             if btn:
-                btn.setFixedWidth(self.TOOL_BUTTON_WIDTH)
+                btn.setFixedWidth(TOOL_BUTTON_WIDTH)
 
         self.top_toolbar.addWidget(self.image_toolbar)
 
@@ -281,7 +296,7 @@ class ScreenshotApp(QMainWindow):
         self.top_toolbar.addWidget(spacer)
 
         settings = QToolBar("Опции аннотаций")
-        settings.setIconSize(QSize(32, 32))
+        settings.setIconSize(QSize(TOOLBAR_ICON_SIZE, TOOLBAR_ICON_SIZE))
         settings.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
         settings.setMovable(False)
         settings.setFloatable(False)
@@ -305,7 +320,7 @@ class ScreenshotApp(QMainWindow):
         self.top_toolbar.addWidget(settings)
 
         right_spacer = QWidget()
-        right_spacer.setFixedWidth(4)
+        right_spacer.setFixedWidth(RIGHT_SPACER_WIDTH)
         self.top_toolbar.addWidget(right_spacer)
 
         self.color_palette.set_current_color(QColor("#FF0000"))
@@ -399,7 +414,6 @@ class ScreenshotApp(QMainWindow):
         clipboard = QApplication.clipboard()
         mime = clipboard.mimeData()
 
-        # Изображение
         if mime.hasImage():
             image = clipboard.image()
             if not image.isNull():
@@ -411,7 +425,6 @@ class ScreenshotApp(QMainWindow):
                         self.view.add_pasted_image(pixmap)
                     return
 
-        # URLs
         if mime.hasUrls():
             for url in mime.urls():
                 local_path = url.toLocalFile()
@@ -424,7 +437,6 @@ class ScreenshotApp(QMainWindow):
                             self.view.add_pasted_image(pixmap)
                         return
 
-        # Текст (путь к файлу)
         if mime.hasText():
             text = mime.text().strip()
             if text.startswith('file:///'):

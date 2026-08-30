@@ -8,6 +8,7 @@ from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QPushButton, QSlider, QLineEd
                              QToolTip, QInputDialog)
 from PyQt5.QtGui import QFont
 from ..utils import SelectAllLineEdit
+from ..ui.layout_metrics import THICKNESS_WIDGET_WIDTH
 
 
 class ThicknessSlider(QSlider):
@@ -53,7 +54,7 @@ class ThicknessWidget(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedWidth(360)
+        self.setFixedWidth(THICKNESS_WIDGET_WIDTH)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
@@ -63,7 +64,7 @@ class ThicknessWidget(QWidget):
         for value in presets:
             button = QPushButton(f"x{value}")
             button.setFixedSize(36, 32)
-            button.setFont(QFont("Arial", 9))  # уменьшен шрифт
+            button.setFont(QFont("Arial", 9))
             button.setCheckable(True)
             button.clicked.connect(lambda _, v=value: self._set_value(v))
             layout.addWidget(button)
@@ -135,7 +136,4 @@ class ThicknessWidget(QWidget):
     def _update_preset_highlight(self, value):
         presets = [1, 2, 5, 10, 20]
         for button, preset in zip(self.preset_buttons, presets):
-            if value == preset:
-                button.setChecked(True)
-            else:
-                button.setChecked(False)
+            button.setChecked(value == preset)
