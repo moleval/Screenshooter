@@ -35,7 +35,6 @@ from .utils import load_app_icon
 from .theme import theme_manager
 from .controllers.crop_cursor_factory import CropCursorFactory
 from .ui.layout_metrics import (
-    TOOL_BUTTON_WIDTH,
     TOOLBAR_ICON_SIZE,
     MAIN_LAYOUT_MARGIN,
     MAIN_LAYOUT_SPACING,
@@ -47,12 +46,12 @@ from .ui.layout_metrics import (
     WINDOW_INITIAL_WIDTH,
     WINDOW_INITIAL_HEIGHT,
 )
+from .ui.annotation_toolbar import AnnotationToolbar
+from .ui.image_toolbar import ImageToolbar
+from .ui.options_toolbar import OptionsToolbar
 
 
 class ScreenshotApp(QMainWindow):
-    # Ширина кнопки инструмента (взята из layout_metrics)
-    TOOL_BUTTON_WIDTH = TOOL_BUTTON_WIDTH
-
     capture_monitor_requested = pyqtSignal()
     capture_window_requested = pyqtSignal()
     capture_region_requested = pyqtSignal()
@@ -214,114 +213,97 @@ class ScreenshotApp(QMainWindow):
         left_spacer.setFixedWidth(LEFT_SPACER_WIDTH)
         self.top_toolbar.addWidget(left_spacer)
 
-        toolbar_tools = QToolBar("Аннотации")
-        toolbar_tools.setIconSize(QSize(TOOLBAR_ICON_SIZE, TOOLBAR_ICON_SIZE))
-        toolbar_tools.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
-        toolbar_tools.setMovable(False)
-        toolbar_tools.setFloatable(False)
-        toolbar_tools.setContentsMargins(0, 0, 0, 0)
-        toolbar_tools.layout().setSpacing(0)
-
+        # ------------------- Toolbar components -------------------
         action_group = QActionGroup(self)
         action_group.setExclusive(True)
-        ic = QColor(220, 30, 30)
 
-        self.pointer_action = self._create_tool_action("Выбор", None, action_group, toolbar_tools,
-                                                       icon=create_tool_icon('pointer', QColor(30, 30, 30)),
-                                                       tooltip="Выделение")
-        self.line_action = self._create_tool_action("Линия", 'line', action_group, toolbar_tools,
-                                                    icon=create_tool_icon('line', ic), tooltip="Линия")
-        self.rect_action = self._create_tool_action("Контур", 'rect', action_group, toolbar_tools,
-                                                    icon=create_tool_icon('rect', ic), tooltip="Контур")
-        self.ellipse_action = self._create_tool_action("Эллипс", 'ellipse', action_group, toolbar_tools,
-                                                       icon=create_tool_icon('ellipse', ic), tooltip="Эллипс")
-        self.arrow_action = self._create_tool_action("Стрелка", 'arrow', action_group, toolbar_tools,
-                                                     icon=create_tool_icon('arrow', ic), tooltip="Стрелка")
-        self.text_action = self._create_tool_action("Текст", 'text', action_group, toolbar_tools,
-                                                    icon=create_tool_icon('text', ic), tooltip="Текст")
-        self.pointer_action.setChecked(True)
+        pointer_action = self._create_tool_action(
+            "Выбор", None, action_group,
+            icon=create_tool_icon('pointer', QColor(30, 30, 30)),
+            tooltip="Выделение")
+        line_action = self._create_tool_action(
+            "Линия", 'line', action_group,
+            icon=create_tool_icon('line', QColor(220, 30, 30)),
+            tooltip="Линия")
+        rect_action = self._create_tool_action(
+            "Контур", 'rect', action_group,
+            icon=create_tool_icon('rect', QColor(220, 30, 30)),
+            tooltip="Контур")
+        ellipse_action = self._create_tool_action(
+            "Эллипс", 'ellipse', action_group,
+            icon=create_tool_icon('ellipse', QColor(220, 30, 30)),
+            tooltip="Эллипс")
+        arrow_action = self._create_tool_action(
+            "Стрелка", 'arrow', action_group,
+            icon=create_tool_icon('arrow', QColor(220, 30, 30)),
+            tooltip="Стрелка")
+        text_action = self._create_tool_action(
+            "Текст", 'text', action_group,
+            icon=create_tool_icon('text', QColor(220, 30, 30)),
+            tooltip="Текст")
 
-        for act in action_group.actions():
-            btn = toolbar_tools.widgetForAction(act)
-            if btn:
-                btn.setFixedWidth(TOOL_BUTTON_WIDTH)
+        self.pointer_action = pointer_action
+        self.line_action = line_action
+        self.rect_action = rect_action
+        self.ellipse_action = ellipse_action
+        self.arrow_action = arrow_action
+        self.text_action = text_action
 
-        self.top_toolbar.addWidget(toolbar_tools)
-        self.top_toolbar.addSeparator()
+        annotation_actions = [
+            pointer_action, line_action, rect_action,
+            ellipse_action, arrow_action, text_action
+        ]
 
-        self.image_toolbar = QToolBar("Изображение")
-        self.image_toolbar.setIconSize(QSize(TOOLBAR_ICON_SIZE, TOOLBAR_ICON_SIZE))
-        self.image_toolbar.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
-        self.image_toolbar.setMovable(False)
-        self.image_toolbar.setFloatable(False)
-        self.image_toolbar.setContentsMargins(0, 0, 0, 0)
-        self.image_toolbar.layout().setSpacing(0)
+        crop_action = QAction("Обрезать", self)
+        crop_action.setCheckable(True)
+        crop_action.setIcon(create_crop_icon())
+        crop_action.setToolTip("Обрезать изображение")
+        crop_action.triggered.connect(self._on_crop_action_triggered)
 
-        self.crop_action = QAction("Обрезать", self)
-        self.crop_action.setCheckable(True)
-        self.crop_action.setIcon(create_crop_icon())
-        self.crop_action.setToolTip("Обрезать изображение")
-        self.crop_action.triggered.connect(self._on_crop_action_triggered)
-        self.image_toolbar.addAction(self.crop_action)
+        rotate_cw_action = QAction("Повернуть", self)
+        rotate_cw_action.setIcon(create_rotate_icon(clockwise=True))
+        rotate_cw_action.setToolTip("Повернуть на 90° по часовой")
+        rotate_cw_action.triggered.connect(lambda: self._rotate_image(90))
 
-        self.rotate_cw_action = QAction("Повернуть", self)
-        self.rotate_cw_action.setIcon(create_rotate_icon(clockwise=True))
-        self.rotate_cw_action.setToolTip("Повернуть на 90° по часовой")
-        self.rotate_cw_action.triggered.connect(lambda: self._rotate_image(90))
-        self.image_toolbar.addAction(self.rotate_cw_action)
+        rotate_ccw_action = QAction("Повернуть", self)
+        rotate_ccw_action.setIcon(create_rotate_icon(clockwise=False))
+        rotate_ccw_action.setToolTip("Повернуть на 90° против часовой")
+        rotate_ccw_action.triggered.connect(lambda: self._rotate_image(-90))
 
-        self.rotate_ccw_action = QAction("Повернуть", self)
-        self.rotate_ccw_action.setIcon(create_rotate_icon(clockwise=False))
-        self.rotate_ccw_action.setToolTip("Повернуть на 90° против часовой")
-        self.rotate_ccw_action.triggered.connect(lambda: self._rotate_image(-90))
-        self.image_toolbar.addAction(self.rotate_ccw_action)
+        blur_action = QAction("Размыть", self)
+        blur_action.setCheckable(True)
+        blur_action.setIcon(create_blur_icon())
+        blur_action.setToolTip("Размыть область")
+        blur_action.triggered.connect(self._on_blur_action_triggered)
 
-        self.blur_action = QAction("Размыть", self)
-        self.blur_action.setCheckable(True)
-        self.blur_action.setIcon(create_blur_icon())
-        self.blur_action.setToolTip("Размыть область")
-        self.blur_action.triggered.connect(self._on_blur_action_triggered)
-        self.image_toolbar.addAction(self.blur_action)
+        self.crop_action = crop_action
+        self.rotate_cw_action = rotate_cw_action
+        self.rotate_ccw_action = rotate_ccw_action
+        self.blur_action = blur_action
 
-        for act in self.image_toolbar.actions():
-            btn = self.image_toolbar.widgetForAction(act)
-            if btn:
-                btn.setFixedWidth(TOOL_BUTTON_WIDTH)
+        image_actions = [crop_action, rotate_cw_action, rotate_ccw_action, blur_action]
 
-        self.top_toolbar.addWidget(self.image_toolbar)
+        # Создаём компоненты
+        annotation_toolbar = AnnotationToolbar(annotation_actions)
+        image_toolbar = ImageToolbar(image_actions)
+        options_toolbar = OptionsToolbar(self.thickness_widget, self.color_palette)
 
-        spacer = QWidget()
-        spacer.setMinimumWidth(0)
-        spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        self.top_toolbar.addWidget(spacer)
+        # Добавляем в существующий top_toolbar (временная компоновка)
+        self.top_toolbar.addWidget(annotation_toolbar)
+        self.top_toolbar.addWidget(image_toolbar)
 
-        settings = QToolBar("Опции аннотаций")
-        settings.setIconSize(QSize(TOOLBAR_ICON_SIZE, TOOLBAR_ICON_SIZE))
-        settings.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
-        settings.setMovable(False)
-        settings.setFloatable(False)
-        settings.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
-        settings.setContentsMargins(0, 0, 0, 0)
-        settings.addSeparator()
+        expanding_spacer = QWidget()
+        expanding_spacer.setMinimumWidth(0)
+        expanding_spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.top_toolbar.addWidget(expanding_spacer)
 
-        sw = QWidget()
-        sl = QVBoxLayout(sw)
-        sl.setContentsMargins(0, 0, 0, 0)
-        sl.setSpacing(2)
-        tr = QHBoxLayout()
-        tr.setContentsMargins(0, 0, 0, 0)
-        tr.addWidget(self.thickness_widget)
-        sl.addLayout(tr)
-        cr = QHBoxLayout()
-        cr.setContentsMargins(0, 0, 0, 0)
-        cr.addWidget(self.color_palette)
-        sl.addLayout(cr)
-        settings.addWidget(sw)
-        self.top_toolbar.addWidget(settings)
+        self.top_toolbar.addWidget(options_toolbar)
 
         right_spacer = QWidget()
         right_spacer.setFixedWidth(RIGHT_SPACER_WIDTH)
         self.top_toolbar.addWidget(right_spacer)
+
+        self.pointer_action.setChecked(True)
 
         self.color_palette.set_current_color(QColor("#FF0000"))
         self.screenshot_pixmap = None
@@ -342,10 +324,22 @@ class ScreenshotApp(QMainWindow):
         self.view.background_changed.connect(self._update_image_actions_enabled)
 
         self.setup_global_hotkeys()
-
         self._update_image_actions_enabled()
-
         self.view.setFocus()
+
+    # --------------------------------------------------------------
+    # Вспомогательный метод создания tool action
+    # --------------------------------------------------------------
+    def _create_tool_action(self, text, tool_name, group, icon=None, tooltip=None):
+        act = QAction(text, self)
+        act.setCheckable(True)
+        if icon:
+            act.setIcon(icon)
+        if tooltip:
+            act.setToolTip(tooltip)
+        act.triggered.connect(lambda: self.set_tool(tool_name))
+        group.addAction(act)
+        return act
 
     # --------------------------------------------------------------
     # Интеграция с системным треем
@@ -752,18 +746,6 @@ class ScreenshotApp(QMainWindow):
     # --------------------------------------------------------------
     # Прочие методы
     # --------------------------------------------------------------
-    def _create_tool_action(self, text, tool_name, group, toolbar, icon=None, tooltip=None):
-        act = QAction(text, self)
-        act.setCheckable(True)
-        if icon:
-            act.setIcon(icon)
-        if tooltip:
-            act.setToolTip(tooltip)
-        act.triggered.connect(lambda: self.set_tool(tool_name))
-        toolbar.addAction(act)
-        group.addAction(act)
-        return act
-
     def set_tool(self, tn):
         self.view.set_tool(tn)
         self.thickness_widget.set_value_silent(self.view.get_current_width())
