@@ -1,31 +1,28 @@
-# screenshooter/ui/image_toolbar.py
 """
 Модуль: ui/image_toolbar.py
-Описание: Компонент тулбара операций с изображением.
-          Отображает переданные QAction в виде кнопок с фиксированной шириной.
-          Не содержит бизнес-логики, только представление.
+Описание: Компонент тулбара операций с изображением (QWidget + QToolButton).
 """
 
-from PyQt5.QtCore import QSize, Qt
-from PyQt5.QtWidgets import QToolBar
+from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtWidgets import QWidget, QHBoxLayout, QToolButton, QSizePolicy
 
 from ..ui.layout_metrics import TOOL_BUTTON_WIDTH, TOOLBAR_ICON_SIZE
 
 
-class ImageToolbar(QToolBar):
-    """Тулбар с операциями изображения (4 кнопки)."""
-
+class ImageToolbar(QWidget):
     def __init__(self, actions, parent=None):
-        super().__init__("Изображение", parent)
-        self.setMovable(False)
-        self.setFloatable(False)
-        self.setIconSize(QSize(TOOLBAR_ICON_SIZE, TOOLBAR_ICON_SIZE))
-        self.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
-        self.setContentsMargins(0, 0, 0, 0)
-        self.layout().setSpacing(0)
+        super().__init__(parent)
+        self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
 
         for act in actions:
-            self.addAction(act)
-            btn = self.widgetForAction(act)
-            if btn:
-                btn.setFixedWidth(TOOL_BUTTON_WIDTH)
+            btn = QToolButton()
+            btn.setDefaultAction(act)
+            btn.setIconSize(QSize(TOOLBAR_ICON_SIZE, TOOLBAR_ICON_SIZE))
+            btn.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
+            btn.setFixedWidth(TOOL_BUTTON_WIDTH)
+            btn.setCheckable(act.isCheckable())
+            layout.addWidget(btn)

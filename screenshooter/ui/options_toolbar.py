@@ -1,33 +1,18 @@
-# screenshooter/ui/options_toolbar.py
 """
 Модуль: ui/options_toolbar.py
-Описание: Компонент тулбара опций (толщина и палитра).
-          Содержит двухрядную компоновку из ThicknessWidget и ColorPaletteWidget.
-          Не содержит бизнес-логики, только представление.
+Описание: Компонент тулбара опций (QWidget).
 """
 
-from PyQt5.QtCore import QSize, Qt
-from PyQt5.QtWidgets import (QHBoxLayout, QSizePolicy, QToolBar, QVBoxLayout,
-                             QWidget)
-
-from ..ui.layout_metrics import TOOLBAR_ICON_SIZE
+from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QSizePolicy
 
 
-class OptionsToolbar(QToolBar):
-    """Тулбар с настройками толщины и цвета."""
-
+class OptionsToolbar(QWidget):
     def __init__(self, thickness_widget, color_palette_widget, parent=None):
-        super().__init__("Опции аннотаций", parent)
-        self.setMovable(False)
-        self.setFloatable(False)
-        self.setIconSize(QSize(TOOLBAR_ICON_SIZE, TOOLBAR_ICON_SIZE))
-        self.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
-        self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
-        self.setContentsMargins(0, 0, 0, 0)
+        super().__init__(parent)
+        self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
-        # Временное сохранение текущей структуры: два горизонтальных ряда
-        container = QWidget()
-        layout = QVBoxLayout(container)
+        layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(2)
 
@@ -40,5 +25,3 @@ class OptionsToolbar(QToolBar):
         row2.setContentsMargins(0, 0, 0, 0)
         row2.addWidget(color_palette_widget)
         layout.addLayout(row2)
-
-        self.addWidget(container)

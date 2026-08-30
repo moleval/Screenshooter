@@ -41,11 +41,17 @@ class LayoutManager:
         self._update_timer.setInterval(16)  # ~60 fps
         self._update_timer.timeout.connect(self._do_update_all)
 
-    def update_all(self):
-        """Запускает отложенное обновление позиций виджетов.
-        Если вызывается несколько раз подряд, реальное обновление
-        произойдёт только один раз за 16 мс."""
-        if not self._update_timer.isActive():
+    def update_all(self, immediate=False):
+        """Запускает обновление позиций виджетов.
+
+        :param immediate: если True, обновление происходит немедленно,
+                          без дебаунса. Используется при показе виджетов,
+                          чтобы избежать мелькания в позиции (0, 0).
+        """
+        if immediate:
+            self._update_timer.stop()
+            self._do_update_all()
+        elif not self._update_timer.isActive():
             self._update_timer.start()
 
     def _do_update_all(self):
@@ -260,4 +266,4 @@ class LayoutManager:
         y = vh - sl.sizeHint().height() - sh - 4
         y = max(0, y)
         sl.move(x, y)
-        sl.raise_()
+        sl.raise_()       

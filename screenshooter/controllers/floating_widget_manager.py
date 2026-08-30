@@ -191,7 +191,11 @@ class FloatingWidgetManager:
         view.update_resolution_from_background()
 
     def update_floating_widgets_visibility(self):
-        """Обновляет видимость плавающих виджетов."""
+        """Обновляет видимость плавающих виджетов.
+
+        При показе виджета используется немедленное позиционирование
+        (immediate=True), чтобы избежать мелькания в позиции (0, 0).
+        """
         view = self.view
         view.shape_mode_widget.setVisible(False)
         view.ellipse_mode_widget.setVisible(False)
@@ -204,7 +208,7 @@ class FloatingWidgetManager:
         if view.active_text_item is not None:
             view.text_format_widget.setVisible(True)
             view.text_format_widget.raise_()
-            view.layout_manager.update_all()
+            view.layout_manager.update_all(immediate=True)
             return
 
         selected = view.scene().selectedItems()
@@ -213,22 +217,22 @@ class FloatingWidgetManager:
             if all_text:
                 view.text_format_widget.setVisible(True)
                 view.text_format_widget.raise_()
-                view.layout_manager.update_all()
+                view.layout_manager.update_all(immediate=True)
                 return
 
         # Режимы обрезки/размытия — виджеты инструментов скрыты
         if view.image_editor.crop_mode or view.blur_controller.blur_mode:
-            view.layout_manager.update_all()
+            view.layout_manager.update_all(immediate=True)
             return
 
         if view.current_tool == 'text':
             view.text_format_widget.setVisible(True)
             view.text_format_widget.raise_()
-            view.layout_manager.update_all()
+            view.layout_manager.update_all(immediate=True)
             return
 
         if selected:
-            view.layout_manager.update_all()
+            view.layout_manager.update_all(immediate=True)
             return
 
         # Определяем активный инструмент с учётом временного указателя
@@ -254,7 +258,7 @@ class FloatingWidgetManager:
             view.line_mode_widget.raise_()
 
         view._update_pasted_image_handles()
-        view.layout_manager.update_all()
+        view.layout_manager.update_all(immediate=True)
 
     def update_info_widget_content(self, color, thickness):
         """Устанавливает цвет и толщину в виджет информации."""

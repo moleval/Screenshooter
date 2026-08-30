@@ -51,6 +51,12 @@ class ThemeManager:
         'text_bg_black': QColor(0, 0, 0, 200),
 
         'rubber_band': QColor(255, 200, 0),
+
+        # --- EditorToolbarStrip и разделители ---
+        'strip_bg': QColor(245, 245, 245),
+        'strip_border': QColor(200, 200, 200),
+        'separator_line': QColor(200, 200, 200),
+        'tool_btn_hover': QColor(0, 0, 0, 20),
     }
 
     COLORS_DARK = {
@@ -91,6 +97,12 @@ class ThemeManager:
         'text_bg_black': QColor(0, 0, 0, 200),
 
         'rubber_band': QColor(255, 255, 0),
+
+        # --- EditorToolbarStrip и разделители ---
+        'strip_bg': QColor(70, 70, 70),
+        'strip_border': QColor(100, 100, 100),
+        'separator_line': QColor(120, 120, 120),
+        'tool_btn_hover': QColor(255, 255, 255, 25),
     }
 
     def __init__(self, theme_key: str = 'light'):
@@ -120,6 +132,11 @@ class ThemeManager:
             return self.COLORS_DARK.get(key, QColor(0, 0, 0))
         return self.COLORS_LIGHT.get(key, QColor(0, 0, 0))
 
+    def get_rgba(self, key: str) -> str:
+        """Возвращает цвет в формате 'rgba(r, g, b, a)' для QSS."""
+        color = self.get_color(key)
+        return f"rgba({color.red()}, {color.green()}, {color.blue()}, {color.alpha()})"
+
     def get_qss(self) -> str:
         c = {k: self.get_color(k).name() for k in self.COLORS_LIGHT.keys()}
 
@@ -127,17 +144,42 @@ class ThemeManager:
         selection_border = self.get_color('selection_border')
         text_bg_white = self.get_color('text_bg_white')
         text_bg_black = self.get_color('text_bg_black')
+        tool_btn_hover = self.get_rgba('tool_btn_hover')
 
         return f"""
         QMainWindow {{
             background-color: {c['window_bg']};
         }}
+
+        /* ===== QToolBar (легаси, пока используется в переходный период) ===== */
         QToolBar {{
             background-color: {c['panel_bg']};
             border: 1px solid {c['border']};
             padding: 2px;
             spacing: 2px;
         }}
+        QToolBar::separator {{
+            width: 1px;
+            background-color: {c['separator_line']};
+            margin-top: 8px;
+            margin-bottom: 8px;
+        }}
+
+        /* ===== EditorToolbarStrip (новая плоская панель) ===== */
+        QWidget#editorToolbarStrip {{
+            background-color: {c['strip_bg']};
+            border: none;
+            border-bottom: 1px solid {c['strip_border']};
+        }}
+
+        /* ===== ToolbarSeparator (линия разделителя) ===== */
+        QFrame#toolbarSeparatorLine {{
+            background-color: {c['separator_line']};
+            border: none;
+            max-width: 1px;
+        }}
+
+        /* ===== QToolButton (общий для QToolBar и QWidget-контейнеров) ===== */
         QToolButton {{
             padding: 2px;
             margin: 0px;
@@ -148,13 +190,15 @@ class ThemeManager:
             color: {c['text']};
         }}
         QToolButton:hover {{
-            background-color: rgba(0, 0, 0, 20);
+            background-color: {tool_btn_hover};
         }}
         QToolButton:checked {{
             background-color: {selection_bg.name()};
             border: 2px solid {selection_border.name()};
             border-radius: 4px;
         }}
+
+        /* ===== QPushButton ===== */
         QPushButton {{
             background-color: {c['btn_bg']};
             color: {c['btn_text']};
@@ -220,6 +264,8 @@ class ThemeManager:
         QPushButton#bgNoneBtn:checked {{
             border: 2px solid {selection_border.name()};
         }}
+
+        /* ===== QLineEdit ===== */
         QLineEdit {{
             background-color: {c['btn_bg']};
             color: {c['text']};
@@ -227,6 +273,8 @@ class ThemeManager:
             border-radius: 2px;
             padding: 2px;
         }}
+
+        /* ===== QSlider ===== */
         QSlider::groove:horizontal {{
             background: {selection_bg.name()};
             height: 6px;
@@ -238,10 +286,14 @@ class ThemeManager:
             margin: -5px 0;
             border-radius: 7px;
         }}
+
+        /* ===== QGraphicsView ===== */
         QGraphicsView {{
             border: none;
             border-radius: 0;
         }}
+
+        /* ===== QToolTip ===== */
         QToolTip {{
             background-color: {c['panel_bg']};
             color: {c['text']};
