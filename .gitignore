@@ -3,3 +3,7 @@ __pycache__/
 *.pyc
 # Исключаем скрипт результат экспорта
 export/
+# PyInstaller
+build/
+dist/
+*.spec

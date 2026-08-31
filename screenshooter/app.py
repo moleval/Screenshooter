@@ -16,7 +16,7 @@ from PyQt5.QtGui import QPixmap, QPainter, QImage, QColor, QIcon, QKeySequence
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                              QGraphicsScene, QGraphicsPixmapItem, QActionGroup,
                              QAction, QFileDialog, QMessageBox, QApplication, QSizePolicy, QDialog,
-                             QStyle, QMenu, QLabel, QShortcut)
+                             QStyle, QMenu, QLabel, QShortcut, QTextBrowser)
 
 from .screen_capture import ScreenCapture
 from .export import Exporter
@@ -46,6 +46,7 @@ from .ui.annotation_toolbar import AnnotationToolbar
 from .ui.image_toolbar import ImageToolbar
 from .ui.options_toolbar import OptionsToolbar
 from .ui.editor_toolbar_strip import EditorToolbarStrip
+from .help_content import HELP_HTML
 
 
 class ScreenshotApp(QMainWindow):
@@ -68,7 +69,7 @@ class ScreenshotApp(QMainWindow):
 
         self._force_quit = False
         self._saved_window_state = None
-        self._window_state_before_fullscreen = None   # для сохранения состояния перед fullscreen
+        self._window_state_before_fullscreen = None
 
         self._printscreen_hook = None
         self._alt_printscreen_hotkey = None
@@ -137,6 +138,10 @@ class ScreenshotApp(QMainWindow):
         self.fullscreen_shortcut_ctrl_enter = QShortcut(QKeySequence("Ctrl+Return"), self)
         self.fullscreen_shortcut_ctrl_enter.activated.connect(self.toggle_fullscreen)
 
+        # Шорткат для справки
+        self.help_shortcut = QShortcut(QKeySequence("F1"), self)
+        self.help_shortcut.activated.connect(self.show_help)
+
         self.crop_buttons_widget = QWidget()
         crop_buttons_layout = QHBoxLayout(self.crop_buttons_widget)
         crop_buttons_layout.setContentsMargins(0, 0, 0, 0)
@@ -185,8 +190,35 @@ class ScreenshotApp(QMainWindow):
         self.quick_save_btn.customContextMenuRequested.connect(self.show_quick_save_menu)
         right_group_layout.addWidget(self.quick_save_btn)
 
+        # Кнопка справки
+        self.help_btn = QPushButton("?")
+        self.help_btn.setFixedSize(32, 26)  # ширина 32, высота 26
+        self.help_btn.setToolTip("Справка (F1)")
+        self.help_btn.clicked.connect(self.show_help)
+        right_group_layout.addWidget(self.help_btn)
+
         top_actions_layout.addWidget(right_group_widget)
         layout.addWidget(top_actions_widget)
+
+        # Фиксируем высоту кнопок MainActionBar = 26 px
+        main_action_buttons = (
+            self.undo_btn,
+            self.redo_btn,
+            self.capture_btn,
+            self.clear_btn,
+            self.copy_btn,
+            self.insert_file_btn,
+            self.insert_clipboard_btn,
+            self.save_as_btn,
+            self.quick_save_btn,
+            self.help_btn,
+        )
+        for btn in main_action_buttons:
+            btn.setFixedHeight(26)
+
+        # Кнопки crop тоже высотой 26
+        self.apply_crop_btn.setFixedHeight(26)
+        self.cancel_crop_btn.setFixedHeight(26)
 
         self.top_actions_widget = top_actions_widget
 
@@ -311,6 +343,7 @@ class ScreenshotApp(QMainWindow):
         self._update_image_actions_enabled()
 
         self._update_window_minimum_width()
+
         # Устанавливаем стартовую ширину равной минимальной,
         # чтобы убрать зазор между ImageToolbar и OptionsToolbar
         self.resize(self.minimumWidth(), self.height())
@@ -854,3 +887,35 @@ class ScreenshotApp(QMainWindow):
         else:
             self.setWindowState(Qt.WindowNoState)
         self.setUpdatesEnabled(True)
+
+    def show_help(self):
+        """Отображает окно справки."""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Справка")
+        dialog.resize(560, 480)
+
+        # Убираем кнопку "?" в заголовке окна
+        dialog.setWindowFlags(dialog.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+
+        # Убираем рамку/линию у самого диалога
+        dialog.setStyleSheet("QDialog { border: none; }")
+
+        layout = QVBoxLayout(dialog)
+        text_browser = QTextBrowser()
+        text_browser.setOpenExternalLinks(True)
+
+        # Убираем рамку текстового поля
+        text_browser.setFrameShape(QTextBrowser.NoFrame)
+        text_browser.setStyleSheet("QTextBrowser { border: none; }")
+
+        text_browser.setHtml(HELP_HTML)
+        layout.addWidget(text_browser)
+
+        close_btn = QPushButton("Закрыть")
+        close_btn.clicked.connect(dialog.accept)
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
+        button_layout.addWidget(close_btn)
+        layout.addLayout(button_layout)
+
+        dialog.exec_()

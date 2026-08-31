@@ -91,7 +91,7 @@ class ThicknessWidget(QWidget):
 
         # Поле ручного ввода
         self.value_edit = SelectAllLineEdit("3")
-        self.value_edit.setFixedSize(32, 32)
+        self.value_edit.setFixedSize(32, 26)
         self.value_edit.setAlignment(Qt.AlignCenter)
         self.value_edit.setFont(QFont("Arial", 10))
         self.value_edit.returnPressed.connect(self._on_edit)

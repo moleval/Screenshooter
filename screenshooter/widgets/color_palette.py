@@ -50,7 +50,7 @@ class ColorPaletteWidget(QWidget):
             self.color_buttons.append(button)
 
         self.palette_btn = QPushButton("🎨")
-        self.palette_btn.setFixedSize(32, 32)
+        self.palette_btn.setFixedSize(32, 26)
         self.palette_btn.setToolTip("Выбрать цвет...")
         self.palette_btn.clicked.connect(self._open_palette)
         layout.addWidget(self.palette_btn)
