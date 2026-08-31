@@ -122,8 +122,8 @@ def _blur_region_cv2(pixmap: QPixmap, blur_rect: QRectF, radius: float) -> QPixm
 
     # Получаем доступ к данным пикселей
     ptr = qimage.bits()
-    ptr.setArraySize(qimage.byteCount())
-    arr = np.frombuffer(ptr, dtype=np.uint8).reshape((height, width, 4)).copy()
+    data = ptr.asstring(qimage.byteCount())
+    arr = np.frombuffer(data, dtype=np.uint8).reshape((height, width, 4)).copy()
 
     # Вырезаем область размытия с запасом для корректных границ
     margin = int(radius)
