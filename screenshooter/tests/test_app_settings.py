@@ -20,7 +20,6 @@ def temp_config(tmp_path, monkeypatch):
         return str(config_path)
 
     monkeypatch.setattr(AppSettings, "_get_config_path", fake_get_config_path)
-
     return config_path
 
 
@@ -42,33 +41,35 @@ def test_save_and_load(temp_config):
 
 
 def test_autostart_shortcut_create_and_remove(temp_config, monkeypatch):
-    # Мокаем win32com.client.Dispatch
     class FakeShortcut:
-        def __init__(self):
+        def __init__(self, path):
+            self.path = path
             self.Targetpath = None
             self.Arguments = None
             self.WorkingDirectory = None
             self.IconLocation = None
 
         def save(self):
-            pass
+            # Реально создаём файл, чтобы is_autostart_enabled() вернул True
+            with open(self.path, 'w', encoding='utf-8') as f:
+                f.write('')
 
     class FakeShell:
         def CreateShortCut(self, path):
-            return FakeShortcut()
+            return FakeShortcut(path)
 
     fake_dispatch = lambda prog_id: FakeShell()
 
-    # Подменяем модуль win32com.client, если он не установлен
-    import types
-    fake_module = types.ModuleType("win32com.client")
-    fake_module.Dispatch = fake_dispatch
-    sys.modules["win32com.client"] = fake_module
-
-    # ВАЖНО: подменяем флаг _HAS_WIN32COM, иначе код решит, что win32com нет
+    # Подменяем Dispatch в самом модуле screenshooter.settings
+    monkeypatch.setattr("screenshooter.settings.Dispatch", fake_dispatch)
+    # Гарантируем, что флаг _HAS_WIN32COM True
     monkeypatch.setattr("screenshooter.settings._HAS_WIN32COM", True)
+    # Подменяем путь к ярлыку на временный
+    shortcut_path = temp_config.parent / "Screenshooter.lnk"
+    monkeypatch.setattr(AppSettings, "_get_shortcut_path", lambda self: str(shortcut_path))
 
     settings = AppSettings()
+
     assert settings.create_autostart_shortcut() is True
     assert settings.is_autostart_enabled() is True
 
