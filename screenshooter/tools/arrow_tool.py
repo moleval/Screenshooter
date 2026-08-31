@@ -7,7 +7,7 @@
 
 import math
 from PyQt5.QtCore import Qt, QPointF
-from PyQt5.QtGui import QPen, QFont
+from PyQt5.QtGui import QPen, QFont, QColor
 
 from .base_tool import BaseTool
 from ..items import ArrowItem, CurvedArrowItem, DimensionItem, TextItem
@@ -39,7 +39,6 @@ class ArrowTool(BaseTool):
         end = scene_pos
         mode = self.view.arrow_mode
 
-        # Ограничение по осям при зажатом Shift для всех режимов
         if modifiers & Qt.ShiftModifier:
             dx = end.x() - start.x()
             dy = end.y() - start.y()
@@ -99,7 +98,7 @@ class ArrowTool(BaseTool):
         normal = QPointF(math.sin(rad), -math.cos(rad))
 
         ti = TextItem(self.view, bg_color=self.view.current_text_bg)
-        ti.setDefaultTextColor(self.view.current_pen_color)
+        ti.setDefaultTextColor(QColor("#F9D556"))  # <-- изменено на жёлтый
         font = QFont()
         font.setPointSize(self.view.text_size * 4)
         ti.setFont(font)

@@ -57,21 +57,18 @@ class ScreenshotApp(QMainWindow):
         super().__init__()
         self.setWindowTitle("Скриншотер с редактором")
         self.setGeometry(100, 100, WINDOW_INITIAL_WIDTH, WINDOW_INITIAL_HEIGHT)
-        self.setMinimumHeight(WINDOW_MIN_HEIGHT)   # ширина будет задана динамически
+        self.setMinimumHeight(WINDOW_MIN_HEIGHT)
 
-        # Настройки приложения
         self.settings = AppSettings()
 
-        # Загружаем сохранённую тему и применяем её ДО создания виджетов
         theme_manager.set_theme(self.settings.theme)
         theme_manager.apply(QApplication.instance())
 
-        # Иконка окна из ресурсов
         self.setWindowIcon(load_app_icon())
 
-        # Флаг для различения закрытия и сворачивания
         self._force_quit = False
         self._saved_window_state = None
+        self._window_state_before_fullscreen = None   # для сохранения состояния перед fullscreen
 
         self._printscreen_hook = None
         self._alt_printscreen_hotkey = None
@@ -121,12 +118,10 @@ class ScreenshotApp(QMainWindow):
         self.view = EditorView(self.scene)
         self.view.zoomChangedByWheel.connect(self._on_view_zoom_changed)
 
-        # Контроллеры захвата и экспорта
         self.capture = ScreenCapture(self)
         self.exporter = Exporter(self.view, self.scene, self.settings)
         self.exporter.load_save_directory_from_settings()
 
-        # Инициализация трея после создания основного окна
         self.tray_manager = TrayManager(self)
 
         self.undo_shortcut = QShortcut(QKeySequence("Ctrl+Z"), self)
@@ -135,6 +130,12 @@ class ScreenshotApp(QMainWindow):
         self.redo_shortcut.activated.connect(self._on_redo_shortcut)
         self.paste_shortcut = QShortcut(QKeySequence("Ctrl+V"), self)
         self.paste_shortcut.activated.connect(self._on_paste_shortcut)
+
+        # Шорткаты полноэкранного режима
+        self.fullscreen_shortcut_f11 = QShortcut(QKeySequence("F11"), self)
+        self.fullscreen_shortcut_f11.activated.connect(self.toggle_fullscreen)
+        self.fullscreen_shortcut_ctrl_enter = QShortcut(QKeySequence("Ctrl+Return"), self)
+        self.fullscreen_shortcut_ctrl_enter.activated.connect(self.toggle_fullscreen)
 
         self.crop_buttons_widget = QWidget()
         crop_buttons_layout = QHBoxLayout(self.crop_buttons_widget)
@@ -187,10 +188,8 @@ class ScreenshotApp(QMainWindow):
         top_actions_layout.addWidget(right_group_widget)
         layout.addWidget(top_actions_widget)
 
-        # Сохраняем ссылку на верхнюю панель
         self.top_actions_widget = top_actions_widget
 
-        # ================== РЕДАКТОР ТУЛБАРОВ ==================
         self.view.history.stack.canUndoChanged.connect(self._update_undo_buttons)
         self.view.history.stack.canRedoChanged.connect(self._update_undo_buttons)
         self._update_undo_buttons()
@@ -200,7 +199,6 @@ class ScreenshotApp(QMainWindow):
         self.color_palette = ColorPaletteWidget()
         self.color_palette.colorSelected.connect(self.set_color_from_palette)
 
-        # Связываем изменение режима прямоугольника с обновлением цвета палитры
         self.view.shape_mode_widget.modeChanged.connect(self._on_shape_mode_changed_for_color)
 
         action_group = QActionGroup(self)
@@ -272,12 +270,10 @@ class ScreenshotApp(QMainWindow):
 
         image_actions = [crop_action, rotate_cw_action, rotate_ccw_action, blur_action]
 
-        # Создаём компоненты тулбаров
         annotation_toolbar = AnnotationToolbar(annotation_actions)
         image_toolbar = ImageToolbar(image_actions)
         options_toolbar = OptionsToolbar(self.thickness_widget, self.color_palette)
 
-        # Создаём плоскую панель
         editor_toolbar_strip = EditorToolbarStrip(
             annotation_toolbar,
             image_toolbar,
@@ -285,14 +281,11 @@ class ScreenshotApp(QMainWindow):
             parent=cw
         )
 
-        # Сохраняем ссылку на strip
         self.editor_toolbar_strip = editor_toolbar_strip
 
-        # Добавляем панель между MainActionBar и EditorView
         layout.addWidget(editor_toolbar_strip)
         layout.addWidget(self.view)
 
-        # Устанавливаем текущий инструмент
         self.pointer_action.setChecked(True)
         self._sync_palette_to_tool(None)
 
@@ -317,30 +310,25 @@ class ScreenshotApp(QMainWindow):
         self.setup_global_hotkeys()
         self._update_image_actions_enabled()
 
-        # Динамически вычисляем минимальную ширину окна
         self._update_window_minimum_width()
 
         self.view.setFocus()
 
     # --------------------------------------------------------------
-    # Новый метод: вычисление минимальной ширины окна
+    # Динамическое вычисление минимальной ширины окна
     # --------------------------------------------------------------
     def _update_window_minimum_width(self):
-        """
-        Вычисляет и применяет минимальную ширину окна на основе
-        минимальных ширин MainActionBar и EditorToolbarStrip.
-        Не уменьшает текущее окно, если новый минимум меньше.
-        """
         self.ensurePolished()
         self.top_actions_widget.ensurePolished()
         self.editor_toolbar_strip.ensurePolished()
+        self.top_actions_widget.updateGeometry()
+        self.editor_toolbar_strip.updateGeometry()
         central_layout = self.centralWidget().layout()
         central_layout.activate()
 
         main_action_min = self.top_actions_widget.minimumSizeHint().width()
         strip_min = self.editor_toolbar_strip.minimumSizeHint().width()
 
-        # Проверяем другие виджеты центрального layout (например, EditorView)
         other_min = 0
         for i in range(central_layout.count()):
             item = central_layout.itemAt(i)
@@ -377,7 +365,6 @@ class ScreenshotApp(QMainWindow):
     # Синхронизация палитры с инструментом
     # --------------------------------------------------------------
     def _sync_palette_to_tool(self, tool_name):
-        """Устанавливает цвет пера и палитры в зависимости от выбранного инструмента."""
         if tool_name == 'text':
             new_color = QColor("#F9D556")
         elif tool_name == 'rect':
@@ -390,7 +377,6 @@ class ScreenshotApp(QMainWindow):
         self.view.widget_manager.update_info_widget_content(new_color, self.view.pen_width)
 
     def _on_shape_mode_changed_for_color(self, mode):
-        """Обрабатывает смену режима прямоугольника для обновления цвета."""
         if self.view.current_tool == 'rect':
             self._sync_palette_to_tool('rect')
 
@@ -443,7 +429,6 @@ class ScreenshotApp(QMainWindow):
         label = theme_names.get(theme_key, theme_key)
         self.view.show_status_message(f"Тема: {label}", 2000)
 
-        # Пересчитываем минимальную ширину окна (могли измениться шрифты)
         self._update_window_minimum_width()
 
     # --------------------------------------------------------------
@@ -527,6 +512,7 @@ class ScreenshotApp(QMainWindow):
 
         msg_box.setDefaultButton(yes_btn)
 
+        yes_btn.setFocus()  # Фокус на "Да"
         msg_box.exec_()
 
         if msg_box.clickedButton() == yes_btn:
@@ -841,3 +827,29 @@ class ScreenshotApp(QMainWindow):
 
     def delete_selected(self):
         self.view.delete_selected()
+
+    def toggle_fullscreen(self):
+        """Переключает полноэкранный режим без артефактов."""
+        if self.isFullScreen():
+            # Выход из полноэкранного режима
+            was_maximized = bool(self._window_state_before_fullscreen & Qt.WindowMaximized)
+            self._window_state_before_fullscreen = None
+
+            # Отключаем обновление окна, чтобы скрыть промежуточные состояния
+            self.setUpdatesEnabled(False)
+            # Снимаем полноэкранный режим
+            self.setWindowState(self.windowState() & ~Qt.WindowFullScreen)
+            # Отложенно восстанавливаем нужное состояние
+            QTimer.singleShot(0, lambda: self._restore_after_fullscreen(was_maximized))
+        else:
+            self._window_state_before_fullscreen = self.windowState()
+            self.setUpdatesEnabled(True)
+            self.showFullScreen()
+
+    def _restore_after_fullscreen(self, was_maximized):
+        """Восстанавливает состояние окна после выхода из fullscreen."""
+        if was_maximized:
+            self.setWindowState(Qt.WindowMaximized)
+        else:
+            self.setWindowState(Qt.WindowNoState)
+        self.setUpdatesEnabled(True)
