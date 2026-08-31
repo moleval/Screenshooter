@@ -311,7 +311,9 @@ class ScreenshotApp(QMainWindow):
         self._update_image_actions_enabled()
 
         self._update_window_minimum_width()
-
+        # Устанавливаем стартовую ширину равной минимальной,
+        # чтобы убрать зазор между ImageToolbar и OptionsToolbar
+        self.resize(self.minimumWidth(), self.height())
         self.view.setFocus()
 
     # --------------------------------------------------------------
@@ -512,7 +514,7 @@ class ScreenshotApp(QMainWindow):
 
         msg_box.setDefaultButton(yes_btn)
 
-        yes_btn.setFocus()  # Фокус на "Да"
+        yes_btn.setFocus()
         msg_box.exec_()
 
         if msg_box.clickedButton() == yes_btn:
@@ -690,6 +692,10 @@ class ScreenshotApp(QMainWindow):
         self.view.active_text_item = None
         self.view.history.clear()
 
+        # Сбрасываем ссылки на фоновое изображение
+        self.view.image_editor.background_item = None
+        self.view.image_editor.crop_target_item = None
+
         item = QGraphicsPixmapItem(self.screenshot_pixmap)
         item.setTransformationMode(Qt.SmoothTransformation)
 
@@ -831,15 +837,11 @@ class ScreenshotApp(QMainWindow):
     def toggle_fullscreen(self):
         """Переключает полноэкранный режим без артефактов."""
         if self.isFullScreen():
-            # Выход из полноэкранного режима
             was_maximized = bool(self._window_state_before_fullscreen & Qt.WindowMaximized)
             self._window_state_before_fullscreen = None
 
-            # Отключаем обновление окна, чтобы скрыть промежуточные состояния
             self.setUpdatesEnabled(False)
-            # Снимаем полноэкранный режим
             self.setWindowState(self.windowState() & ~Qt.WindowFullScreen)
-            # Отложенно восстанавливаем нужное состояние
             QTimer.singleShot(0, lambda: self._restore_after_fullscreen(was_maximized))
         else:
             self._window_state_before_fullscreen = self.windowState()
@@ -847,7 +849,6 @@ class ScreenshotApp(QMainWindow):
             self.showFullScreen()
 
     def _restore_after_fullscreen(self, was_maximized):
-        """Восстанавливает состояние окна после выхода из fullscreen."""
         if was_maximized:
             self.setWindowState(Qt.WindowMaximized)
         else:

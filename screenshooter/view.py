@@ -136,10 +136,10 @@ class EditorView(QGraphicsView):
     # ==============================================================
     def _is_point_inside_background(self, scene_pos):
         """Проверяет, попадает ли точка в пределы подложки."""
-        if self.image_editor.background_item is None:
+        bg = self.image_editor.background_item
+        if bg is None or sip.isdeleted(bg):
             return False
-        bg_rect = self.image_editor.background_item.mapRectToScene(
-            QRectF(self.image_editor.background_item.pixmap().rect()))
+        bg_rect = bg.mapRectToScene(QRectF(bg.pixmap().rect()))
         return bg_rect.contains(scene_pos)
 
     def _schedule_selection_update(self):
@@ -308,6 +308,11 @@ class EditorView(QGraphicsView):
         self.scene().clear()
         self.active_text_item = None
         self.history.clear()
+
+        # Сбрасываем ссылки на фоновое изображение, чтобы избежать ошибок
+        # при обращении к удалённому QGraphicsPixmapItem.
+        self.image_editor.background_item = None
+        self.image_editor.crop_target_item = None
 
         self.image_editor.reset_state()
         self.blur_controller.reset_state()
