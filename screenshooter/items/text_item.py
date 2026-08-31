@@ -26,15 +26,18 @@ class TextItem(QGraphicsTextItem):
         self.setTextInteractionFlags(Qt.NoTextInteraction)
 
     def boundingRect(self):
+        """Return the complete painted area, including the text background."""
         rect = super().boundingRect()
         return rect.adjusted(self.PADDING_LEFT, self.PADDING_TOP,
                              self.PADDING_RIGHT, self.PADDING_BOTTOM)
 
     def paint(self, painter, option, widget):
         if self.bg_color is not None:
-            rect = self.boundingRect().adjusted(
-                self.PADDING_LEFT, self.PADDING_TOP, self.PADDING_RIGHT, self.PADDING_BOTTOM
-            )
+            # boundingRect() already contains the complete background area.
+            # Do not apply the padding a second time: doing so paints outside
+            # the item's declared geometry and causes clipping/ghost trails
+            # when the item is created or moved.
+            rect = self.boundingRect()
             painter.save()
             painter.setBrush(self.bg_color)
             painter.setPen(Qt.NoPen)
