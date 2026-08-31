@@ -38,7 +38,6 @@ from .ui.layout_metrics import (
     MAIN_LAYOUT_MARGIN,
     MAIN_LAYOUT_SPACING,
     TOP_ACTIONS_SPACING,
-    WINDOW_MIN_WIDTH,
     WINDOW_MIN_HEIGHT,
     WINDOW_INITIAL_WIDTH,
     WINDOW_INITIAL_HEIGHT,
@@ -58,7 +57,7 @@ class ScreenshotApp(QMainWindow):
         super().__init__()
         self.setWindowTitle("Скриншотер с редактором")
         self.setGeometry(100, 100, WINDOW_INITIAL_WIDTH, WINDOW_INITIAL_HEIGHT)
-        self.setMinimumSize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
+        self.setMinimumHeight(WINDOW_MIN_HEIGHT)   # ширина будет задана динамически
 
         # Настройки приложения
         self.settings = AppSettings()
@@ -188,6 +187,9 @@ class ScreenshotApp(QMainWindow):
         top_actions_layout.addWidget(right_group_widget)
         layout.addWidget(top_actions_widget)
 
+        # Сохраняем ссылку на верхнюю панель
+        self.top_actions_widget = top_actions_widget
+
         # ================== РЕДАКТОР ТУЛБАРОВ ==================
         self.view.history.stack.canUndoChanged.connect(self._update_undo_buttons)
         self.view.history.stack.canRedoChanged.connect(self._update_undo_buttons)
@@ -283,6 +285,9 @@ class ScreenshotApp(QMainWindow):
             parent=cw
         )
 
+        # Сохраняем ссылку на strip
+        self.editor_toolbar_strip = editor_toolbar_strip
+
         # Добавляем панель между MainActionBar и EditorView
         layout.addWidget(editor_toolbar_strip)
         layout.addWidget(self.view)
@@ -311,7 +316,48 @@ class ScreenshotApp(QMainWindow):
 
         self.setup_global_hotkeys()
         self._update_image_actions_enabled()
+
+        # Динамически вычисляем минимальную ширину окна
+        self._update_window_minimum_width()
+
         self.view.setFocus()
+
+    # --------------------------------------------------------------
+    # Новый метод: вычисление минимальной ширины окна
+    # --------------------------------------------------------------
+    def _update_window_minimum_width(self):
+        """
+        Вычисляет и применяет минимальную ширину окна на основе
+        минимальных ширин MainActionBar и EditorToolbarStrip.
+        Не уменьшает текущее окно, если новый минимум меньше.
+        """
+        self.ensurePolished()
+        self.top_actions_widget.ensurePolished()
+        self.editor_toolbar_strip.ensurePolished()
+        central_layout = self.centralWidget().layout()
+        central_layout.activate()
+
+        main_action_min = self.top_actions_widget.minimumSizeHint().width()
+        strip_min = self.editor_toolbar_strip.minimumSizeHint().width()
+
+        # Проверяем другие виджеты центрального layout (например, EditorView)
+        other_min = 0
+        for i in range(central_layout.count()):
+            item = central_layout.itemAt(i)
+            if item.widget() and item.widget() is not self.view:
+                other_min = max(other_min, item.widget().minimumSizeHint().width())
+
+        content_min = max(main_action_min, strip_min, other_min)
+
+        margins = central_layout.contentsMargins()
+        left = margins.left()
+        right = margins.right()
+        min_width = content_min + left + right
+
+        self.setMinimumWidth(min_width)
+
+        if self.width() < min_width:
+            self.resize(min_width, self.height())
 
     # --------------------------------------------------------------
     # Вспомогательный метод создания tool action
@@ -339,10 +385,7 @@ class ScreenshotApp(QMainWindow):
         else:
             new_color = QColor("#D25145")
 
-        # Обновляем текущий цвет пера
         self.view.current_pen_color = new_color
-
-        # Обновляем палитру и информационный виджет
         self.color_palette.set_current_color(new_color)
         self.view.widget_manager.update_info_widget_content(new_color, self.view.pen_width)
 
@@ -399,6 +442,9 @@ class ScreenshotApp(QMainWindow):
         theme_names = {"light": "Светлая", "dark": "Тёмная", "system": "Системная"}
         label = theme_names.get(theme_key, theme_key)
         self.view.show_status_message(f"Тема: {label}", 2000)
+
+        # Пересчитываем минимальную ширину окна (могли измениться шрифты)
+        self._update_window_minimum_width()
 
     # --------------------------------------------------------------
     # Вставка изображений
@@ -573,7 +619,6 @@ class ScreenshotApp(QMainWindow):
         clipboard = QApplication.clipboard()
         mime = clipboard.mimeData()
 
-        # Проверяем маркер внутреннего копирования
         if mime.hasFormat("application/x-screenshooter-internal"):
             if self.view.clipboard_controller.has_clipboard:
                 self.view.clipboard_controller.paste()
@@ -581,12 +626,10 @@ class ScreenshotApp(QMainWindow):
                 self.view.show_status_message("Буфер обмена пуст", 3000)
             return
 
-        # Если маркера нет — работаем с системным буфером
         if mime.hasImage() or mime.hasUrls() or mime.hasText():
             self.insert_image_from_clipboard()
             return
 
-        # Если системный буфер пуст, пробуем внутренний
         if self.view.clipboard_controller.has_clipboard:
             self.view.clipboard_controller.paste()
         else:

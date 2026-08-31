@@ -56,12 +56,12 @@ class ThicknessWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        # Разрешаем расширение по горизонтали, чтобы заполнять доступную ширину
+        # Важно: Expanding, чтобы заполнять доступную ширину в OptionsToolbar
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(4)                      # зазор между контролами
+        layout.setSpacing(4)
 
         # Кнопки пресетов
         self.preset_buttons = []
@@ -82,8 +82,8 @@ class ThicknessWidget(QWidget):
         self.slider.setRange(1, 100)
         self.slider.setValue(3)
         self.slider.setFixedHeight(26)
-        self.slider.setMinimumWidth(80)           # минимальная ширина для удобства
-        # Убрано ограничение setMaximumWidth, чтобы слайдер мог растягиваться
+        self.slider.setMinimumWidth(80)          # минимальная ширина для удобства
+        # Ограничение максимальной ширины не задаём — слайдер должен расширяться
         self.slider.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.slider.valueChanged.connect(self._on_slider_changed)
         self.slider.customEditRequested.connect(self._open_value_dialog)
@@ -100,8 +100,6 @@ class ThicknessWidget(QWidget):
         self._value = 3
         self._update_preset_highlight(3)
 
-    # ----- методы set_value_silent, _set_value, _on_slider_changed,
-    #       _on_edit, _open_value_dialog, _update_preset_highlight оставлены без изменений -----
     def set_value_silent(self, value):
         self.slider.blockSignals(True)
         self.slider.setValue(value)

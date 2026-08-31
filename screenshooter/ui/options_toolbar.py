@@ -13,10 +13,11 @@ class OptionsToolbar(QWidget):
         self.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
+        # Левый отступ для компенсации внутреннего padding кнопок ImageToolbar (~12 px)
+        layout.setContentsMargins(12, 0, 0, 0)
         layout.setSpacing(2)
 
-        # Ряд толщины: без растяжек, виджет занимает всю ширину
+        # Ряд толщины: без растяжек, виджет заполняет всю ширину
         row1 = QHBoxLayout()
         row1.setContentsMargins(0, 0, 0, 0)
         row1.addWidget(thickness_widget)

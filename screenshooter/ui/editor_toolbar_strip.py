@@ -30,5 +30,6 @@ class EditorToolbarStrip(QWidget):
         layout.addWidget(annotation_toolbar)
         layout.addWidget(ToolbarSeparator())
         layout.addWidget(image_toolbar)
+        layout.addWidget(ToolbarSeparator())   # <-- добавлено
         layout.addStretch(1)
         layout.addWidget(options_toolbar)
