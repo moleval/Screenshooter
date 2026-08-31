@@ -45,7 +45,7 @@ class ZoomWidget(QWidget):
         self.minus_btn.setStyleSheet(
             "QPushButton { background-color: white; color: black; font-weight: bold; font-size: 14px; "
             "border: 1px solid gray; border-radius: 4px; } QPushButton:hover { background-color: lightgray; }")
-        self.minus_btn.clicked.connect(self._zoom_out)
+        self.minus_btn.clicked.connect(self.zoom_out)
         layout.addWidget(self.minus_btn)
 
         self.slider = ZoomSlider(Qt.Horizontal)
@@ -68,7 +68,7 @@ class ZoomWidget(QWidget):
         self.plus_btn.setStyleSheet(
             "QPushButton { background-color: white; color: black; font-weight: bold; font-size: 14px; "
             "border: 1px solid gray; border-radius: 4px; } QPushButton:hover { background-color: lightgray; }")
-        self.plus_btn.clicked.connect(self._zoom_in)
+        self.plus_btn.clicked.connect(self.zoom_in)
         layout.addWidget(self.plus_btn)
 
         self.percent_edit = SelectAllLineEdit()
@@ -87,10 +87,12 @@ class ZoomWidget(QWidget):
         self.percent_edit.setText(f"{value}%")
         self.zoomChanged.emit(value)
 
-    def _zoom_in(self):
+    def zoom_in(self):
+        """Увеличить масштаб на 10%."""
         self.slider.setValue(self.slider.value() + 10)
 
-    def _zoom_out(self):
+    def zoom_out(self):
+        """Уменьшить масштаб на 10%."""
         self.slider.setValue(self.slider.value() - 10)
 
     def _on_edit(self):

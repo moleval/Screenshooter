@@ -72,7 +72,6 @@ D:\Screenshooter\
 │   │   └── icon.png
 │   │
 │   ├── tests\
-│   │   ├── __init__.py (если есть)
 │   │   ├── conftest.py
 │   │   ├── test_app_settings.py
 │   │   ├── test_clipboard_controller.py

@@ -7,11 +7,11 @@ import math
 from PyQt5 import sip
 from PyQt5.QtCore import Qt, QRectF, QPointF, QPoint, pyqtSignal, QSize, QTimer
 from PyQt5.QtGui import (QPainter, QPen, QColor, QPolygonF, QFont, QImage,
-                         QIcon, QPainterPath, QCursor, QBrush, QPixmap)
+                         QIcon, QPainterPath, QCursor, QBrush, QPixmap, QKeySequence)
 from PyQt5.QtWidgets import (QGraphicsView, QGraphicsScene, QGraphicsRectItem,
                              QGraphicsEllipseItem, QGraphicsPixmapItem,
                              QGraphicsTextItem, QGraphicsItem, QStyle,
-                             QInputDialog, QLabel, QApplication)
+                             QInputDialog, QLabel, QApplication, QShortcut)
 
 from .constants import MIN_RECT_SIZE, MIN_ARROW_LENGTH
 from .items import (TextItem, DimensionTextItem, RectangleItem, EllipseItem,
@@ -130,6 +130,16 @@ class EditorView(QGraphicsView):
         self._selection_update_timer.timeout.connect(self._do_selection_update)
 
         self.crop_mode_changed.connect(self._on_crop_mode_changed)
+
+        # Горячие клавиши масштабирования (+/-)
+        self.zoom_in_shortcut = QShortcut(QKeySequence(Qt.Key_Plus), self)
+        self.zoom_in_shortcut.activated.connect(self._on_zoom_in_shortcut)
+        self.zoom_out_shortcut = QShortcut(QKeySequence(Qt.Key_Minus), self)
+        self.zoom_out_shortcut.activated.connect(self._on_zoom_out_shortcut)
+
+        # Горячая клавиша вписывания изображения в окно
+        self.fit_shortcut = QShortcut(QKeySequence(Qt.ALT + Qt.Key_Return), self)
+        self.fit_shortcut.activated.connect(self._on_fit_shortcut)
 
     # ==============================================================
     # Вспомогательные
@@ -278,6 +288,10 @@ class EditorView(QGraphicsView):
         self.active_text_item = None
         self.history.clear()
 
+        # Сбрасываем ссылку на предыдущий фон
+        self.image_editor.background_item = None
+        self.image_editor.crop_target_item = None
+
         item = QGraphicsPixmapItem(pixmap)
         item.setTransformationMode(Qt.SmoothTransformation)
         item.setAcceptedMouseButtons(Qt.NoButton)
@@ -309,8 +323,7 @@ class EditorView(QGraphicsView):
         self.active_text_item = None
         self.history.clear()
 
-        # Сбрасываем ссылки на фоновое изображение, чтобы избежать ошибок
-        # при обращении к удалённому QGraphicsPixmapItem.
+        # Сбрасываем ссылки на фоновое изображение
         self.image_editor.background_item = None
         self.image_editor.crop_target_item = None
 
@@ -354,10 +367,8 @@ class EditorView(QGraphicsView):
         return self.pasted_image_controller.pasted_images
 
     def add_pasted_image(self, pixmap, scene_pos=None):
-        """Добавляет изображение на сцену. Если scene_pos не задан,
-        размещает в центре viewport."""
+        """Добавляет изображение на сцену."""
         if self.background_item is None or sip.isdeleted(self.background_item):
-            # Если подложки нет, делаем изображение подложкой
             self.set_background_from_pixmap(pixmap)
             return None
 
@@ -365,14 +376,12 @@ class EditorView(QGraphicsView):
         self.scene().addItem(item)
         self.pasted_images.append(item)
 
-        # Определяем позицию вставки
         if scene_pos is None:
             center = self.mapToScene(self.viewport().rect().center())
             scene_pos = center - QPointF(pixmap.width() / 2, pixmap.height() / 2)
 
         item.setPos(scene_pos)
 
-        # Автоматическое масштабирование, как раньше
         viewport_rect = self.viewport().rect()
         max_w = viewport_rect.width() * 0.8
         max_h = viewport_rect.height() * 0.8
@@ -456,7 +465,6 @@ class EditorView(QGraphicsView):
                     path = url.toLocalFile()
                     pixmap = QPixmap(path)
                     if not pixmap.isNull():
-                        # Позиция вставки — точка под курсором при сбросе
                         scene_pos = self.mapToScene(e.pos())
                         scene_pos -= QPointF(pixmap.width() / 2, pixmap.height() / 2)
                         if self.background_item is None or sip.isdeleted(self.background_item):
@@ -552,7 +560,6 @@ class EditorView(QGraphicsView):
                 if self.active_text_item and self.active_text_item._editable:
                     self._deactivate_active_text()
                 if li is None or self._is_background_item(li):
-                    # Проверяем, что точка внутри подложки
                     if not self._is_point_inside_background(sp):
                         e.accept()
                         return
@@ -575,7 +582,6 @@ class EditorView(QGraphicsView):
         if self.current_tool in ('rect', 'ellipse', 'arrow', 'line'):
             if self._tool is not None:
                 sp = self.mapToScene(e.pos())
-                # Ограничиваем точку подложкой
                 if not self._is_point_inside_background(sp):
                     e.accept()
                     return
@@ -614,12 +620,10 @@ class EditorView(QGraphicsView):
 
         if self.temp_item and self._tool is not None and self.current_tool not in ('text',):
             sp = self.mapToScene(e.pos())
-            # Ограничиваем точку пределами подложки
             if self.image_editor.background_item is not None:
                 bg_rect = self.image_editor.background_item.mapRectToScene(
                     QRectF(self.image_editor.background_item.pixmap().rect()))
                 if not bg_rect.contains(sp):
-                    # Прижимаем точку к ближайшей границе
                     sp.setX(max(bg_rect.left(), min(bg_rect.right(), sp.x())))
                     sp.setY(max(bg_rect.top(), min(bg_rect.bottom(), sp.y())))
             self._tool.update_draw(self.temp_item, sp, e.modifiers())
@@ -683,7 +687,6 @@ class EditorView(QGraphicsView):
             return
 
         if self.current_tool == 'text' and (li is None or self._is_background_item(li)):
-            # Проверяем, что точка внутри подложки
             if not self._is_point_inside_background(sp):
                 e.accept()
                 return
@@ -912,3 +915,22 @@ class EditorView(QGraphicsView):
     def showEvent(self, e):
         super().showEvent(e)
         QTimer.singleShot(0, self.layout_manager.update_all)
+
+    # ==============================================================
+    # Горячие клавиши масштабирования (+/-)
+    # ==============================================================
+    def _on_zoom_in_shortcut(self):
+        if self.active_text_item and self.active_text_item._editable:
+            return
+        self.zoom_widget.zoom_in()
+
+    def _on_zoom_out_shortcut(self):
+        if self.active_text_item and self.active_text_item._editable:
+            return
+        self.zoom_widget.zoom_out()
+
+    def _on_fit_shortcut(self):
+        """Обработчик Alt+Enter: вписать изображение в окно."""
+        if self.active_text_item and self.active_text_item._editable:
+            return
+        self.zoom_widget.fitRequested.emit()    
