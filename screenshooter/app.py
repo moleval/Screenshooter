@@ -41,6 +41,7 @@ from .ui.layout_metrics import (
     WINDOW_MIN_HEIGHT,
     WINDOW_INITIAL_WIDTH,
     WINDOW_INITIAL_HEIGHT,
+    TOOLBAR_CONTROL_HEIGHT,
 )
 from .ui.annotation_toolbar import AnnotationToolbar
 from .ui.image_toolbar import ImageToolbar
@@ -192,7 +193,7 @@ class ScreenshotApp(QMainWindow):
 
         # Кнопка справки
         self.help_btn = QPushButton("?")
-        self.help_btn.setFixedSize(32, 26)  # ширина 32, высота 26
+        self.help_btn.setFixedSize(32, TOOLBAR_CONTROL_HEIGHT) # ширина 32, высота 26
         self.help_btn.setToolTip("Справка (F1)")
         self.help_btn.clicked.connect(self.show_help)
         right_group_layout.addWidget(self.help_btn)
@@ -214,11 +215,11 @@ class ScreenshotApp(QMainWindow):
             self.help_btn,
         )
         for btn in main_action_buttons:
-            btn.setFixedHeight(26)
+            btn.setFixedHeight(TOOLBAR_CONTROL_HEIGHT)
 
         # Кнопки crop тоже высотой 26
-        self.apply_crop_btn.setFixedHeight(26)
-        self.cancel_crop_btn.setFixedHeight(26)
+        self.apply_crop_btn.setFixedHeight(TOOLBAR_CONTROL_HEIGHT)
+        self.cancel_crop_btn.setFixedHeight(TOOLBAR_CONTROL_HEIGHT)
 
         self.top_actions_widget = top_actions_widget
 
@@ -870,18 +871,24 @@ class ScreenshotApp(QMainWindow):
     def toggle_fullscreen(self):
         """Переключает полноэкранный режим без артефактов."""
         if self.isFullScreen():
+            # Выход из полноэкранного режима
             was_maximized = bool(self._window_state_before_fullscreen & Qt.WindowMaximized)
             self._window_state_before_fullscreen = None
 
+            # Отключаем обновление окна, чтобы скрыть промежуточные состояния
             self.setUpdatesEnabled(False)
+            # Снимаем полноэкранный режим
             self.setWindowState(self.windowState() & ~Qt.WindowFullScreen)
+            # Отложенно восстанавливаем нужное состояние
             QTimer.singleShot(0, lambda: self._restore_after_fullscreen(was_maximized))
         else:
+            # Вход в полноэкранный режим
             self._window_state_before_fullscreen = self.windowState()
             self.setUpdatesEnabled(True)
             self.showFullScreen()
 
     def _restore_after_fullscreen(self, was_maximized):
+        """Восстанавливает состояние окна после выхода из fullscreen."""
         if was_maximized:
             self.setWindowState(Qt.WindowMaximized)
         else:

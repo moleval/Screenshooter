@@ -37,3 +37,4 @@ TOP_ACTIONS_MARGIN = 0            # отступы верхней строки �
 WINDOW_MIN_HEIGHT = 650           # минимальная высота окна
 WINDOW_INITIAL_WIDTH = 1030       # стартовая ширина окна
 WINDOW_INITIAL_HEIGHT = 750       # стартовая высота окна
+TOOLBAR_CONTROL_HEIGHT = 26     # высота элементов управления в верхней панели

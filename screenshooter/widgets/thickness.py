@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QPushButton, QSlider,
                              QLineEdit, QToolTip, QInputDialog, QSizePolicy)
 from PyQt5.QtGui import QFont
 from ..utils import SelectAllLineEdit
-
+from ..ui.layout_metrics import TOOLBAR_CONTROL_HEIGHT
 
 class ThicknessSlider(QSlider):
     customEditRequested = pyqtSignal()
@@ -81,7 +81,7 @@ class ThicknessWidget(QWidget):
         self.slider = ThicknessSlider(Qt.Horizontal)
         self.slider.setRange(1, 100)
         self.slider.setValue(3)
-        self.slider.setFixedHeight(26)
+        self.slider.setFixedHeight(TOOLBAR_CONTROL_HEIGHT)
         self.slider.setMinimumWidth(80)          # минимальная ширина для удобства
         # Ограничение максимальной ширины не задаём — слайдер должен расширяться
         self.slider.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -91,7 +91,7 @@ class ThicknessWidget(QWidget):
 
         # Поле ручного ввода
         self.value_edit = SelectAllLineEdit("3")
-        self.value_edit.setFixedSize(32, 26)
+        self.value_edit.setFixedSize(32, TOOLBAR_CONTROL_HEIGHT)
         self.value_edit.setAlignment(Qt.AlignCenter)
         self.value_edit.setFont(QFont("Arial", 10))
         self.value_edit.returnPressed.connect(self._on_edit)

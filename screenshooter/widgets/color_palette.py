@@ -9,7 +9,7 @@ from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QPushButton, QColorDialog,
                              QSizePolicy)
 from PyQt5.QtGui import QColor
-
+from ..ui.layout_metrics import TOOLBAR_CONTROL_HEIGHT
 
 class ColorPaletteWidget(QWidget):
     colorSelected = pyqtSignal(QColor)
@@ -50,7 +50,7 @@ class ColorPaletteWidget(QWidget):
             self.color_buttons.append(button)
 
         self.palette_btn = QPushButton("🎨")
-        self.palette_btn.setFixedSize(32, 26)
+        self.palette_btn.setFixedSize(32, TOOLBAR_CONTROL_HEIGHT)
         self.palette_btn.setToolTip("Выбрать цвет...")
         self.palette_btn.clicked.connect(self._open_palette)
         layout.addWidget(self.palette_btn)
