@@ -2,10 +2,11 @@ D:\Screenshooter\
 │
 ├── .gitignore
 ├── LICENSES.txt
+├── REGRESSION_NOTES.md
 ├── diagnose_geometry.py
+├── export_code.py
 ├── main.py
 ├── promt.txt
-├── prototype_toolbar_layout.py
 ├── pytest.ini
 ├── requirements-dev.txt
 ├── requirements.txt
@@ -70,6 +71,17 @@ D:\Screenshooter\
 │   │   ├── icon.ico
 │   │   └── icon.png
 │   │
+│   ├── tests\
+│   │   ├── __init__.py (если есть)
+│   │   ├── conftest.py
+│   │   ├── test_app_settings.py
+│   │   ├── test_clipboard_controller.py
+│   │   ├── test_history.py
+│   │   ├── test_image_edit_controller.py
+│   │   ├── test_image_processing.py
+│   │   ├── test_smoke.py
+│   │   └── test_ui_geometry.py
+│   │
 │   ├── tools\
 │   │   ├── __init__.py
 │   │   ├── arrow_tool.py
@@ -78,6 +90,7 @@ D:\Screenshooter\
 │   │   ├── ellipse_tool.py
 │   │   ├── line_tool.py
 │   │   ├── rect_tool.py
+│   │   ├── run_regression.py
 │   │   └── text_tool.py
 │   │
 │   ├── ui\
@@ -99,12 +112,3 @@ D:\Screenshooter\
 │       ├── thickness.py
 │       ├── tool_icons.py
 │       └── zoom_widget.py
-│
-└── tests\
-    ├── conftest.py
-    ├── test_app_settings.py
-    ├── test_clipboard_controller.py
-    ├── test_history.py
-    ├── test_image_edit_controller.py
-    ├── test_image_processing.py
-    └── test_smoke.py

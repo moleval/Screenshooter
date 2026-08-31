@@ -133,7 +133,6 @@ class ThemeManager:
         return self.COLORS_LIGHT.get(key, QColor(0, 0, 0))
 
     def get_rgba(self, key: str) -> str:
-        """Возвращает цвет в формате 'rgba(r, g, b, a)' для QSS."""
         color = self.get_color(key)
         return f"rgba({color.red()}, {color.green()}, {color.blue()}, {color.alpha()})"
 
@@ -149,20 +148,6 @@ class ThemeManager:
         return f"""
         QMainWindow {{
             background-color: {c['window_bg']};
-        }}
-
-        /* ===== QToolBar (легаси, пока используется в переходный период) ===== */
-        QToolBar {{
-            background-color: {c['panel_bg']};
-            border: 1px solid {c['border']};
-            padding: 2px;
-            spacing: 2px;
-        }}
-        QToolBar::separator {{
-            width: 1px;
-            background-color: {c['separator_line']};
-            margin-top: 8px;
-            margin-bottom: 8px;
         }}
 
         /* ===== EditorToolbarStrip (новая плоская панель) ===== */
