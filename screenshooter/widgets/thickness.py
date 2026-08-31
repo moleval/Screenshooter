@@ -10,7 +10,6 @@ from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QPushButton, QSlider,
                              QLineEdit, QToolTip, QInputDialog, QSizePolicy)
 from PyQt5.QtGui import QFont
 from ..utils import SelectAllLineEdit
-from ..ui.layout_metrics import THICKNESS_WIDGET_WIDTH
 
 
 class ThicknessSlider(QSlider):
@@ -57,38 +56,40 @@ class ThicknessWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        # Фиксированная ширина — как у палитры, чтобы панели совпадали
-        self.setFixedWidth(THICKNESS_WIDGET_WIDTH)
-        self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        # Разрешаем расширение по горизонтали, чтобы заполнять доступную ширину
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
+        layout.setSpacing(4)                      # зазор между контролами
 
+        # Кнопки пресетов
         self.preset_buttons = []
         presets = [1, 2, 5, 10, 20]
         for value in presets:
             button = QPushButton(f"x{value}")
-            button.setFixedSize(36, 32)
-            button.setFont(QFont("Arial", 9))
+            button.setMinimumHeight(24)
+            button.setFont(QFont("Arial", 8))
             button.setCheckable(True)
+            button.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
+            button.setStyleSheet("padding: 2px 4px;")
             button.clicked.connect(lambda _, v=value: self._set_value(v))
             layout.addWidget(button)
             self.preset_buttons.append(button)
 
-        layout.addStretch(1)
-
+        # Слайдер
         self.slider = ThicknessSlider(Qt.Horizontal)
         self.slider.setRange(1, 100)
         self.slider.setValue(3)
         self.slider.setFixedHeight(26)
+        self.slider.setMinimumWidth(80)           # минимальная ширина для удобства
+        # Убрано ограничение setMaximumWidth, чтобы слайдер мог растягиваться
         self.slider.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.slider.valueChanged.connect(self._on_slider_changed)
         self.slider.customEditRequested.connect(self._open_value_dialog)
         layout.addWidget(self.slider)
 
-        layout.addStretch(1)
-
+        # Поле ручного ввода
         self.value_edit = SelectAllLineEdit("3")
         self.value_edit.setFixedSize(32, 32)
         self.value_edit.setAlignment(Qt.AlignCenter)
@@ -99,6 +100,8 @@ class ThicknessWidget(QWidget):
         self._value = 3
         self._update_preset_highlight(3)
 
+    # ----- методы set_value_silent, _set_value, _on_slider_changed,
+    #       _on_edit, _open_value_dialog, _update_preset_highlight оставлены без изменений -----
     def set_value_silent(self, value):
         self.slider.blockSignals(True)
         self.slider.setValue(value)

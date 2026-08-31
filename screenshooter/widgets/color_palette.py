@@ -9,7 +9,6 @@ from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QPushButton, QColorDialog,
                              QSizePolicy)
 from PyQt5.QtGui import QColor
-from ..ui.layout_metrics import THICKNESS_WIDGET_WIDTH
 
 
 class ColorPaletteWidget(QWidget):
@@ -18,14 +17,11 @@ class ColorPaletteWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        # Эталон ширины — палитра (совпадает с шириной ThicknessWidget)
-        self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        self.setFixedWidth(THICKNESS_WIDGET_WIDTH)
+        self.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(2)
-        layout.addStretch(1)
 
         self.color_buttons = []
         colors = [
@@ -52,8 +48,6 @@ class ColorPaletteWidget(QWidget):
             button.clicked.connect(lambda _, c=color_str, b=button: self._on_color_click(c, b))
             layout.addWidget(button)
             self.color_buttons.append(button)
-
-        layout.addStretch(1)
 
         self.palette_btn = QPushButton("🎨")
         self.palette_btn.setFixedSize(32, 32)
