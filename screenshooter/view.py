@@ -497,53 +497,11 @@ class EditorView(QGraphicsView):
     # Мышь
     # ==============================================================
     def mousePressEvent(self, e):
-        if self.blur_controller.blur_mode:
-            sp = self.mapToScene(e.pos())
-            item = self.scene().itemAt(sp, self.transform())
-            li = self._item_for_manipulation(item) if item else None
+        if self.mouse_manager.handle_press(e):
+            e.accept()
+            return
 
-            is_blur_handle = False
-            if (self.blur_controller.active_blur_index is not None and
-                    self.blur_controller.active_blur_index < len(
-                        self.blur_controller.blur_region_items)):
-                active_blur = self.blur_controller.blur_region_items[
-                    self.blur_controller.active_blur_index]
-                if active_blur.handles:
-                    hid = active_blur.handles.hit_test(QPointF(e.pos()))
-                    if hid:
-                        is_blur_handle = True
-
-            delegate_to_manipulation = False
-
-            if is_blur_handle:
-                pass
-            elif li is not None and not self._is_background_item(li):
-                if isinstance(li, BlurRegionItem):
-                    modifiers = e.modifiers()
-                    is_ctrl = bool(modifiers & Qt.ControlModifier)
-                    is_shift = bool(modifiers & Qt.ShiftModifier)
-
-                    if is_ctrl or is_shift:
-                        delegate_to_manipulation = True
-                    else:
-                        selected = self.scene().selectedItems()
-                        non_bg_selected = [it for it in selected
-                                           if not self._is_background_item(it)]
-                        if len(non_bg_selected) > 1 and li.isSelected():
-                            delegate_to_manipulation = True
-                else:
-                    delegate_to_manipulation = True
-
-            if delegate_to_manipulation:
-                if self.manipulation_controller.handle_mouse_press(e):
-                    e.accept()
-                    return
-
-            if self.blur_controller.handle_mouse_press(e):
-                e.accept()
-                return
-
-        elif self.image_editor.crop_mode:
+        if self.image_editor.crop_mode:
             if self.image_editor.handle_mouse_press(e):
                 e.accept()
                 return
@@ -605,15 +563,14 @@ class EditorView(QGraphicsView):
         e.accept()
 
     def mouseMoveEvent(self, e):
-        if not self.manipulation_controller._drag_items:
-            if self.blur_controller.blur_mode:
-                if self.blur_controller.handle_mouse_move(e):
-                    e.accept()
-                    return
-            elif self.image_editor.crop_mode:
-                if self.image_editor.handle_mouse_move(e):
-                    e.accept()
-                    return
+        if self.mouse_manager.handle_move(e):
+            e.accept()
+            return
+
+        if not self.manipulation_controller._drag_items and self.image_editor.crop_mode:
+            if self.image_editor.handle_mouse_move(e):
+                e.accept()
+                return
 
         if not self.manipulation_controller._drag_items:
             if not self.image_editor.crop_mode and not self.blur_controller.blur_mode:
@@ -642,15 +599,14 @@ class EditorView(QGraphicsView):
         super().mouseMoveEvent(e)
 
     def mouseReleaseEvent(self, e):
-        if not self.manipulation_controller._drag_items:
-            if self.blur_controller.blur_mode:
-                if self.blur_controller.handle_mouse_release(e):
-                    e.accept()
-                    return
-            elif self.image_editor.crop_mode:
-                if self.image_editor.handle_mouse_release(e):
-                    e.accept()
-                    return
+        if self.mouse_manager.handle_release(e):
+            e.accept()
+            return
+
+        if not self.manipulation_controller._drag_items and self.image_editor.crop_mode:
+            if self.image_editor.handle_mouse_release(e):
+                e.accept()
+                return
 
         if not self.manipulation_controller._drag_items:
             if (e.button() == Qt.LeftButton and
@@ -942,4 +898,4 @@ class EditorView(QGraphicsView):
         """Обработчик Alt+Enter: вписать изображение в окно."""
         if self.active_text_item and self.active_text_item._editable:
             return
-        self.zoom_widget.fitRequested.emit()    
+        self.zoom_widget.fitRequested.emit()
