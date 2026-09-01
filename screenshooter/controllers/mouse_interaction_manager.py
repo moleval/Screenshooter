@@ -2,8 +2,8 @@
 Модуль: controllers/mouse_interaction_manager.py
 Описание: Диспетчер событий мыши для EditorView.
 
-Реализована маршрутизация для режимов размытия (blur) и обрезки (crop).
-Остальные режимы будут добавлены на следующих шагах.
+Реализована маршрутизация:
+  blur → crop → blur_outside → manipulation → (далее text/drawing уже в EditorView)
 """
 
 from PyQt5.QtCore import Qt, QPointF
@@ -15,12 +15,6 @@ class MouseInteractionManager:
     """Отвечает только за маршрутизацию событий мыши между обработчиками."""
 
     def __init__(self, view, blur_controller, image_editor, manipulation_controller):
-        """
-        :param view: EditorView, для которого выполняется диспетчеризация.
-        :param blur_controller: Контроллер режима размытия.
-        :param image_editor: Контроллер режима обрезки (ImageEditController).
-        :param manipulation_controller: Контроллер манипуляций объектами.
-        """
         self.view = view
         self.blur_controller = blur_controller
         self.image_editor = image_editor
@@ -74,13 +68,16 @@ class MouseInteractionManager:
             if self.blur_controller.handle_mouse_press(event):
                 return True
 
-            # Если blur_mode был активен, но событие не обработано,
-            # не переходим к crop (взаимоисключение)
-            return False
+            # НЕ возвращаем False здесь: манипуляция должна вызываться
+            # после неудачной обработки blur_mode (как в старом коде)
 
-        if self.image_editor.crop_mode:
+        elif self.image_editor.crop_mode:
             if self.image_editor.handle_mouse_press(event):
                 return True
+
+        # Манипуляция вызывается независимо от режима
+        if self.manipulation_controller.handle_mouse_press(event):
+            return True
 
         return False
 
@@ -93,6 +90,14 @@ class MouseInteractionManager:
             elif self.image_editor.crop_mode:
                 if self.image_editor.handle_mouse_move(event):
                     return True
+
+            if not self.image_editor.crop_mode and not self.blur_controller.blur_mode:
+                if self.blur_controller.handle_blur_region_move_outside(event):
+                    return True
+
+        if self.manipulation_controller.handle_mouse_move(event):
+            return True
+
         return False
 
     def handle_release(self, event) -> bool:
@@ -104,6 +109,16 @@ class MouseInteractionManager:
             elif self.image_editor.crop_mode:
                 if self.image_editor.handle_mouse_release(event):
                     return True
+
+            if (event.button() == Qt.LeftButton and
+                    not self.image_editor.crop_mode and
+                    not self.blur_controller.blur_mode):
+                if self.blur_controller.handle_blur_region_release_outside(event):
+                    return True
+
+        if self.manipulation_controller.handle_mouse_release(event):
+            return True
+
         return False
 
     def handle_cancel(self):

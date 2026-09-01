@@ -79,8 +79,7 @@ class ZoomWidget(QWidget):
         self.percent_edit.setStyleSheet("QLineEdit { background-color: white; border: 1px solid gray; }")
         self.percent_edit.returnPressed.connect(self._on_edit)
         layout.addWidget(self.percent_edit)
-
-        self._current_zoom = 100
+        
         self.setFixedSize(self.sizeHint())
 
     def _on_slider_changed(self, value):

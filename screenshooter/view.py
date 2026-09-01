@@ -501,10 +501,6 @@ class EditorView(QGraphicsView):
             e.accept()
             return
 
-        if self.manipulation_controller.handle_mouse_press(e):
-            e.accept()
-            return
-
         if self.current_tool == 'text':
             sp = self.mapToScene(e.pos())
             item = self.scene().itemAt(sp, self.transform())
@@ -562,16 +558,6 @@ class EditorView(QGraphicsView):
             e.accept()
             return
 
-        if not self.manipulation_controller._drag_items:
-            if not self.image_editor.crop_mode and not self.blur_controller.blur_mode:
-                if self.blur_controller.handle_blur_region_move_outside(e):
-                    e.accept()
-                    return
-
-        if self.manipulation_controller.handle_mouse_move(e):
-            e.accept()
-            return
-
         self._update_cursor(e.pos())
 
         if self.temp_item and self._tool is not None and self.current_tool not in ('text',):
@@ -590,18 +576,6 @@ class EditorView(QGraphicsView):
 
     def mouseReleaseEvent(self, e):
         if self.mouse_manager.handle_release(e):
-            e.accept()
-            return
-
-        if not self.manipulation_controller._drag_items:
-            if (e.button() == Qt.LeftButton and
-                    not self.image_editor.crop_mode and
-                    not self.blur_controller.blur_mode):
-                if self.blur_controller.handle_blur_region_release_outside(e):
-                    e.accept()
-                    return
-
-        if self.manipulation_controller.handle_mouse_release(e):
             e.accept()
             return
 

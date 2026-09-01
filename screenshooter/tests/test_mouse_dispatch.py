@@ -41,7 +41,7 @@ def make_mouse_event(view, event_type, pos=None, button=Qt.LeftButton, modifiers
     if pos is None:
         pos = view.viewport().rect().center()
     local = QPointF(pos)
-    global_pos = view.viewport().mapToGlobal(pos)  # исправлено: без toPoint()
+    global_pos = view.viewport().mapToGlobal(pos)
     return QMouseEvent(
         event_type,
         local,
@@ -195,7 +195,7 @@ def test_editable_text_is_dispatched_to_manipulation_then_qt(view_and_scene, mon
 
     monkeypatch.setattr(view.manipulation_controller, 'handle_mouse_press', fake_manip_press)
 
-    # Исправлено: используем view.mapFromScene, а не viewport
+    # Используем координаты viewport, а не EditorView
     pos = view.mapFromScene(text_item.sceneBoundingRect().center())
     event = make_mouse_event(view, QEvent.MouseButtonPress, pos=pos)
     view.mousePressEvent(event)
@@ -381,3 +381,32 @@ def test_drawing_release_removes_temp_item_on_false(view_and_scene, monkeypatch)
 
     assert mock_tool.finish_called
     assert view.temp_item is None
+
+
+def test_blur_outside_has_priority_over_manipulation(view_and_scene, monkeypatch):
+    view, _ = view_and_scene
+    blur_outside_called = False
+    manipulation_called = False
+
+    def fake_blur_outside(e):
+        nonlocal blur_outside_called
+        blur_outside_called = True
+        return True   # перехватываем событие, манипуляция не должна вызываться
+
+    def fake_manip_move(e):
+        nonlocal manipulation_called
+        manipulation_called = True
+        return True
+
+    monkeypatch.setattr(view.blur_controller, 'handle_blur_region_move_outside', fake_blur_outside)
+    monkeypatch.setattr(view.manipulation_controller, 'handle_mouse_move', fake_manip_move)
+    # Убеждаемся, что нет перетаскивания и режимов
+    view.manipulation_controller._drag_items = []
+    view.blur_controller.blur_mode = False
+    view.image_editor.crop_mode = False
+
+    event = make_mouse_event(view, QEvent.MouseMove)
+    view.mouseMoveEvent(event)
+
+    assert blur_outside_called
+    assert not manipulation_called
