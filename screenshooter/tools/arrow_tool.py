@@ -1,8 +1,10 @@
 """
 Модуль: tools/arrow_tool.py
 Описание: Инструмент рисования стрелок.
-          Поддерживает режимы: прямая (straight), изогнутая (curved), размерная линия (dimension).
-          При зажатом Shift ограничивает направление по горизонтали или вертикали для всех режимов.
+          Поддерживает режимы: прямая (straight), изогнутая (curved),
+          размерная линия (dimension).
+          При зажатом Shift ограничивает направление по горизонтали
+          или вертикали для всех режимов.
 """
 
 import math
@@ -27,7 +29,8 @@ class ArrowTool(BaseTool):
         if mode == 'straight':
             return ArrowItem(scene_pos, scene_pos, pen)
         elif mode == 'curved':
-            return CurvedArrowItem(scene_pos, scene_pos, (scene_pos + scene_pos) / 2, pen)
+            return CurvedArrowItem(scene_pos, scene_pos,
+                                   (scene_pos + scene_pos) / 2, pen)
         elif mode == 'dimension':
             return DimensionItem(scene_pos, scene_pos, pen)
         return None
@@ -37,8 +40,8 @@ class ArrowTool(BaseTool):
             return
         start = self.start_point
         end = scene_pos
-        mode = self.view.arrow_mode
 
+        # Ограничение по осям при зажатом Shift для всех режимов
         if modifiers & Qt.ShiftModifier:
             dx = end.x() - start.x()
             dy = end.y() - start.y()
@@ -47,9 +50,11 @@ class ArrowTool(BaseTool):
             else:
                 end.setX(start.x())
 
-        if mode == 'straight':
-            temp_item.set_line(start, end)
-        elif mode == 'curved':
+        # Определяем метод по типу элемента, а не по текущему режиму.
+        # Это защищает от ошибки при смене подрежима во время рисования.
+        if isinstance(temp_item, DimensionItem):
+            temp_item.setRect(start, end)
+        elif isinstance(temp_item, CurvedArrowItem):
             mid = (start + end) / 2
             dx = end.x() - start.x()
             dy = end.y() - start.y()
@@ -58,13 +63,16 @@ class ArrowTool(BaseTool):
                 perp_x = -dy / length
                 perp_y = dx / length
                 bend = 0.3
-                ctrl = mid + QPointF(perp_x * length * bend, perp_y * length * bend)
-                cross = dx * (end.y() - start.y()) - dy * (end.x() - start.x())
+                ctrl = mid + QPointF(perp_x * length * bend,
+                                     perp_y * length * bend)
+                cross = (dx * (end.y() - start.y())
+                         - dy * (end.x() - start.x()))
                 if cross < 0:
-                    ctrl = mid - QPointF(perp_x * length * bend, perp_y * length * bend)
+                    ctrl = mid - QPointF(perp_x * length * bend,
+                                         perp_y * length * bend)
                 temp_item.set_curve(start, end, ctrl)
-        elif mode == 'dimension':
-            temp_item.setRect(start, end)   # ← исправлено для DimensionItem
+        elif isinstance(temp_item, ArrowItem):
+            temp_item.set_line(start, end)
 
     def finish_draw(self, temp_item) -> bool:
         if not self.start_point:
@@ -77,7 +85,8 @@ class ArrowTool(BaseTool):
         if length < MIN_ARROW_LENGTH:
             return False
 
-        if self.view.arrow_mode == 'dimension':
+        # Определяем по типу элемента, а не по текущему режиму
+        if isinstance(temp_item, DimensionItem):
             self._create_dimension_text(start, end)
 
         return True
@@ -89,7 +98,8 @@ class ArrowTool(BaseTool):
         if length == 0:
             return
 
-        mid = QPointF((start.x() + end.x()) / 2, (start.y() + end.y()) / 2)
+        mid = QPointF((start.x() + end.x()) / 2,
+                      (start.y() + end.y()) / 2)
         angle_deg = math.degrees(math.atan2(dy, dx))
         if angle_deg > 90 or angle_deg < -90:
             angle_deg += 180
@@ -98,7 +108,7 @@ class ArrowTool(BaseTool):
         normal = QPointF(math.sin(rad), -math.cos(rad))
 
         ti = TextItem(self.view, bg_color=self.view.current_text_bg)
-        ti.setDefaultTextColor(QColor("#F9D556"))  # жёлтый цвет текста
+        ti.setDefaultTextColor(QColor("#F9D556"))
         font = QFont()
         font.setPointSize(self.view.text_size * 4)
         ti.setFont(font)

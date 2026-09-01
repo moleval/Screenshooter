@@ -34,6 +34,7 @@ HELP_HTML = """
 </ul>
 
 <h3>Горячие клавиши</h3>
+<div align="center">
 <table border="1" cellspacing="0" cellpadding="4">
   <tr><th>Клавиша</th><th>Действие</th></tr>
   <tr><td>PrintScreen</td><td>Захват экрана</td></tr>
@@ -49,6 +50,7 @@ HELP_HTML = """
   <tr><td>Ctrl (удержание)</td><td>Временный указатель</td></tr>
   <tr><td>F1</td><td>Открыть справку</td></tr>
 </table>
+</div>
 
 <h3>Дополнительно</h3>
 <ul>

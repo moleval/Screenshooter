@@ -149,7 +149,7 @@ class MouseInteractionManager:
         # Drawing tools
         if (self.view.temp_item and self.view._tool is not None and
                 self.view.current_tool not in ('text',)):
-            self.view._update_cursor(event.pos())
+            # Обновление курсора теперь выполняется в EditorView после менеджера
             sp = self.view.mapToScene(event.pos())
             if self.view.image_editor.background_item is not None:
                 bg_rect = self.view.image_editor.background_item.mapRectToScene(

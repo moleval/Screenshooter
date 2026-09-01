@@ -58,7 +58,7 @@ class ScreenshotApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Скриншотер с редактором")
-        self.setGeometry(100, 100, WINDOW_INITIAL_WIDTH, WINDOW_INITIAL_HEIGHT)
+        self.setGeometry(100, 100, WINDOW_INITIAL_WIDTH, WINDOW_MIN_HEIGHT)
         self.setMinimumHeight(WINDOW_MIN_HEIGHT)
 
         self.settings = AppSettings()
