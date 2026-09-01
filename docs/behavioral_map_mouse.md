@@ -89,3 +89,84 @@
 | 5 | Text |
 | 6 | Drawing |
 | 7 | QGraphicsView (super) |
+
+# Поведенческая карта обработки мыши
+
+## Маршрутизация событий Press/Move/Release
+
+### Press (нажатие)
+
+1. **Blur mode**  
+   Если `blur_mode == True`:  
+   - определяется элемент под курсором и наличие маркеров зоны размытия;  
+   - при попадании в маркер или при определённых условиях (Ctrl/Shift, множественное выделение) управление может быть делегировано `ManipulationController`;  
+   - иначе событие передаётся в `BlurController.handle_mouse_press()`.  
+   При успешной обработке возвращается `True`.
+
+2. **Crop mode**  
+   Если `crop_mode == True` (и blur не обработал), событие передаётся в `ImageEditController.handle_mouse_press()`.  
+   При успешной обработке — `True`.
+
+3. **Blur outside**  
+   Вне режимов `blur` и `crop` выделенная зона размытия может быть обработана `BlurController.handle_blur_region_press_outside()`.  
+   (Фактически эта логика встроена в `ManipulationController`, но концептуально стоит до общей манипуляции.)
+
+4. **Manipulation**  
+   Событие передаётся в `ManipulationController.handle_mouse_press()`.  
+   Если контроллер обработал (перетаскивание, выделение, маркеры вставленных изображений, временный указатель), возвращается `True`.
+
+5. **Text**  
+   Если `current_tool == 'text'`:  
+   - клик по редактируемому `TextItem` → событие не поглощается менеджером (`False`), чтобы его обработал `QGraphicsView`;  
+   - клик по нередактируемому тексту → деактивируется предыдущий активный текст, событие не поглощается;  
+   - клик по пустому месту внутри подложки при первом клике после активации инструмента → создаётся новый текст, начинается редактирование, возвращается `True`;  
+   - клик вне подложки → возвращается `True`.
+
+6. **Drawing**  
+   Если `current_tool in ('rect', 'ellipse', 'arrow', 'line')`:  
+   - создаётся `temp_item` через `_tool.start_draw()`, ограничение по подложке;  
+   - возвращается `True` (даже если `_tool is None`, событие поглощается, как в исходном коде).
+
+7. **QGraphicsView**  
+   Если ни один обработчик не сработал, возвращается `False`, и `EditorView` вызывает `super().mousePressEvent()`.
+
+### Move (перемещение)
+
+1. **Blur/Crop при отсутствии drag**  
+   Если `manipulation_controller._drag_items` пуст:  
+   - при `blur_mode` → `BlurController.handle_mouse_move()`;  
+   - иначе при `crop_mode` → `ImageEditController.handle_mouse_move()`;  
+   - иначе, если нет crop и blur, вызывается `BlurController.handle_blur_region_move_outside()`.
+
+2. **Manipulation**  
+   Вызывается `ManipulationController.handle_mouse_move()`. Если обработано, возвращается `True`.
+
+3. **Drawing**  
+   Если есть `temp_item` и активен инструмент рисования, вызывается `_tool.update_draw()`.  
+   Обновление курсора выполняется **в `EditorView`** после возврата из менеджера.
+
+### Release (отпускание)
+
+Аналогично move: сначала blur/crop/outside, затем manipulation, затем завершение рисования (`_tool.finish_draw`), иначе `super()`.
+
+---
+
+## Отмена операций (handle_cancel)
+
+Приоритет:
+
+1. Незавершённое рисование (`temp_item`) → удалить временный элемент, очистить `temp_item` и `start_point`.
+2. Режим обрезки (`crop_mode`) → вызвать `ImageEditController.cancel_crop_mode()`.
+3. Режим размытия (`blur_mode`) → вызвать `BlurController.handle_blur_escape()`.
+4. Активный редактируемый текст → `_deactivate_active_text()`.
+5. Выделение объектов → `scene().clearSelection()` + `manipulation_controller._restore_tool_if_needed()`.
+6. Если ничего не активно → вернуть `False`.
+
+`handle_cancel()` возвращает `True`, если состояние было изменено, и `False`, если отменять нечего.
+
+---
+
+## Дополнительно
+
+- `mouseDoubleClickEvent` обрабатывается **вне** `MouseInteractionManager`. В нём присутствует фильтрация: при двойном клике не левой кнопкой событие передаётся в `super()` без создания/редактирования текста.
+- Все приватные обращения `MouseInteractionManager` к `EditorView` и `ManipulationController` зафиксированы как технический долг (см. `REGRESSION_NOTES.md`, TD-001).

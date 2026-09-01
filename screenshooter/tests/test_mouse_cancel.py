@@ -113,7 +113,7 @@ def test_cancel_selection_clears_and_restores(view_and_scene, monkeypatch):
     monkeypatch.setattr(view.manipulation_controller, '_restore_tool_if_needed', fake_restore)
 
     item = QGraphicsRectItem(0, 0, 10, 10)
-    item.setFlag(QGraphicsRectItem.ItemIsSelectable, True)  # ← обязательный флаг
+    item.setFlag(QGraphicsRectItem.ItemIsSelectable, True)
     scene.addItem(item)
     item.setSelected(True)
 
@@ -184,3 +184,37 @@ def test_cancel_priority_drawing_over_crop_blur(view_and_scene, monkeypatch):
     # Третий вызов отменяет blur
     assert manager.handle_cancel() is True
     assert blur_called
+
+
+def test_handle_cancel_full_drain(view_and_scene):
+    """Последовательные вызовы handle_cancel() возвращают True,
+    пока есть что отменять, затем стабильно возвращают False."""
+    view, scene = view_and_scene
+    manager = view.mouse_manager
+
+    # Создаём редактируемый текст и выделение, чтобы было несколько состояний.
+    from screenshooter.items.text_item import TextItem
+    text_item = TextItem(view, bg_color=None)
+    text_item.setPlainText("Test")
+    text_item.setPos(100, 100)
+    scene.addItem(text_item)
+    text_item.setEditable(True)
+    view.active_text_item = text_item
+
+    # Добавляем выделяемый элемент
+    selectable = QGraphicsRectItem(0, 0, 10, 10)
+    selectable.setFlag(QGraphicsRectItem.ItemIsSelectable, True)
+    scene.addItem(selectable)
+    selectable.setSelected(True)
+
+    results = []
+    for _ in range(10):
+        result = manager.handle_cancel()
+        results.append(result)
+        if not result:
+            break
+
+    # После полного drain последний вызов должен вернуть False
+    assert results[-1] is False
+    # И повторный вызов тоже False (идемпотентность)
+    assert manager.handle_cancel() is False
