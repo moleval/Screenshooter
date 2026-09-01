@@ -27,6 +27,7 @@ from screenshooter.view import EditorView
 def view_and_scene(qapp):
     scene = QGraphicsScene()
     view = EditorView(scene)
+    view.resize(300, 300)  # фиксируем размер для предсказуемых координат
 
     pm = QPixmap(200, 200)
     pm.fill(QColor("white"))
@@ -36,18 +37,43 @@ def view_and_scene(qapp):
 
 
 def make_mouse_event(view, event_type, pos=None, button=Qt.LeftButton, modifiers=Qt.NoModifier):
+    """Создаёт QMouseEvent с координатами в системе viewport."""
     if pos is None:
         pos = view.viewport().rect().center()
+    local = QPointF(pos)
+    global_pos = view.viewport().mapToGlobal(pos)  # исправлено: без toPoint()
     return QMouseEvent(
         event_type,
-        QPointF(pos),
-        Qt.LeftButton,
+        local,
+        QPointF(global_pos),
+        button,
         button,
         modifiers,
     )
 
 
-# ---------- Short-circuit тесты для Press ----------
+class MockTool:
+    """Заглушка инструмента рисования для тестов."""
+
+    def __init__(self):
+        self.start_called = False
+        self.update_called = False
+        self.finish_called = False
+        self.finish_result = True
+
+    def start_draw(self, scene_pos):
+        self.start_called = True
+        return QGraphicsRectItem(0, 0, 10, 10)
+
+    def update_draw(self, temp_item, scene_pos, modifiers):
+        self.update_called = True
+
+    def finish_draw(self, temp_item):
+        self.finish_called = True
+        return self.finish_result
+
+
+# ---------- Short-circuit тесты ----------
 
 def test_blur_short_circuits_crop_and_manipulation(view_and_scene, monkeypatch):
     view, _ = view_and_scene
@@ -61,10 +87,12 @@ def test_blur_short_circuits_crop_and_manipulation(view_and_scene, monkeypatch):
         nonlocal blur_pressed
         blur_pressed = True
         return True
+
     def fake_manip_press(e):
         nonlocal manip_pressed
         manip_pressed = True
         return True
+
     def fake_crop_press(e):
         nonlocal crop_pressed
         crop_pressed = True
@@ -93,6 +121,7 @@ def test_crop_short_circuits_manipulation(view_and_scene, monkeypatch):
         nonlocal crop_pressed
         crop_pressed = True
         return True
+
     def fake_manip_press(e):
         nonlocal manip_pressed
         manip_pressed = True
@@ -152,7 +181,7 @@ def test_editable_text_is_dispatched_to_manipulation_then_qt(view_and_scene, mon
     from screenshooter.items.text_item import TextItem
     text_item = TextItem(view, bg_color=None)
     text_item.setPlainText("Test")
-    text_item.setPos(10, 10)
+    text_item.setPos(100, 100)  # центр подложки
     scene.addItem(text_item)
     text_item.setEditable(True)
     view.active_text_item = text_item
@@ -166,6 +195,7 @@ def test_editable_text_is_dispatched_to_manipulation_then_qt(view_and_scene, mon
 
     monkeypatch.setattr(view.manipulation_controller, 'handle_mouse_press', fake_manip_press)
 
+    # Исправлено: используем view.mapFromScene, а не viewport
     pos = view.mapFromScene(text_item.sceneBoundingRect().center())
     event = make_mouse_event(view, QEvent.MouseButtonPress, pos=pos)
     view.mousePressEvent(event)
@@ -174,7 +204,7 @@ def test_editable_text_is_dispatched_to_manipulation_then_qt(view_and_scene, mon
     assert view.temp_item is None
 
 
-# ---------- Полный цикл press/move/release для каждого состояния ----------
+# ---------- Полный цикл press/move/release ----------
 
 def test_blur_press_move_release_cycle(view_and_scene, monkeypatch):
     view, _ = view_and_scene
@@ -189,14 +219,17 @@ def test_blur_press_move_release_cycle(view_and_scene, monkeypatch):
         nonlocal blur_pressed
         blur_pressed = True
         return True
+
     def fake_blur_move(e):
         nonlocal blur_moved
         blur_moved = True
         return True
+
     def fake_blur_release(e):
         nonlocal blur_released
         blur_released = True
         return True
+
     def fake_manip_any(e):
         nonlocal manip_any
         manip_any = True
@@ -232,14 +265,17 @@ def test_crop_press_move_release_cycle(view_and_scene, monkeypatch):
         nonlocal crop_pressed
         crop_pressed = True
         return True
+
     def fake_crop_move(e):
         nonlocal crop_moved
         crop_moved = True
         return True
+
     def fake_crop_release(e):
         nonlocal crop_released
         crop_released = True
         return True
+
     def fake_manip_any(e):
         nonlocal manip_any
         manip_any = True
@@ -273,14 +309,17 @@ def test_manipulation_press_move_release_cycle(view_and_scene, monkeypatch):
         nonlocal manip_pressed
         manip_pressed = True
         return True
+
     def fake_manip_move(e):
         nonlocal manip_moved
         manip_moved = True
         return True
+
     def fake_manip_release(e):
         nonlocal manip_released
         manip_released = True
         return True
+
     def fake_tool_start(e):
         nonlocal drawing_any
         drawing_any = True
@@ -342,23 +381,3 @@ def test_drawing_release_removes_temp_item_on_false(view_and_scene, monkeypatch)
 
     assert mock_tool.finish_called
     assert view.temp_item is None
-
-
-# Заглушка инструмента рисования
-class MockTool:
-    def __init__(self):
-        self.start_called = False
-        self.update_called = False
-        self.finish_called = False
-        self.finish_result = True
-
-    def start_draw(self, scene_pos):
-        self.start_called = True
-        return QGraphicsRectItem(0, 0, 10, 10)
-
-    def update_draw(self, temp_item, scene_pos, modifiers):
-        self.update_called = True
-
-    def finish_draw(self, temp_item):
-        self.finish_called = True
-        return self.finish_result

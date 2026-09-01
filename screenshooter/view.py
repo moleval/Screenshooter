@@ -36,6 +36,7 @@ from .tools import RectTool, EllipseTool, LineTool, ArrowTool, TextTool
 from .controllers import (ClipboardController, ManipulationController,
                           KeyboardManager, FloatingWidgetManager,
                           PastedImageController, BlurController)
+from .controllers.mouse_interaction_manager import MouseInteractionManager
 from .theme import theme_manager
 
 
@@ -112,6 +113,14 @@ class EditorView(QGraphicsView):
         self.manipulation_controller = ManipulationController(self)
         self.keyboard_manager = KeyboardManager(self)
         self.widget_manager = FloatingWidgetManager(self)
+
+        # Создаём диспетчер событий мыши
+        self.mouse_manager = MouseInteractionManager(
+            self,
+            self.blur_controller,
+            self.image_editor,
+            self.manipulation_controller,
+        )
 
         self.widget_manager.update_info_widget_content(
             self.current_pen_color, self.pen_width)
