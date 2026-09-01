@@ -3,12 +3,15 @@
 Описание: Диспетчер событий мыши для EditorView.
 
 Реализована маршрутизация:
-  blur → crop → blur_outside → manipulation → (далее text/drawing уже в EditorView)
+  blur → crop → blur_outside → manipulation → text
 """
 
 from PyQt5.QtCore import Qt, QPointF
+from PyQt5.QtGui import QColor, QFont
 
+from ..items import TextItem
 from ..items.blur_region_item import BlurRegionItem
+from ..history import AddItemCommand
 
 
 class MouseInteractionManager:
@@ -68,16 +71,48 @@ class MouseInteractionManager:
             if self.blur_controller.handle_mouse_press(event):
                 return True
 
-            # НЕ возвращаем False здесь: манипуляция должна вызываться
-            # после неудачной обработки blur_mode (как в старом коде)
-
         elif self.image_editor.crop_mode:
             if self.image_editor.handle_mouse_press(event):
                 return True
 
-        # Манипуляция вызывается независимо от режима
         if self.manipulation_controller.handle_mouse_press(event):
             return True
+
+        # Text tool
+        if self.view.current_tool == 'text':
+            sp = self.view.mapToScene(event.pos())
+            item = self.view.scene().itemAt(sp, self.view.transform())
+            li = self.view._item_for_manipulation(item) if item else None
+
+            if isinstance(item, TextItem) and item._editable:
+                return False
+
+            if isinstance(li, TextItem):
+                if (self.view.active_text_item is not None and
+                        self.view.active_text_item is not li):
+                    self.view._deactivate_active_text()
+                return False
+            else:
+                if self.view.active_text_item and self.view.active_text_item._editable:
+                    self.view._deactivate_active_text()
+                if li is None or self.view._is_background_item(li):
+                    if not self.view._is_point_inside_background(sp):
+                        return True
+                    if self.view._first_click_after_activation:
+                        ti = TextItem(self.view, bg_color=self.view.current_text_bg)
+                        ti.setDefaultTextColor(QColor("#F9D556"))
+                        font = QFont()
+                        font.setPointSize(self.view.text_size * 4)
+                        ti.setFont(font)
+                        ti.setPos(sp)
+                        self.view.scene().addItem(ti)
+                        self.view.active_text_item = ti
+                        ti.setSelected(True)
+                        ti.setEditable(True)
+                        self.view._first_click_after_activation = False
+                        self.view.history.push(AddItemCommand(self.view.scene(), ti))
+                        return True
+                return False
 
         return False
 

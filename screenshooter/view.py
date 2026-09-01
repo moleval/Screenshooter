@@ -501,42 +501,6 @@ class EditorView(QGraphicsView):
             e.accept()
             return
 
-        if self.current_tool == 'text':
-            sp = self.mapToScene(e.pos())
-            item = self.scene().itemAt(sp, self.transform())
-            li = self._item_for_manipulation(item) if item else None
-
-            if isinstance(item, TextItem) and item._editable:
-                super().mousePressEvent(e)
-                e.accept()
-                return
-
-            if isinstance(li, TextItem):
-                if self.active_text_item is not None and self.active_text_item is not li:
-                    self._deactivate_active_text()
-            else:
-                if self.active_text_item and self.active_text_item._editable:
-                    self._deactivate_active_text()
-                if li is None or self._is_background_item(li):
-                    if not self._is_point_inside_background(sp):
-                        e.accept()
-                        return
-                    if self._first_click_after_activation:
-                        ti = TextItem(self, bg_color=self.current_text_bg)
-                        ti.setDefaultTextColor(QColor("#F9D556"))
-                        font = QFont()
-                        font.setPointSize(self.text_size * 4)
-                        ti.setFont(font)
-                        ti.setPos(sp)
-                        self.scene().addItem(ti)
-                        self.active_text_item = ti
-                        ti.setSelected(True)
-                        ti.setEditable(True)
-                        self._first_click_after_activation = False
-                        self.history.push(AddItemCommand(self.scene(), ti))
-                        e.accept()
-                        return
-
         if self.current_tool in ('rect', 'ellipse', 'arrow', 'line'):
             if self._tool is not None:
                 sp = self.mapToScene(e.pos())
