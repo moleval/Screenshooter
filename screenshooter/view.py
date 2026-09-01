@@ -517,6 +517,9 @@ class EditorView(QGraphicsView):
         super().mouseReleaseEvent(e)
 
     def mouseDoubleClickEvent(self, e):
+        if e.button() != Qt.LeftButton:
+            super().mouseDoubleClickEvent(e)
+            return
         sp = self.mapToScene(e.pos())
         item = self.scene().itemAt(sp, self.transform())
         li = self._item_for_manipulation(item) if item else None
