@@ -18,10 +18,6 @@ class KeyboardManager:
     def __init__(self, view):
         self.view = view
 
-    # ==============================================================
-    # Два главных метода — вызываются из view.py
-    # ==============================================================
-
     def handle_key_press(self, event) -> bool:
         """Обрабатывает нажатие клавиши. Возвращает True, если обработано."""
 
@@ -58,18 +54,9 @@ class KeyboardManager:
             self.view.delete_selected()
             return True
 
-        # 6. Escape — отмена режимов, снятие выделения
+        # 6. Escape — отмена текущей операции через MouseInteractionManager
         if event.key() == Qt.Key_Escape:
-            if self.view.image_editor.crop_mode:
-                self.view.image_editor.cancel_crop_mode()
-                return True
-            if self.view.blur_controller.blur_mode:
-                self.view.blur_controller.handle_blur_escape()
-                return True
-            self.view.scene().clearSelection()
-            self.view._deactivate_active_text()
-            self.view.manipulation_controller._restore_tool_if_needed()
-            return True
+            return self.view.mouse_manager.handle_cancel()
 
         # 7. Ctrl (зажатие) — временный указатель
         if event.key() == Qt.Key_Control:
@@ -88,25 +75,17 @@ class KeyboardManager:
 
     def handle_key_release(self, event) -> bool:
         """Обрабатывает отпускание клавиши. Возвращает True, если обработано."""
-
-        # Отпускание Ctrl — восстановление инструмента
         if event.key() == Qt.Key_Control:
             self.view.manipulation_controller.ctrl_pressed = False
             if not self.view.manipulation_controller.ctrl_pressed:
                 self.view.manipulation_controller._restore_tool_if_needed()
             return True
-
         return False
-
-    # ==============================================================
-    # Внутренние методы
-    # ==============================================================
 
     def _handle_arrow_keys(self, event) -> bool:
         """Перемещение выделенных элементов стрелками."""
         view = self.view
 
-        # Активная зона размытия — двигаем её
         if view.blur_controller.active_blur_index is not None:
             idx = view.blur_controller.active_blur_index
             old_rect = view.blur_controller.blur_regions[idx]
@@ -126,7 +105,6 @@ class KeyboardManager:
                     view.blur_controller, idx, old_rect, new_rect))
             return True
 
-        # Выделенные элементы — двигаем их
         selected = view.scene().selectedItems()
         items = [it for it in selected if not view._is_background_item(it)]
         if items:

@@ -4,6 +4,7 @@
 
 Реализована маршрутизация:
   blur → crop → blur_outside → manipulation → text → drawing
+  и централизованная отмена (handle_cancel).
 """
 
 from PyQt5.QtCore import Qt, QPointF, QRectF
@@ -124,7 +125,6 @@ class MouseInteractionManager:
                 self.view.temp_item = self.view._tool.start_draw(sp)
                 if self.view.temp_item:
                     self.view.scene().addItem(self.view.temp_item)
-            # В старом коде даже при _tool is None событие поглощалось
             return True
 
         return False
@@ -149,7 +149,6 @@ class MouseInteractionManager:
         # Drawing tools
         if (self.view.temp_item and self.view._tool is not None and
                 self.view.current_tool not in ('text',)):
-            # Сохраняем старое поведение: курсор обновляется перед рисованием
             self.view._update_cursor(event.pos())
             sp = self.view.mapToScene(event.pos())
             if self.view.image_editor.background_item is not None:
@@ -197,6 +196,41 @@ class MouseInteractionManager:
 
         return False
 
-    def handle_cancel(self):
-        """Прерывает текущую операцию. Пока заглушка."""
-        pass
+    def handle_cancel(self) -> bool:
+        """
+        Отменяет наиболее специфичную активную операцию.
+
+        Возвращает True, если состояние было изменено или операция отменена;
+        False, если отменять нечего.
+        """
+        # 1. Незавершённая drawing operation (temp_item) отменяется первой
+        if self.view.temp_item is not None:
+            if self.view.temp_item.scene() is self.view.scene():
+                self.view.scene().removeItem(self.view.temp_item)
+            self.view.temp_item = None
+            self.view.start_point = None
+            return True
+
+        # 2. Отмена режима обрезки
+        if self.view.image_editor.crop_mode:
+            self.view.image_editor.cancel_crop_mode()
+            return True
+
+        # 3. Отмена режима размытия
+        if self.view.blur_controller.blur_mode:
+            self.view.blur_controller.handle_blur_escape()
+            return True
+
+        # 4. Деактивация редактируемого текста
+        if self.view.active_text_item is not None and self.view.active_text_item._editable:
+            self.view._deactivate_active_text()
+            return True
+
+        # 5. Снятие выделения с восстановлением временного инструмента
+        selected = self.view.scene().selectedItems()
+        if selected:
+            self.view.scene().clearSelection()
+            self.view.manipulation_controller._restore_tool_if_needed()
+            return True
+
+        return False
