@@ -101,8 +101,7 @@ class ClipboardController:
 
         # Выделяем вставленные элементы (кроме зон размытия)
         for item in new_items:
-            if not isinstance(item, BlurRegionItem):
-                item.setSelected(True)
+            item.setSelected(True)
 
         # Пересчитываем размытие, если были добавлены зоны
         if blur_added:
