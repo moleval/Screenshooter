@@ -3,10 +3,10 @@
 Описание: Диспетчер событий мыши для EditorView.
 
 Реализована маршрутизация:
-  blur → crop → blur_outside → manipulation → text
+  blur → crop → blur_outside → manipulation → text → drawing
 """
 
-from PyQt5.QtCore import Qt, QPointF
+from PyQt5.QtCore import Qt, QPointF, QRectF
 from PyQt5.QtGui import QColor, QFont
 
 from ..items import TextItem
@@ -114,6 +114,19 @@ class MouseInteractionManager:
                         return True
                 return False
 
+        # Drawing tools
+        if self.view.current_tool in ('rect', 'ellipse', 'arrow', 'line'):
+            if self.view._tool is not None:
+                sp = self.view.mapToScene(event.pos())
+                if not self.view._is_point_inside_background(sp):
+                    return True
+                self.view.start_point = sp
+                self.view.temp_item = self.view._tool.start_draw(sp)
+                if self.view.temp_item:
+                    self.view.scene().addItem(self.view.temp_item)
+            # В старом коде даже при _tool is None событие поглощалось
+            return True
+
         return False
 
     def handle_move(self, event) -> bool:
@@ -131,6 +144,21 @@ class MouseInteractionManager:
                     return True
 
         if self.manipulation_controller.handle_mouse_move(event):
+            return True
+
+        # Drawing tools
+        if (self.view.temp_item and self.view._tool is not None and
+                self.view.current_tool not in ('text',)):
+            # Сохраняем старое поведение: курсор обновляется перед рисованием
+            self.view._update_cursor(event.pos())
+            sp = self.view.mapToScene(event.pos())
+            if self.view.image_editor.background_item is not None:
+                bg_rect = self.view.image_editor.background_item.mapRectToScene(
+                    QRectF(self.view.image_editor.background_item.pixmap().rect()))
+                if not bg_rect.contains(sp):
+                    sp.setX(max(bg_rect.left(), min(bg_rect.right(), sp.x())))
+                    sp.setY(max(bg_rect.top(), min(bg_rect.bottom(), sp.y())))
+            self.view._tool.update_draw(self.view.temp_item, sp, event.modifiers())
             return True
 
         return False
@@ -152,6 +180,19 @@ class MouseInteractionManager:
                     return True
 
         if self.manipulation_controller.handle_mouse_release(event):
+            return True
+
+        # Drawing tools
+        if (self.view.temp_item and event.button() == Qt.LeftButton and
+                self.view._tool is not None and self.view.current_tool not in ('text',)):
+            if self.view._tool.finish_draw(self.view.temp_item):
+                self.view.scene().clearSelection()
+                self.view.temp_item.setSelected(True)
+                self.view.history.push(AddItemCommand(self.view.scene(), self.view.temp_item))
+            else:
+                self.view.scene().removeItem(self.view.temp_item)
+            self.view.temp_item = None
+            self.view.start_point = None
             return True
 
         return False

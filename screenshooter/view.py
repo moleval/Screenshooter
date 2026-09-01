@@ -500,20 +500,6 @@ class EditorView(QGraphicsView):
         if self.mouse_manager.handle_press(e):
             e.accept()
             return
-
-        if self.current_tool in ('rect', 'ellipse', 'arrow', 'line'):
-            if self._tool is not None:
-                sp = self.mapToScene(e.pos())
-                if not self._is_point_inside_background(sp):
-                    e.accept()
-                    return
-                self.start_point = sp
-                self.temp_item = self._tool.start_draw(sp)
-                if self.temp_item:
-                    self.scene().addItem(self.temp_item)
-            e.accept()
-            return
-
         super().mousePressEvent(e)
         e.accept()
 
@@ -521,41 +507,13 @@ class EditorView(QGraphicsView):
         if self.mouse_manager.handle_move(e):
             e.accept()
             return
-
         self._update_cursor(e.pos())
-
-        if self.temp_item and self._tool is not None and self.current_tool not in ('text',):
-            sp = self.mapToScene(e.pos())
-            if self.image_editor.background_item is not None:
-                bg_rect = self.image_editor.background_item.mapRectToScene(
-                    QRectF(self.image_editor.background_item.pixmap().rect()))
-                if not bg_rect.contains(sp):
-                    sp.setX(max(bg_rect.left(), min(bg_rect.right(), sp.x())))
-                    sp.setY(max(bg_rect.top(), min(bg_rect.bottom(), sp.y())))
-            self._tool.update_draw(self.temp_item, sp, e.modifiers())
-            e.accept()
-            return
-
         super().mouseMoveEvent(e)
 
     def mouseReleaseEvent(self, e):
         if self.mouse_manager.handle_release(e):
             e.accept()
             return
-
-        if (self.temp_item and e.button() == Qt.LeftButton and
-                self._tool is not None and self.current_tool not in ('text',)):
-            if self._tool.finish_draw(self.temp_item):
-                self.scene().clearSelection()
-                self.temp_item.setSelected(True)
-                self.history.push(AddItemCommand(self.scene(), self.temp_item))
-            else:
-                self.scene().removeItem(self.temp_item)
-            self.temp_item = None
-            self.start_point = None
-            e.accept()
-            return
-
         super().mouseReleaseEvent(e)
 
     def mouseDoubleClickEvent(self, e):
