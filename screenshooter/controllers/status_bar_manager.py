@@ -66,6 +66,7 @@ class StatusBarManager:
             label.raise_()
             label.update()
             label.repaint()
+            self.view.viewport().update()
 
     def update_crop_status_text(self, text):
         label = self._label
@@ -77,12 +78,15 @@ class StatusBarManager:
             label.raise_()
             label.update()
             label.repaint()
+            self.view.viewport().update()
 
     def reset_to_normal(self):
         label = self._label
         if label:
             label.setStyleSheet(self._normal_style())
+            label.update()
             label.repaint()
+            self.view.viewport().update()
 
     def repaint(self):
         label = self._label
