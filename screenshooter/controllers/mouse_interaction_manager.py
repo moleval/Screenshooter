@@ -2,7 +2,7 @@
 Модуль: controllers/mouse_interaction_manager.py
 Описание: Диспетчер событий мыши для EditorView.
 
-На текущем этапе реализована маршрутизация только для режима размытия (blur).
+Реализована маршрутизация для режимов размытия (blur) и обрезки (crop).
 Остальные режимы будут добавлены на следующих шагах.
 """
 
@@ -19,7 +19,6 @@ class MouseInteractionManager:
         :param view: EditorView, для которого выполняется диспетчеризация.
         :param blur_controller: Контроллер режима размытия.
         :param image_editor: Контроллер режима обрезки (ImageEditController).
-                             Используется начиная с Шага 3 (перенос crop).
         :param manipulation_controller: Контроллер манипуляций объектами.
         """
         self.view = view
@@ -75,6 +74,14 @@ class MouseInteractionManager:
             if self.blur_controller.handle_mouse_press(event):
                 return True
 
+            # Если blur_mode был активен, но событие не обработано,
+            # не переходим к crop (взаимоисключение)
+            return False
+
+        if self.image_editor.crop_mode:
+            if self.image_editor.handle_mouse_press(event):
+                return True
+
         return False
 
     def handle_move(self, event) -> bool:
@@ -83,6 +90,9 @@ class MouseInteractionManager:
             if self.blur_controller.blur_mode:
                 if self.blur_controller.handle_mouse_move(event):
                     return True
+            elif self.image_editor.crop_mode:
+                if self.image_editor.handle_mouse_move(event):
+                    return True
         return False
 
     def handle_release(self, event) -> bool:
@@ -90,6 +100,9 @@ class MouseInteractionManager:
         if not self.manipulation_controller._drag_items:
             if self.blur_controller.blur_mode:
                 if self.blur_controller.handle_mouse_release(event):
+                    return True
+            elif self.image_editor.crop_mode:
+                if self.image_editor.handle_mouse_release(event):
                     return True
         return False
 

@@ -501,11 +501,6 @@ class EditorView(QGraphicsView):
             e.accept()
             return
 
-        if self.image_editor.crop_mode:
-            if self.image_editor.handle_mouse_press(e):
-                e.accept()
-                return
-
         if self.manipulation_controller.handle_mouse_press(e):
             e.accept()
             return
@@ -567,11 +562,6 @@ class EditorView(QGraphicsView):
             e.accept()
             return
 
-        if not self.manipulation_controller._drag_items and self.image_editor.crop_mode:
-            if self.image_editor.handle_mouse_move(e):
-                e.accept()
-                return
-
         if not self.manipulation_controller._drag_items:
             if not self.image_editor.crop_mode and not self.blur_controller.blur_mode:
                 if self.blur_controller.handle_blur_region_move_outside(e):
@@ -602,11 +592,6 @@ class EditorView(QGraphicsView):
         if self.mouse_manager.handle_release(e):
             e.accept()
             return
-
-        if not self.manipulation_controller._drag_items and self.image_editor.crop_mode:
-            if self.image_editor.handle_mouse_release(e):
-                e.accept()
-                return
 
         if not self.manipulation_controller._drag_items:
             if (e.button() == Qt.LeftButton and
