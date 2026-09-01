@@ -64,7 +64,7 @@ class ArrowTool(BaseTool):
                     ctrl = mid - QPointF(perp_x * length * bend, perp_y * length * bend)
                 temp_item.set_curve(start, end, ctrl)
         elif mode == 'dimension':
-            temp_item.setRect(start, end)
+            temp_item.setRect(start, end)   # ← исправлено для DimensionItem
 
     def finish_draw(self, temp_item) -> bool:
         if not self.start_point:
@@ -98,7 +98,7 @@ class ArrowTool(BaseTool):
         normal = QPointF(math.sin(rad), -math.cos(rad))
 
         ti = TextItem(self.view, bg_color=self.view.current_text_bg)
-        ti.setDefaultTextColor(QColor("#F9D556"))  # <-- изменено на жёлтый
+        ti.setDefaultTextColor(QColor("#F9D556"))  # жёлтый цвет текста
         font = QFont()
         font.setPointSize(self.view.text_size * 4)
         ti.setFont(font)
