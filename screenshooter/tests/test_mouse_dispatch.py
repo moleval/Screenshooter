@@ -195,7 +195,6 @@ def test_editable_text_is_dispatched_to_manipulation_then_qt(view_and_scene, mon
 
     monkeypatch.setattr(view.manipulation_controller, 'handle_mouse_press', fake_manip_press)
 
-    # Используем координаты viewport, а не EditorView
     pos = view.mapFromScene(text_item.sceneBoundingRect().center())
     event = make_mouse_event(view, QEvent.MouseButtonPress, pos=pos)
     view.mousePressEvent(event)
@@ -400,7 +399,6 @@ def test_blur_outside_has_priority_over_manipulation(view_and_scene, monkeypatch
 
     monkeypatch.setattr(view.blur_controller, 'handle_blur_region_move_outside', fake_blur_outside)
     monkeypatch.setattr(view.manipulation_controller, 'handle_mouse_move', fake_manip_move)
-    # Убеждаемся, что нет перетаскивания и режимов
     view.manipulation_controller._drag_items = []
     view.blur_controller.blur_mode = False
     view.image_editor.crop_mode = False
@@ -411,47 +409,6 @@ def test_blur_outside_has_priority_over_manipulation(view_and_scene, monkeypatch
     assert blur_outside_called
     assert not manipulation_called
 
-def test_pe004_diagnostic_blur_in_group(qapp):
-    scene = QGraphicsScene()
-    view = EditorView(scene)
-    view.resize(300, 300)
-    pm = QPixmap(200, 200)
-    pm.fill(QColor("white"))
-    view.set_background_from_pixmap(pm)
-
-    from screenshooter.items.shape_items import RectangleItem
-    from screenshooter.items.blur_region_item import BlurRegionItem
-    from PyQt5.QtGui import QPen
-
-    rect_item = RectangleItem(QRectF(10, 10, 50, 30), QPen(QColor("red"), 2))
-    scene.addItem(rect_item)
-    rect_item.setSelected(True)
-
-    blur_item = BlurRegionItem(QRectF(70, 70, 40, 40), view, mode='inactive')
-    scene.addItem(blur_item)
-    blur_item.setSelected(True)
-
-    # Клик по центру Blur
-    pos = view.mapFromScene(blur_item.sceneBoundingRect().center())
-    event = make_mouse_event(view, QEvent.MouseButtonPress, pos=pos)
-
-    # Вызываем обработчик вручную (чтобы избежать влияния MouseInteractionManager)
-    manager = view.manipulation_controller
-    sp = view.mapToScene(event.pos())
-    item = scene.itemAt(sp, view.transform())
-    li = view._item_for_manipulation(item) if item else None
-
-    # Диагностика
-    print(f"item: {type(item)}, li: {type(li)}, li_is_selected: {li.isSelected() if li else None}")
-    selected = scene.selectedItems()
-    non_bg = [it for it in selected if not view._is_background_item(it)]
-    print(f"selected: {len(selected)}, non_bg: {len(non_bg)}")
-
-    # Проверяем, что li — BlurRegionItem
-    assert isinstance(li, BlurRegionItem)
-    # Проверяем, что оба выделены
-    assert rect_item.isSelected()
-    assert blur_item.isSelected()    
 
 def test_pe004_blur_group_reaches_manipulation(qapp):
     scene = QGraphicsScene()
@@ -479,16 +436,12 @@ def test_pe004_blur_group_reaches_manipulation(qapp):
 
     result = view.manipulation_controller.handle_mouse_press(event)
 
-    print(f"handle_mouse_press result: {result}")
-    print(f"_drag_items: {view.manipulation_controller._drag_items}")
-    print(f"rect selected: {rect_item.isSelected()}")
-    print(f"blur selected: {blur_item.isSelected()}")
-
     assert result is True
     assert rect_item.isSelected()
     assert blur_item.isSelected()
     assert rect_item in view.manipulation_controller._drag_items
     assert blur_item in view.manipulation_controller._drag_items
+
 
 def test_pe004_full_scenario_with_pasted_image(qapp):
     scene = QGraphicsScene()
@@ -503,12 +456,10 @@ def test_pe004_full_scenario_with_pasted_image(qapp):
     from screenshooter.items.pasted_image_item import PastedImageItem
     from PyQt5.QtGui import QPen
 
-    # Прямоугольник
     rect_item = RectangleItem(QRectF(10, 10, 50, 30), QPen(QColor("red"), 2))
     scene.addItem(rect_item)
     rect_item.setSelected(True)
 
-    # Вставленное изображение (например, маленький квадрат)
     pasted_pm = QPixmap(20, 20)
     pasted_pm.fill(QColor("blue"))
     pasted_item = PastedImageItem(pasted_pm, view)
@@ -517,18 +468,13 @@ def test_pe004_full_scenario_with_pasted_image(qapp):
     view.pasted_images.append(pasted_item)
     pasted_item.setSelected(True)
 
-    # Зона размытия
     blur_item = BlurRegionItem(QRectF(70, 70, 40, 40), view, mode='inactive')
     scene.addItem(blur_item)
     blur_item.setSelected(True)
 
-    # Клик по Blur через полный dispatch
     pos = view.mapFromScene(blur_item.sceneBoundingRect().center())
     press_event = make_mouse_event(view, QEvent.MouseButtonPress, pos=pos)
     view.mousePressEvent(press_event)
-
-    print("selected after press:", [type(it).__name__ for it in scene.selectedItems()])
-    print("_drag_items:", view.manipulation_controller._drag_items)
 
     assert rect_item.isSelected()
     assert pasted_item.isSelected()
@@ -536,6 +482,7 @@ def test_pe004_full_scenario_with_pasted_image(qapp):
     assert rect_item in view.manipulation_controller._drag_items
     assert pasted_item in view.manipulation_controller._drag_items
     assert blur_item in view.manipulation_controller._drag_items
+
 
 def test_pe004_after_copy_paste(qapp):
     scene = QGraphicsScene()
@@ -550,7 +497,6 @@ def test_pe004_after_copy_paste(qapp):
     from screenshooter.items.pasted_image_item import PastedImageItem
     from PyQt5.QtGui import QPen
 
-    # Создаём три исходных объекта
     rect_item = RectangleItem(QRectF(10, 10, 50, 30), QPen(QColor("red"), 2))
     scene.addItem(rect_item)
 
@@ -568,12 +514,9 @@ def test_pe004_after_copy_paste(qapp):
     for it in original_items:
         it.setSelected(True)
 
-    # Копируем и вставляем
     assert view.clipboard_controller.copy_selected() is True
     view.clipboard_controller.paste()
 
-    # После вставки старые объекты не должны быть выделены,
-    # а новые три копии — должны.
     selected = scene.selectedItems()
     new_selected = [it for it in selected if it not in original_items]
     assert len(new_selected) == 3
@@ -581,16 +524,15 @@ def test_pe004_after_copy_paste(qapp):
     assert sum(isinstance(it, PastedImageItem) for it in new_selected) == 1
     assert sum(isinstance(it, BlurRegionItem) for it in new_selected) == 1
 
-    # Клик по вставленной зоне размытия
     inserted_blur = next(it for it in new_selected if isinstance(it, BlurRegionItem))
     pos = view.mapFromScene(inserted_blur.sceneBoundingRect().center())
     press_event = make_mouse_event(view, QEvent.MouseButtonPress, pos=pos)
     view.mousePressEvent(press_event)
 
-    # Группа должна включать все три новых объекта
     drag_items = view.manipulation_controller._drag_items
     assert len(drag_items) == 3
     assert inserted_blur in drag_items
+
 
 def test_blur_alone_still_moves_alone(qapp):
     scene = QGraphicsScene()
@@ -611,4 +553,4 @@ def test_blur_alone_still_moves_alone(qapp):
 
     drag_items = view.manipulation_controller._drag_items
     assert len(drag_items) == 1
-    assert drag_items[0] is blur_item    
+    assert drag_items[0] is blur_item
