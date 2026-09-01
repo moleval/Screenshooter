@@ -182,21 +182,12 @@ class EditorView(QGraphicsView):
 
     def _enable_crop_status_style(self):
         if hasattr(self, 'status_label') and self.status_label is not None:
-            self.status_label.setStyleSheet(
-                "QLabel {"
-                "  background-color: rgba(0, 0, 0, 180);"
-                "  color: white;"
-                "  font-size: 14px;"
-                "  font-weight: bold;"
-                "  padding: 4px 8px;"
-                "  border-radius: 4px;"
-                "}"
-            )
+            self.image_editor.status_bar_manager.set_crop_status(self.image_editor.crop_target_item)
             self.status_label.setVisible(True)
 
     def _disable_crop_status_style(self):
         if hasattr(self, 'status_label') and self.status_label is not None:
-            self.status_label.setStyleSheet("")
+            self.image_editor.status_bar_manager.reset_to_normal()
             self.status_label.setVisible(False)
 
     def _is_background_item(self, item):

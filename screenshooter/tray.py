@@ -73,10 +73,32 @@ class TrayManager(QObject):
 
     def _on_autostart_toggled(self, enabled: bool):
         if enabled:
-            self.app.settings.create_autostart_shortcut()
+            success = self.app.settings.create_autostart_shortcut()
         else:
-            self.app.settings.remove_autostart_shortcut()
+            success = self.app.settings.remove_autostart_shortcut()
+
         self.autostart_action.setChecked(self.app.settings.is_autostart_enabled())
+
+        if success:
+            msg = "Автозагрузка включена" if enabled else "Автозагрузка выключена"
+            # Индикация в системном трее
+            self.tray_icon.showMessage(
+                "Скриншотер",
+                msg,
+                QSystemTrayIcon.Information,
+                2000
+            )
+            # Индикация в строке состояния окна программы
+            self.app.view.show_status_message(msg, 3000)
+        else:
+            err = "Не удалось изменить автозагрузку"
+            self.tray_icon.showMessage(
+                "Скриншотер",
+                err,
+                QSystemTrayIcon.Warning,
+                2000
+            )
+            self.app.view.show_status_message(err, 5000)
 
     def _on_theme_selected(self, theme_key: str):
         self.app.apply_theme(theme_key)

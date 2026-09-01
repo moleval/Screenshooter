@@ -5,6 +5,7 @@
 
 from PyQt5 import sip
 
+from ..theme import theme_manager
 from ..items.pasted_image_item import PastedImageItem
 
 
@@ -17,6 +18,24 @@ class StatusBarManager:
         if hasattr(self.view, 'status_label') and self.view.status_label is not None:
             return self.view.status_label
         return None
+
+    def _crop_style(self):
+        bg = theme_manager.get_color('status_crop_bg')
+        text = theme_manager.get_color('status_crop_text')
+        return (
+            f"background-color: rgba({bg.red()}, {bg.green()}, {bg.blue()}, {bg.alpha()});"
+            f" color: rgba({text.red()}, {text.green()}, {text.blue()}, {text.alpha()});"
+            " font-size: 14px; font-weight: bold; border-radius: 4px; padding: 4px 8px;"
+        )
+
+    def _normal_style(self):
+        bg = theme_manager.get_color('status_normal_bg')
+        text = theme_manager.get_color('status_normal_text')
+        return (
+            f"background-color: rgba({bg.red()}, {bg.green()}, {bg.blue()}, {bg.alpha()});"
+            f" color: rgba({text.red()}, {text.green()}, {text.blue()}, {text.alpha()});"
+            " border-radius: 6px; padding: 4px 8px;"
+        )
 
     def get_background_resolution(self):
         bg = self.view.background_item
@@ -42,11 +61,7 @@ class StatusBarManager:
         if label:
             label.setText(text)
             label.setVisible(True)
-            label.setStyleSheet(
-                "background-color: rgba(0, 0, 0, 180); color: white; "
-                "font-size: 14px; font-weight: bold; "
-                "border-radius: 4px; padding: 4px 8px;"
-            )
+            label.setStyleSheet(self._crop_style())
             self._update_position()
             label.raise_()
             label.update()
@@ -57,11 +72,7 @@ class StatusBarManager:
         if label:
             label.setText(text)
             label.setVisible(True)
-            label.setStyleSheet(
-                "background-color: rgba(0, 0, 0, 180); color: white; "
-                "font-size: 14px; font-weight: bold; "
-                "border-radius: 4px; padding: 4px 8px;"
-            )
+            label.setStyleSheet(self._crop_style())
             self._update_position()
             label.raise_()
             label.update()
@@ -70,10 +81,7 @@ class StatusBarManager:
     def reset_to_normal(self):
         label = self._label
         if label:
-            label.setStyleSheet(
-                "background-color: rgba(255,255,255,180); color: #333; "
-                "border-radius: 6px; padding: 4px 8px;"
-            )
+            label.setStyleSheet(self._normal_style())
             label.repaint()
 
     def repaint(self):

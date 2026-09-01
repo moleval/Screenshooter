@@ -25,7 +25,6 @@ class ThemeManager:
         'btn_bg': QColor(250, 250, 250),
         'btn_hover': QColor(228, 228, 228),
         'btn_pressed': QColor(205, 205, 205),
-        'border': QColor(170, 170, 170),
         'btn_text': QColor(51, 51, 51),
         'btn_green': QColor(76, 175, 80),
         'btn_red': QColor(244, 67, 54),
@@ -65,14 +64,13 @@ class ThemeManager:
         'panel_bg': QColor(83, 83, 83),
         'text': QColor(255, 255, 255),
         'text_light': QColor(255, 255, 255),
-        'border': QColor(140, 140, 140),
+        'border': QColor(155, 155, 155),
         'selection_bg': QColor(0, 90, 158),
         'selection_border': QColor(176, 212, 241),
 
         'btn_bg': QColor(70, 70, 70),
         'btn_hover': QColor(115, 115, 115),
         'btn_pressed': QColor(130, 130, 130),
-        'border': QColor(155, 155, 155),
         'btn_text': QColor(255, 255, 255),
         'btn_green': QColor(76, 175, 80),
         'btn_red': QColor(244, 67, 54),
@@ -152,11 +150,36 @@ class ThemeManager:
             background-color: {c['window_bg']};
         }}
 
+        QDialog {{
+            background-color: {c['window_bg']};
+            color: {c['text']};
+        }}
+        QMessageBox {{
+            background-color: {c['window_bg']};
+            color: {c['text']};
+        }}
+        QMessageBox QLabel {{
+            color: {c['text']};
+            background: transparent;
+        }}
+        QMessageBox QPushButton {{
+            background-color: {c['btn_bg']};
+            color: {c['btn_text']};
+            border: 1px solid {c['border']};
+            border-radius: 3px;
+            padding: 4px 8px;
+        }}
+        QMessageBox QPushButton:hover {{
+            background-color: {c['btn_hover']};
+        }}
+        QMessageBox QPushButton:pressed {{
+            background-color: {c['btn_pressed']};
+        }}
+
         /* ===== EditorToolbarStrip (новая плоская панель) ===== */
         QWidget#editorToolbarStrip {{
             background-color: {c['strip_bg']};
             border: none;
-            border-bottom: 1px solid {c['strip_border']};
         }}
 
         /* ===== ToolbarSeparator (линия разделителя) ===== */

@@ -15,6 +15,7 @@ from ..items import (RectangleItem, EllipseItem, FilledRectItem, CloudItem,
                      LineItem, WavyLineItem, ArrowItem, CurvedArrowItem,
                      DimensionItem, TextItem)
 from ..history import ChangePenCommand
+from ..theme import theme_manager
 
 
 class FloatingWidgetManager:
@@ -47,11 +48,9 @@ class FloatingWidgetManager:
     # ==============================================================
 
     def _on_zoom_widget_changed(self, p):
-        """Обработчик сигнала изменения масштаба."""
         self.view.zoomChangedByWheel.emit(p)
 
     def _fit_to_view(self):
-        """Подгоняет изображение под размер окна."""
         view = self.view
         bg = view.image_editor.background_item
         if bg is not None and not sip.isdeleted(bg) and bg.scene() is view.scene():
@@ -65,7 +64,6 @@ class FloatingWidgetManager:
         view.zoom_widget.set_zoom(scale)
 
     def _on_text_bg_changed(self, m):
-        """Обработчик смены фона текста."""
         view = self.view
         view.current_text_bg = (
             QColor(255, 255, 255, 200) if m == 'white' else
@@ -95,9 +93,25 @@ class FloatingWidgetManager:
     # Статусный виджет
     # ==============================================================
 
+    def _apply_normal_status_style(self):
+        """Применяет обычный (нетематический) стиль к статусной метке."""
+        label = self.view.status_label
+        if label is None:
+            return
+        normal_bg = theme_manager.get_color('status_normal_bg')
+        normal_text = theme_manager.get_color('status_normal_text')
+        label.setStyleSheet(
+            f"background-color: rgba({normal_bg.red()}, {normal_bg.green()}, "
+            f"{normal_bg.blue()}, {normal_bg.alpha()});"
+            f" color: rgba({normal_text.red()}, {normal_text.green()}, "
+            f"{normal_text.blue()}, {normal_text.alpha()});"
+            " border-radius: 6px; padding: 4px 8px;"
+        )
+
     def set_resolution_text(self, text):
         """Устанавливает текст разрешения в статусный виджет."""
         self._resolution_text = text
+        self._apply_normal_status_style()
         self.view.status_label.setText(text)
         self.view.status_label.setToolTip(text if text else "")
         self.view.status_label.setVisible(bool(text))
@@ -105,6 +119,7 @@ class FloatingWidgetManager:
 
     def show_status_message(self, message, duration=15000):
         """Показывает сообщение на время, затем восстанавливает текст разрешения."""
+        self._apply_normal_status_style()
         self.view.status_label.setText(message)
         self.view.status_label.setToolTip(message)
         self.view.status_label.setVisible(True)
@@ -114,7 +129,7 @@ class FloatingWidgetManager:
     def _restore_status_label(self):
         """Восстанавливает текст разрешения после сообщения."""
         if self._resolution_text:
-            self.view.status_label.setText(self._resolution_text)
+            self.set_resolution_text(self._resolution_text)
         else:
             self.view.status_label.setVisible(False)
 
@@ -160,15 +175,7 @@ class FloatingWidgetManager:
             self.update_info_widget_content(QColor(0, 0, 0), 0)
 
     def update_resolution_for_selection(self):
-        """Обновляет статусную строку при изменении выделения.
-
-        Логика:
-        - Нет выделения → разрешение подложки.
-        - Выбран один объект:
-            * если это вставленная картинка → её разрешение;
-            * иначе → разрешение подложки.
-        - Выбрано несколько объектов → «Выбрано: N».
-        """
+        """Обновляет статусную строку при изменении выделения."""
         view = self.view
         selected = view.scene().selectedItems()
         non_bg_selected = [it for it in selected if not view._is_background_item(it)]
@@ -187,15 +194,10 @@ class FloatingWidgetManager:
                     self.set_resolution_text(f"{pixmap.width()}×{pixmap.height()}")
                     return
 
-        # Нет выделения или выбран один объект, но не картинка
         view.update_resolution_from_background()
 
     def update_floating_widgets_visibility(self):
-        """Обновляет видимость плавающих виджетов.
-
-        При показе виджета используется немедленное позиционирование
-        (immediate=True), чтобы избежать мелькания в позиции (0, 0).
-        """
+        """Обновляет видимость плавающих виджетов."""
         view = self.view
         view.shape_mode_widget.setVisible(False)
         view.ellipse_mode_widget.setVisible(False)
@@ -203,8 +205,6 @@ class FloatingWidgetManager:
         view.line_mode_widget.setVisible(False)
         view.text_format_widget.setVisible(False)
 
-        # Текст выделен или активен — показываем виджет фона
-        # (работает во всех режимах, включая Размыть)
         if view.active_text_item is not None:
             view.text_format_widget.setVisible(True)
             view.text_format_widget.raise_()
@@ -220,7 +220,6 @@ class FloatingWidgetManager:
                 view.layout_manager.update_all(immediate=True)
                 return
 
-        # Режимы обрезки/размытия — виджеты инструментов скрыты
         if view.image_editor.crop_mode or view.blur_controller.blur_mode:
             view.layout_manager.update_all(immediate=True)
             return
@@ -235,7 +234,6 @@ class FloatingWidgetManager:
             view.layout_manager.update_all(immediate=True)
             return
 
-        # Определяем активный инструмент с учётом временного указателя
         active_tool = view.current_tool
         if active_tool is None:
             mc = view.manipulation_controller
@@ -261,12 +259,10 @@ class FloatingWidgetManager:
         view.layout_manager.update_all(immediate=True)
 
     def update_info_widget_content(self, color, thickness):
-        """Устанавливает цвет и толщину в виджет информации."""
         self.view.info_widget.set_info(color, thickness)
         QTimer.singleShot(0, self.view.layout_manager.update_info_widget_position)
 
     def update_text_format_widget_visibility(self):
-        """Обновляет видимость виджета формата текста."""
         self.update_floating_widgets_visibility()
 
     # ==============================================================
@@ -274,7 +270,6 @@ class FloatingWidgetManager:
     # ==============================================================
 
     def apply_current_style_to_selected(self, pen_color=None, pen_width=None):
-        """Применяет цвет/толщину к выделенным элементам."""
         view = self.view
         for item in view.scene().selectedItems():
             if isinstance(item, DimensionItem):
@@ -315,7 +310,6 @@ class FloatingWidgetManager:
                 view.history.push(ChangePenCommand(item, current_pen, new_pen))
 
     def set_pen_color(self, c):
-        """Устанавливает цвет пера."""
         view = self.view
         if view.scene().selectedItems():
             self.apply_current_style_to_selected(pen_color=c)
@@ -325,7 +319,6 @@ class FloatingWidgetManager:
             self.update_info_widget_content(view.current_pen_color, view.pen_width)
 
     def set_pen_width(self, w):
-        """Устанавливает толщину пера."""
         view = self.view
         w = max(1, min(100, int(w)))
         if view.scene().selectedItems() or view.active_text_item:
@@ -337,7 +330,6 @@ class FloatingWidgetManager:
             self.update_info_widget_content(view.current_pen_color, view.pen_width)
 
     def set_text_size(self, v):
-        """Устанавливает размер текста."""
         view = self.view
         v = max(1, min(100, int(v)))
         view.text_size = v
@@ -354,7 +346,6 @@ class FloatingWidgetManager:
             view.active_text_item.update()
 
     def set_text_bg(self, bg):
-        """Устанавливает фон текста."""
         self.view.current_text_bg = bg
 
     # ==============================================================
@@ -362,21 +353,18 @@ class FloatingWidgetManager:
     # ==============================================================
 
     def get_selected_text_item(self):
-        """Возвращает выделенный текстовый элемент."""
         for item in self.view.scene().selectedItems():
             if isinstance(item, TextItem):
                 return item
         return None
 
     def get_selected_dimension_item(self):
-        """Возвращает выделенную размерную линию."""
         for item in self.view.scene().selectedItems():
             if isinstance(item, DimensionItem):
                 return item
         return None
 
     def get_current_width(self):
-        """Возвращает текущую толщину."""
         view = self.view
         sd = self.get_selected_dimension_item()
         if sd:
@@ -395,7 +383,6 @@ class FloatingWidgetManager:
     # ==============================================================
 
     def remove_empty_text(self, item):
-        """Удаляет пустой текст со сцены."""
         view = self.view
         if item.scene():
             item.scene().removeItem(item)
@@ -404,7 +391,6 @@ class FloatingWidgetManager:
         self.update_floating_widgets_visibility()
 
     def text_editing_finished(self, item):
-        """Завершает редактирование текста."""
         view = self.view
         if view.active_text_item is item:
             view.active_text_item = None
