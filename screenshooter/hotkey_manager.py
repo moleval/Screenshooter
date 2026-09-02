@@ -62,6 +62,7 @@ class HotkeyManager(QObject):
             if window.isVisible():
                 self._hidden_windows.append(window)
                 window.hide()
+        QApplication.processEvents()
         return True
 
     def _finish(self):
