@@ -44,6 +44,11 @@ class WindowManager(QObject):
             self._windows.append(window)
             self.window_activated.emit(window)
 
+    @staticmethod
+    def mark_window_reusable(window):
+        """Возвращает окно в автоматический цикл после очистки сцены."""
+        window._auto_reuse_enabled = True
+
     def find_target_window_for_reuse(self):
         eligible = [w for w in reversed(self._windows)
                     if getattr(w, "_auto_reuse_enabled", True)]
@@ -57,6 +62,7 @@ class WindowManager(QObject):
     def create_editor_window(self, reusable=True):
         from .app import ScreenshotApp
         window = ScreenshotApp()
+        window._window_manager = self
         self.add_window(window, reusable=reusable)
         window.show()
         return window

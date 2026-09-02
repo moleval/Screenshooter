@@ -556,6 +556,9 @@ class ScreenshotApp(QMainWindow):
 
         if msg_box.clickedButton() == yes_btn:
             self.view.clear_scene()
+            window_manager = getattr(self, "_window_manager", None)
+            if window_manager is not None:
+                window_manager.mark_window_reusable(self)
             self._update_image_actions_enabled()
             self._update_undo_buttons()
 
