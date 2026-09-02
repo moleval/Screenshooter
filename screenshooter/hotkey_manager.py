@@ -19,6 +19,7 @@ class HotkeyManager(QObject):
         self.window_manager = window_manager
         self._capturing = False
         self._hooks = []
+        self._hidden_windows = []
         self._last_external_hwnd = None
         self._monitor_requested.connect(self._capture_monitor)
         self._window_requested.connect(self._capture_window)
@@ -27,11 +28,14 @@ class HotkeyManager(QObject):
 
     def _register(self):
         self._hooks = [
-            keyboard.add_hotkey("alt+print screen", self._on_alt,
-                                suppress=True, trigger_on_release=False),
-            keyboard.add_hotkey("ctrl+print screen", self._on_ctrl,
-                                suppress=True, trigger_on_release=False),
-            keyboard.hook_key("print screen", self._on_print, suppress=True),
+            ("hotkey", keyboard.add_hotkey(
+                "alt+print screen", self._on_alt,
+                suppress=True, trigger_on_release=False)),
+            ("hotkey", keyboard.add_hotkey(
+                "ctrl+print screen", self._on_ctrl,
+                suppress=True, trigger_on_release=False)),
+            ("hook", keyboard.hook_key(
+                "print screen", self._on_print, suppress=True)),
         ]
 
     def _on_print(self, event):
@@ -53,14 +57,18 @@ class HotkeyManager(QObject):
         if self._capturing:
             return False
         self._capturing = True
+        self._hidden_windows = []
         for window in self.window_manager.windows:
-            window.hide()
+            if window.isVisible():
+                self._hidden_windows.append(window)
+                window.hide()
         return True
 
     def _finish(self):
         self._capturing = False
-        for window in self.window_manager.windows:
+        for window in self._hidden_windows:
             window.show()
+        self._hidden_windows = []
         active = self.window_manager.active_window
         if active:
             active.raise_()
@@ -128,8 +136,8 @@ class HotkeyManager(QObject):
             self._finish()
 
     def cleanup(self):
-        for hook in self._hooks:
-            if isinstance(hook, int):
+        for hook_type, hook in self._hooks:
+            if hook_type == "hotkey":
                 keyboard.remove_hotkey(hook)
             else:
                 keyboard.unhook_key(hook)

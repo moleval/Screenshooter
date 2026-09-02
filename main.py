@@ -46,30 +46,11 @@ def try_acquire_lock():
     """
     lock_path = get_lock_file_path()
     lock_file = QLockFile(lock_path)
+    lock_file.setStaleLockTime(60000)
 
-    # Пытаемся получить блокировку
     if lock_file.tryLock():
         return lock_file, True, None
 
-    # Не удалось получить блокировку — проверяем, не завис ли процесс
-    # QLockFile автоматически определяет, жив ли процесс, удерживающий блокировку
-    # Если процесс мёртв, tryLock может не сработать из-за stale lock
-    # В этом случае пытаемся удалить старый файл и получить блокировку снова
-
-    # Проверяем возраст файла блокировки
-    try:
-        lock_info = lock_file.staleLockTime()
-        # Если файл старше 60 секунд, считаем его зависшим и удаляем
-        if lock_info > 60000:  # 60 секунд в миллисекундах
-            os.remove(lock_path)
-            # Пробуем снова
-            if lock_file.tryLock():
-                return lock_file, True, None
-    except (OSError, AttributeError):
-        # staleLockTime может быть недоступен в старых версиях Qt
-        pass
-
-    # Если всё ещё не удалось получить блокировку — значит, работает другой экземпляр
     return None, False, "Другой экземпляр приложения уже запущен."
 
 

@@ -23,7 +23,9 @@ class WindowManager(QObject):
     def add_window(self, window):
         if window not in self._windows:
             self._windows.append(window)
-            window.installEventFilter(_WindowEventFilter(self, window))
+            event_filter = _WindowEventFilter(self, window)
+            window.installEventFilter(event_filter)
+            window._window_manager_event_filter = event_filter
         self.set_active_window(window)
 
     def remove_window(self, window):
@@ -37,6 +39,8 @@ class WindowManager(QObject):
     def set_active_window(self, window):
         if window in self._windows:
             self._active_window = window
+            self._windows.remove(window)
+            self._windows.append(window)
             self.window_activated.emit(window)
 
     def find_target_window_for_reuse(self):
