@@ -17,8 +17,9 @@ class ScreenCapture:
     def is_capturing(self):
         return self._capture_in_progress
 
-    def capture_screen(self):
-        screen = QApplication.primaryScreen()
+    def capture_screen(self, screen=None):
+        """Захватывает указанный монитор или основной монитор."""
+        screen = screen or QApplication.primaryScreen()
         if screen:
             self.app.screenshot_pixmap = screen.grabWindow(0)
             self.app.display_screenshot()

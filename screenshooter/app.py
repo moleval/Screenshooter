@@ -11,7 +11,7 @@ import os
 import time
 from PyQt5 import sip
 from PyQt5.QtCore import Qt, QRectF, QTimer, pyqtSignal, QDir, QSettings, QEvent
-from PyQt5.QtGui import QPixmap, QPainter, QImage, QColor, QIcon, QKeySequence
+from PyQt5.QtGui import QPixmap, QPainter, QImage, QColor, QIcon, QKeySequence, QGuiApplication
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                              QGraphicsScene, QGraphicsPixmapItem, QActionGroup,
                              QAction, QFileDialog, QMessageBox, QApplication, QSizePolicy, QDialog,
@@ -101,9 +101,17 @@ class ScreenshotApp(QMainWindow):
         self.redo_btn.clicked.connect(self.redo_action)
         left_group_layout.addWidget(self.redo_btn)
 
-        self.capture_btn = QPushButton("Снимок")
-        self.capture_btn.clicked.connect(self.capture_screen)
-        left_group_layout.addWidget(self.capture_btn)
+        self.capture_buttons = []
+        screens = QGuiApplication.screens()
+        capture_label = "Экран" if len(screens) == 1 else None
+        for index, screen in enumerate(screens):
+            label = capture_label or f"Экран {index + 1}"
+            button = QPushButton(label)
+            button.clicked.connect(
+                lambda checked=False, current_screen=screen:
+                self.capture_screen(current_screen))
+            self.capture_buttons.append(button)
+            left_group_layout.addWidget(button)
 
         self.clear_btn = QPushButton("Очистить")
         self.clear_btn.clicked.connect(self.clear_scene_action)
@@ -201,7 +209,7 @@ class ScreenshotApp(QMainWindow):
         main_action_buttons = (
             self.undo_btn,
             self.redo_btn,
-            self.capture_btn,
+            *self.capture_buttons,
             self.clear_btn,
             self.copy_btn,
             self.insert_file_btn,
@@ -684,8 +692,8 @@ class ScreenshotApp(QMainWindow):
     # --------------------------------------------------------------
     # Захват экрана — делегирование в ScreenCapture
     # --------------------------------------------------------------
-    def capture_screen(self):
-        self.capture.capture_screen()
+    def capture_screen(self, screen=None):
+        self.capture.capture_screen(screen)
 
     def capture_monitor(self):
         if self.capture.is_capturing():
