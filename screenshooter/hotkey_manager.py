@@ -89,9 +89,9 @@ class HotkeyManager(QObject):
     @staticmethod
     def _deliver(target, pixmap):
         if target.is_empty():
-            target.set_background_from_pixmap(pixmap)
+            target.view.set_background_from_pixmap(pixmap)
         else:
-            target.add_pasted_image(pixmap)
+            target.view.add_pasted_image(pixmap)
 
     def _target(self):
         return self.window_manager.find_target_window_for_reuse()
