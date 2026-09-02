@@ -11,6 +11,7 @@ class WindowManager(QObject):
         super().__init__(parent)
         self._windows = []
         self._active_window = None
+        self._next_window_number = 1
 
     @property
     def windows(self):
@@ -24,6 +25,10 @@ class WindowManager(QObject):
         if window not in self._windows:
             self._windows.append(window)
             window._auto_reuse_enabled = reusable
+            window_number = self._next_window_number
+            self._next_window_number += 1
+            window._window_number = window_number
+            window.setWindowTitle(f"Скриншотер с редактором — Окно {window_number}")
             event_filter = _WindowEventFilter(self, window)
             window.installEventFilter(event_filter)
             window._window_manager_event_filter = event_filter
