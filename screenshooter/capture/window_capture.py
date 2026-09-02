@@ -11,9 +11,9 @@ from PyQt5.QtCore import QRect
 from .virtual_screen import grab_virtual_screen, get_virtual_screen_geometry
 
 
-def capture_active_window():
-    """Захватывает клиентскую область активного окна."""
-    hwnd = win32gui.GetForegroundWindow()
+def capture_active_window(hwnd=None):
+    """Захватывает клиентскую область указанного или активного окна."""
+    hwnd = hwnd or win32gui.GetForegroundWindow()
     if not hwnd:
         return None
     client_rect = win32gui.GetClientRect(hwnd)
