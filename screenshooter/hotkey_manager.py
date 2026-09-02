@@ -104,7 +104,7 @@ class HotkeyManager(QObject):
             target = self._target()
             pixmap = self._capture_pixmap("monitor")
             if pixmap is not None:
-                target = target or self.window_manager.create_editor_window()
+                target = target or self.window_manager.create_editor_window(reusable=False)
                 self._deliver(target, pixmap)
         finally:
             self._finish()
@@ -117,7 +117,7 @@ class HotkeyManager(QObject):
             target = self._target()
             pixmap = self._capture_pixmap("active_window", hwnd)
             if pixmap is not None:
-                target = target or self.window_manager.create_editor_window()
+                target = target or self.window_manager.create_editor_window(reusable=False)
                 self._deliver(target, pixmap)
         finally:
             self._finish()
@@ -130,7 +130,7 @@ class HotkeyManager(QObject):
             target = self._target()
             pixmap = self._capture_pixmap("region")
             if pixmap is not None:
-                target = target or self.window_manager.create_editor_window()
+                target = target or self.window_manager.create_editor_window(reusable=False)
                 self._deliver(target, pixmap)
         finally:
             self._finish()

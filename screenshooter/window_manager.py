@@ -20,9 +20,10 @@ class WindowManager(QObject):
     def active_window(self):
         return self._active_window
 
-    def add_window(self, window):
+    def add_window(self, window, reusable=True):
         if window not in self._windows:
             self._windows.append(window)
+            window._auto_reuse_enabled = reusable
             event_filter = _WindowEventFilter(self, window)
             window.installEventFilter(event_filter)
             window._window_manager_event_filter = event_filter
@@ -44,17 +45,19 @@ class WindowManager(QObject):
             self.window_activated.emit(window)
 
     def find_target_window_for_reuse(self):
-        empty = [w for w in reversed(self._windows) if w.is_empty()]
+        eligible = [w for w in reversed(self._windows)
+                    if getattr(w, "_auto_reuse_enabled", True)]
+        empty = [w for w in eligible if w.is_empty()]
         if empty:
             return empty[0]
-        available = [w for w in reversed(self._windows)
+        available = [w for w in eligible
                      if w.has_no_pasted_images()]
         return available[0] if available else None
 
-    def create_editor_window(self):
+    def create_editor_window(self, reusable=True):
         from .app import ScreenshotApp
         window = ScreenshotApp()
-        self.add_window(window)
+        self.add_window(window, reusable=reusable)
         window.show()
         return window
 

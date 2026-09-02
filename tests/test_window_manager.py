@@ -45,6 +45,16 @@ def test_reuse_returns_none_when_no_window_is_eligible(qapp):
     assert manager.find_target_window_for_reuse() is None
 
 
+def test_new_capture_window_is_not_reused_automatically(qapp):
+    manager = WindowManager(qapp)
+    initial = FakeWindow(empty=False, no_pasted_images=False)
+    capture_window = FakeWindow(empty=True, no_pasted_images=False)
+    manager.add_window(initial)
+    manager.add_window(capture_window, reusable=False)
+
+    assert manager.find_target_window_for_reuse() is None
+
+
 def test_removing_last_window_quits_application(qapp, monkeypatch):
     manager = WindowManager(qapp)
     window = FakeWindow(empty=True, no_pasted_images=False)
