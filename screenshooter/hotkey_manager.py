@@ -60,18 +60,19 @@ class HotkeyManager(QObject):
         self._hidden_windows = []
         for window in self.window_manager.windows:
             if window.isVisible():
-                self._hidden_windows.append(window)
+                self._hidden_windows.append((window, window.isMinimized()))
                 window.hide()
         QApplication.processEvents()
         return True
 
     def _finish(self):
         self._capturing = False
-        for window in self._hidden_windows:
-            window.show()
+        for window, was_minimized in self._hidden_windows:
+            if not was_minimized:
+                window.show()
         self._hidden_windows = []
         active = self.window_manager.active_window
-        if active:
+        if active and active.isVisible():
             active.raise_()
             active.activateWindow()
 
@@ -107,6 +108,8 @@ class HotkeyManager(QObject):
             if not pixmap.isNull():
                 target = target or self.window_manager.create_editor_window(reusable=False)
                 self._deliver(target, pixmap)
+        except Exception as error:
+            print(f"Ошибка захвата выбранного экрана: {error}")
         finally:
             self._finish()
 
