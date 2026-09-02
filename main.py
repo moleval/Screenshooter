@@ -78,6 +78,9 @@ def main():
     window_manager = WindowManager(app)
     window = window_manager.create_editor_window(reusable=True)
     hotkey_manager = HotkeyManager(window_manager, app)
+    window_manager.hotkey_manager = hotkey_manager
+    for editor_window in window_manager.windows:
+        editor_window._hotkey_manager = hotkey_manager
     app.aboutToQuit.connect(hotkey_manager.cleanup)
 
     # Если приложение запущено с флагом --hidden — не показываем окно

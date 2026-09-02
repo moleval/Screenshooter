@@ -96,6 +96,19 @@ class HotkeyManager(QObject):
     def _target(self):
         return self.window_manager.find_target_window_for_reuse()
 
+    def capture_specific_screen(self, screen):
+        """Захватывает выбранный монитор по общей логике распределения окон."""
+        if not self._begin():
+            return
+        try:
+            target = self._target()
+            pixmap = screen.grabWindow(0)
+            if not pixmap.isNull():
+                target = target or self.window_manager.create_editor_window(reusable=False)
+                self._deliver(target, pixmap)
+        finally:
+            self._finish()
+
     @pyqtSlot()
     def _capture_monitor(self):
         if not self._begin():

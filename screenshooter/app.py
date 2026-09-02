@@ -68,6 +68,7 @@ class ScreenshotApp(QMainWindow):
         self.setWindowIcon(load_app_icon())
 
         self._force_quit = False
+        self._hotkey_manager = None
         self._saved_window_state = None
         self._window_state_before_fullscreen = None
 
@@ -693,6 +694,9 @@ class ScreenshotApp(QMainWindow):
     # Захват экрана — делегирование в ScreenCapture
     # --------------------------------------------------------------
     def capture_screen(self, screen=None):
+        if self._hotkey_manager is not None and screen is not None:
+            self._hotkey_manager.capture_specific_screen(screen)
+            return
         self.capture.capture_screen(screen)
 
     def capture_monitor(self):

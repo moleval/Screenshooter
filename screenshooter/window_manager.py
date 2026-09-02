@@ -68,6 +68,8 @@ class WindowManager(QObject):
         from .app import ScreenshotApp
         window = ScreenshotApp()
         window._window_manager = self
+        if hasattr(self, "hotkey_manager"):
+            window._hotkey_manager = self.hotkey_manager
         self.add_window(window, reusable=reusable)
         window.show()
         return window
