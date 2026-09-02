@@ -24,6 +24,8 @@ if platform.system() == "Windows":
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from screenshooter.app import ScreenshotApp
+from screenshooter.window_manager import WindowManager
+from screenshooter.hotkey_manager import HotkeyManager
 from screenshooter.utils import load_app_icon
 
 
@@ -92,11 +94,16 @@ def main():
     # Устанавливаем иконку приложения глобально
     app.setWindowIcon(load_app_icon())
 
-    window = ScreenshotApp()
+    window_manager = WindowManager(app)
+    window = window_manager.create_editor_window()
+    hotkey_manager = HotkeyManager(window_manager, app)
+    app.aboutToQuit.connect(hotkey_manager.cleanup)
 
     # Если приложение запущено с флагом --hidden — не показываем окно
     if '--hidden' not in sys.argv:
         window.show()
+    else:
+        window.hide()
 
     # lock_file должен оставаться в памяти до завершения приложения
     # Сохраняем ссылку в app для предотвращения сборки мусором
