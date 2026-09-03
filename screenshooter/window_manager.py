@@ -30,15 +30,29 @@ class WindowManager(QObject):
             return
 
         for window in windows:
+            self._enable_preview_constraints(window)
             if window.isMinimized():
                 window.showNormal()
             else:
                 window.show()
             self._restore_saved_geometry(window)
             window.raise_()
-        self.layout_all_windows()
+        self.layout_all_windows(preview=True)
 
-    def layout_all_windows(self):
+    @staticmethod
+    def _enable_preview_constraints(window):
+        if not hasattr(window, "_normal_minimum_size"):
+            window._normal_minimum_size = window.minimumSize()
+        window.setMinimumSize(0, 0)
+
+    @staticmethod
+    def restore_normal_constraints(window):
+        minimum_size = getattr(window, "_normal_minimum_size", None)
+        if minimum_size is not None:
+            window.setMinimumSize(minimum_size)
+            del window._normal_minimum_size
+
+    def layout_all_windows(self, preview=False):
         windows = sorted(self.windows, key=lambda w: getattr(w, "_window_number", 0) or 0)
         if not windows:
             return
@@ -49,67 +63,113 @@ class WindowManager(QObject):
         rect = screen.availableGeometry()
         left = rect.left()
         top = rect.top()
-        width = rect.width()
-        height = rect.height()
+        screen_width = rect.width()
+        screen_height = rect.height()
         count = len(windows)
-
-        gap = 12
-        half_gap = gap // 2
-
-        def clamp(v, lo, hi):
-            return max(lo, min(v, hi))
+        gap = max(8, min(16, min(screen_width, screen_height) // 120))
+        aspect = 1030 / 750
 
         if count == 1:
-            w = max(260, int(width * 0.38))
-            h = max(220, int(height * 0.46))
-            x = left + (width - w) // 2
-            y = top + (height - h) // 2
-            positions = [(x, y)]
-            sizes = [(w, h)]
+            outer_width = min(screen_width, int(screen_height * aspect)) * 3 // 5
+            outer_height = int(outer_width / aspect)
+            positions = [(
+                left + (screen_width - outer_width) // 2,
+                top + (screen_height - outer_height) // 2,
+            )]
         elif count == 2:
-            w = max(210, int(width * 0.42))
-            h = max(180, int((height - gap) * 0.42))
-            positions = [(left + 12, top + 12), (left + 12, top + h + gap + 12)]
-            sizes = [(w, h), (w, h)]
+            outer_width = min(screen_width // 2, int((screen_height - gap) * aspect / 2))
+            outer_height = int(outer_width / aspect)
+            positions = [
+                (left, top),
+                (left, top + outer_height + gap),
+            ]
         elif count == 3:
-            w = max(210, int(width * 0.36))
-            h = max(180, int((height - gap) * 0.32))
+            outer_width = min((screen_width - gap) // 2,
+                              int((screen_height - gap) * aspect / 2))
+            outer_height = int(outer_width / aspect)
             positions = [
-                (left + 12, top + 12),
-                (left + 12, top + h + gap + 12),
-                (left + width - w - 12, top + h + gap + 12),
+                (left, top),
+                (left, top + outer_height + gap),
+                (left + outer_width + gap, top + outer_height + gap),
             ]
-            sizes = [(w, h), (w, h), (w, h)]
         elif count == 4:
-            w = max(180, int(width * 0.28))
-            h = max(170, int(height * 0.28))
+            outer_width = min((screen_width - gap) // 2,
+                              int((screen_height - gap) * aspect / 2))
+            outer_height = int(outer_width / aspect)
             positions = [
-                (left + 12, top + 12),
-                (left + width - w - 12, top + 12),
-                (left + width - w - 12, top + height - h - 12),
-                (left + 12, top + height - h - 12),
+                (left, top),
+                (left + outer_width + gap, top),
+                (left + outer_width + gap, top + outer_height + gap),
+                (left, top + outer_height + gap),
             ]
-            sizes = [(w, h), (w, h), (w, h), (w, h)]
         else:
-            rows = min(5, max(2, (count + 1) // 2))
-            h = max(120, int((height - (rows - 1) * gap - 24) / rows))
-            w = max(150, int(width * 0.24))
+            rows = (count + 1) // 2
+            outer_width = min((screen_width - gap) // 2,
+                              int((screen_height - gap * (rows - 1))
+                                  * aspect / rows))
+            outer_height = int(outer_width / aspect)
             positions = []
-            sizes = []
             for index in range(count):
                 row = index // 2
-                x_side = 0 if index % 2 == 0 else 1
-                x = left + 12 if x_side == 0 else left + width - w - 12
-                y = top + 12 + row * (h + gap)
-                positions.append((x, y))
-                sizes.append((w, h))
+                x = left if index % 2 == 0 else left + outer_width + gap
+                positions.append((x, top + row * (outer_height + gap)))
 
-        for window, (w, h), (x, y) in zip(windows, sizes, positions):
-            w = clamp(w, 120, width - 24)
-            h = clamp(h, 120, height - 24)
-            x = clamp(x, left, left + width - w)
-            y = clamp(y, top, top + height - h)
-            window.setGeometry(x, y, w, h)
+        if preview:
+            outer_width = max(1, int(outer_width * 0.72))
+            outer_height = max(1, int(outer_height * 0.72))
+            if count == 1:
+                positions = [(
+                    left + (screen_width - outer_width) // 2,
+                    top + (screen_height - outer_height) // 2,
+                )]
+            elif count == 2:
+                positions = [
+                    (left, top),
+                    (left, top + outer_height + gap),
+                ]
+            elif count == 3:
+                positions = [
+                    (left, top),
+                    (left, top + outer_height + gap),
+                    (left + outer_width + gap, top + outer_height + gap),
+                ]
+            elif count == 4:
+                positions = [
+                    (left, top),
+                    (left + outer_width + gap, top),
+                    (left + outer_width + gap, top + outer_height + gap),
+                    (left, top + outer_height + gap),
+                ]
+            else:
+                positions = []
+                for index in range(count):
+                    row = index // 2
+                    x = left if index % 2 == 0 else left + outer_width + gap
+                    positions.append((x, top + row * (outer_height + gap)))
+
+        def frame_metrics(window):
+            try:
+                frame = window.frameGeometry()
+                content = window.geometry()
+                return (
+                    frame.width() - content.width(),
+                    frame.height() - content.height(),
+                    frame.left() - content.left(),
+                    frame.top() - content.top(),
+                )
+            except (AttributeError, RuntimeError):
+                return 0, 0, 0, 0
+
+        for window, (outer_x, outer_y) in zip(windows, positions):
+            frame_width, frame_height, frame_left, frame_top = frame_metrics(window)
+            content_width = max(1, outer_width - max(0, frame_width))
+            content_height = max(1, outer_height - max(0, frame_height))
+            window.setGeometry(
+                outer_x - frame_left,
+                outer_y - frame_top,
+                content_width,
+                content_height,
+            )
             window._saved_geometry = window.geometry()
 
     def _restore_saved_geometry(self, window):

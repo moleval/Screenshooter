@@ -70,7 +70,10 @@ class TrayManager(QObject):
             for window in windows:
                 action = QAction(self._window_title(window), self)
                 action.setCheckable(True)
-                action.triggered.connect(lambda checked, target=window: self._activate_window(target))
+                action.triggered.connect(
+                    lambda checked, target=window:
+                    self._toggle_window_visibility(target, checked)
+                )
                 action.setChecked(window.isVisible() and not window.isMinimized())
                 self.menu.addAction(action)
 
@@ -107,6 +110,24 @@ class TrayManager(QObject):
         window.activateWindow()
         if hasattr(window, "_window_manager"):
             window._window_manager.set_active_window(window)
+        self.update_windows_menu()
+
+    def _toggle_window_visibility(self, window, visible):
+        if window is None:
+            return
+        if visible:
+            if hasattr(self.window_manager, "restore_normal_constraints"):
+                self.window_manager.restore_normal_constraints(window)
+            if window.isMinimized():
+                window.showNormal()
+            else:
+                window.show()
+            window.raise_()
+            window.activateWindow()
+            if hasattr(window, "_window_manager"):
+                window._window_manager.set_active_window(window)
+        else:
+            window.hide()
         self.update_windows_menu()
 
     def _build_theme_menu(self):
