@@ -64,14 +64,15 @@ class WindowManager(QObject):
                      if w.has_no_pasted_images()]
         return available[0] if available else None
 
-    def create_editor_window(self, reusable=True):
+    def create_editor_window(self, reusable=True, show=True):
         from .app import ScreenshotApp
         window = ScreenshotApp()
         window._window_manager = self
         if hasattr(self, "hotkey_manager"):
             window._hotkey_manager = self.hotkey_manager
         self.add_window(window, reusable=reusable)
-        window.show()
+        if show:
+            window.show()
         return window
 
 

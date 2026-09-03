@@ -78,7 +78,7 @@ def main():
     app.setWindowIcon(load_app_icon())
 
     window_manager = WindowManager(app)
-    window = window_manager.create_editor_window(reusable=True)
+    window = window_manager.create_editor_window(reusable=True, show=False)
     hotkey_manager = HotkeyManager(window_manager, app)
     window_manager.hotkey_manager = hotkey_manager
     for editor_window in window_manager.windows:

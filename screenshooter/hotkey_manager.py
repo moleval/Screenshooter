@@ -2,7 +2,7 @@
 
 import keyboard
 import win32gui
-from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot
+from PyQt5.QtCore import QObject, Qt, pyqtSignal, pyqtSlot
 from PyQt5.QtWidgets import QApplication, QDialog
 from .capture.screen_overlay import ScreenCaptureOverlay
 from .capture.region_overlay import RegionCaptureOverlay
@@ -74,16 +74,23 @@ class HotkeyManager(QObject):
         QApplication.processEvents()
         return True
 
-    def _finish(self):
+    def _finish(self, target=None):
         self._capturing = False
         for window, was_minimized in self._hidden_windows:
             if not was_minimized:
                 window.show()
         self._hidden_windows = []
-        active = self.window_manager.active_window
-        if active and active.isVisible():
-            active.raise_()
-            active.activateWindow()
+        window = target or self.window_manager.active_window
+        if window:
+            if window.isMinimized():
+                if window.windowState() & Qt.WindowMaximized:
+                    window.showMaximized()
+                else:
+                    window.showNormal()
+            elif not window.isVisible():
+                window.show()
+            window.raise_()
+            window.activateWindow()
 
     def _capture_pixmap(self, capture_type, hwnd=None):
         if capture_type == "active_window":
@@ -111,6 +118,7 @@ class HotkeyManager(QObject):
         """Захватывает выбранный монитор по общей логике распределения окон."""
         if not self._begin():
             return
+        target = None
         try:
             target = self._target()
             pixmap = screen.grabWindow(0)
@@ -120,13 +128,14 @@ class HotkeyManager(QObject):
         except Exception as error:
             print(f"Ошибка захвата выбранного экрана: {error}")
         finally:
-            self._finish()
+            self._finish(target)
 
     @pyqtSlot()
     def _capture_monitor(self):
         if not self._begin():
             self._request_pending = False
             return
+        target = None
         try:
             target = self._target()
             pixmap = self._capture_pixmap("monitor")
@@ -136,7 +145,7 @@ class HotkeyManager(QObject):
         except Exception as error:
             print(f"Ошибка захвата экрана: {error}")
         finally:
-            self._finish()
+            self._finish(target)
             self._request_pending = False
 
     @pyqtSlot(object)
@@ -144,6 +153,7 @@ class HotkeyManager(QObject):
         if not self._begin():
             self._request_pending = False
             return
+        target = None
         try:
             target = self._target()
             pixmap = self._capture_pixmap("active_window", hwnd)
@@ -153,7 +163,7 @@ class HotkeyManager(QObject):
         except Exception as error:
             print(f"Ошибка захвата окна: {error}")
         finally:
-            self._finish()
+            self._finish(target)
             self._request_pending = False
 
     @pyqtSlot()
@@ -161,6 +171,7 @@ class HotkeyManager(QObject):
         if not self._begin():
             self._request_pending = False
             return
+        target = None
         try:
             target = self._target()
             pixmap = self._capture_pixmap("region")
@@ -170,7 +181,7 @@ class HotkeyManager(QObject):
         except Exception as error:
             print(f"Ошибка захвата области: {error}")
         finally:
-            self._finish()
+            self._finish(target)
             self._request_pending = False
 
     def cleanup(self):
