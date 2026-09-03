@@ -2,13 +2,13 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Screenshooter (multi-window)",
+            "name": "Screenshooter",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/main.py",
+            "python": "${workspaceFolder}/venv/Scripts/python.exe",
             "cwd": "${workspaceFolder}",
-            "console": "integratedTerminal",
-            "python": "D:/Screenshooter/venv/Scripts/python.exe"
+            "console": "integratedTerminal"
         }
     ]
 }

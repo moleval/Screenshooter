@@ -26,8 +26,8 @@ def test_reuse_prefers_last_active_empty_window(qapp):
     manager.set_active_window(first)
 
     assert manager.find_target_window_for_reuse() is first
-    assert first.windowTitle() == "Скриншотер с редактором — Окно 1"
-    assert second.windowTitle() == "Скриншотер с редактором — Окно 2"
+    assert first.windowTitle() == "Скриншотер 1"
+    assert second.windowTitle() == "Скриншотер 2"
 
 
 def test_window_numbers_are_not_reused_after_close(qapp, monkeypatch):
@@ -38,7 +38,7 @@ def test_window_numbers_are_not_reused_after_close(qapp, monkeypatch):
     manager.add_window(second)
     manager.remove_window(first)
 
-    assert second.windowTitle() == "Скриншотер с редактором — Окно 2"
+    assert second.windowTitle() == "Скриншотер 2"
 
 
 def test_reuse_falls_back_to_last_active_background_without_pasted_images(qapp):

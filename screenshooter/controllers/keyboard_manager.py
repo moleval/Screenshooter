@@ -51,6 +51,10 @@ class KeyboardManager:
 
         # 5. Delete — удалить выделенное
         if event.key() == Qt.Key_Delete:
+            # While editing text, let QGraphicsTextItem delete the selected
+            # characters or line breaks instead of removing the whole item.
+            if self.view.active_text_item and self.view.active_text_item._editable:
+                return False
             self.view.delete_selected()
             return True
 

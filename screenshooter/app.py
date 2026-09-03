@@ -1,4 +1,4 @@
-"""
+﻿"""
 Модуль: app.py
 Описание: Главное окно приложения ScreenshotApp.
           Создаёт тулбары с инструментами аннотаций, кнопки захвата,
@@ -9,6 +9,8 @@
 import sys
 import os
 import time
+import ctypes
+import ctypes.wintypes
 from PyQt5 import sip
 from PyQt5.QtCore import Qt, QRectF, QTimer, pyqtSignal, QDir, QSettings, QEvent
 from PyQt5.QtGui import QPixmap, QPainter, QImage, QColor, QIcon, QKeySequence, QGuiApplication
@@ -29,7 +31,6 @@ from .widgets.tool_icons import (
     create_blur_icon
 )
 from .settings import AppSettings
-from .tray import TrayManager
 from .utils import load_app_icon
 from .theme import theme_manager
 from .controllers.crop_cursor_factory import CropCursorFactory
@@ -54,6 +55,9 @@ class ScreenshotApp(QMainWindow):
     capture_window_requested = pyqtSignal()
     capture_region_requested = pyqtSignal()
 
+    # Нативное сообщение Windows: двойной клик по заголовку окна
+    WM_NCLBUTTONDBLCLK = 0x00A3
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Скриншотер с редактором")
@@ -61,6 +65,7 @@ class ScreenshotApp(QMainWindow):
         self.setMinimumHeight(WINDOW_MIN_HEIGHT)
 
         self.settings = AppSettings()
+        self.tray_manager = None
 
         theme_manager.set_theme(self.settings.theme)
         theme_manager.apply(QApplication.instance())
@@ -71,7 +76,6 @@ class ScreenshotApp(QMainWindow):
         self._hotkey_manager = None
         self._saved_window_state = None
         self._window_state_before_fullscreen = None
-
 
         cw = QWidget()
         self.setCentralWidget(cw)
@@ -129,8 +133,6 @@ class ScreenshotApp(QMainWindow):
         self.exporter = Exporter(self.view, self.scene, self.settings)
         self.exporter.load_save_directory_from_settings()
 
-        self.tray_manager = TrayManager(self)
-
         self.undo_shortcut = QShortcut(QKeySequence("Ctrl+Z"), self)
         self.undo_shortcut.activated.connect(self._on_undo_shortcut)
         self.redo_shortcut = QShortcut(QKeySequence("Ctrl+Y"), self)
@@ -174,7 +176,7 @@ class ScreenshotApp(QMainWindow):
         right_group_layout.setContentsMargins(0, 0, 0, 0)
         right_group_layout.setSpacing(6)
 
-        self.copy_btn = QPushButton("В буфер")
+        self.copy_btn = QPushButton("Копировать")
         self.copy_btn.clicked.connect(self.copy_to_clipboard)
         right_group_layout.addWidget(self.copy_btn)
 
@@ -186,7 +188,7 @@ class ScreenshotApp(QMainWindow):
         self.insert_clipboard_btn.clicked.connect(self.insert_image_from_clipboard)
         right_group_layout.addWidget(self.insert_clipboard_btn)
 
-        self.save_as_btn = QPushButton(" Сохранить как ")
+        self.save_as_btn = QPushButton("Сохранить как")
         self.save_as_btn.clicked.connect(self.save_image)
         right_group_layout.addWidget(self.save_as_btn)
 
@@ -198,7 +200,7 @@ class ScreenshotApp(QMainWindow):
 
         # Кнопка справки
         self.help_btn = QPushButton("?")
-        self.help_btn.setFixedSize(32, TOOLBAR_CONTROL_HEIGHT) # ширина 32, высота 26
+        self.help_btn.setFixedSize(32, TOOLBAR_CONTROL_HEIGHT)
         self.help_btn.setToolTip("Справка (F1)")
         self.help_btn.clicked.connect(self.show_help)
         right_group_layout.addWidget(self.help_btn)
@@ -354,6 +356,9 @@ class ScreenshotApp(QMainWindow):
         self.resize(self.minimumWidth(), self.height())
         self.view.setFocus()
 
+        # Фильтр для перехвата ДЩЛКМ по полю в режиме предпросмотра
+        self.view.installEventFilter(self)
+
     # --------------------------------------------------------------
     # Динамическое вычисление минимальной ширины окна
     # --------------------------------------------------------------
@@ -386,6 +391,61 @@ class ScreenshotApp(QMainWindow):
 
         if self.width() < min_width:
             self.resize(min_width, self.height())
+
+    # --------------------------------------------------------------
+    # Режим предпросмотра (для раскладки 5+ окон)
+    # --------------------------------------------------------------
+    def set_preview_mode(self, preview):
+        """Скрывает/показывает тулбары и плавающие виджеты
+        для режима предпросмотра."""
+        self.top_actions_widget.setVisible(not preview)
+        self.editor_toolbar_strip.setVisible(not preview)
+        self.view.zoom_widget.setVisible(not preview)
+        self.view.info_widget.setVisible(not preview)
+
+        if not preview:
+            # При показе: принудительно активируем лейаут и перерисовываем
+            self.centralWidget().layout().activate()
+            self.top_actions_widget.raise_()
+            self.editor_toolbar_strip.raise_()
+            self.update()
+
+    # --------------------------------------------------------------
+    # Двойной клик по заголовку окна (разворот из предпросмотра)
+    # --------------------------------------------------------------
+    def nativeEvent(self, eventType, message):
+        """Перехватывает двойной клик по системному заголовку окна."""
+        if eventType == b"windows_genericMSG":
+            try:
+                msg = ctypes.wintypes.MSG.from_address(int(message))
+                if msg.message == self.WM_NCLBUTTONDBLCLK:
+                    window_manager = getattr(self, "_window_manager", None)
+                    if window_manager is not None:
+                        visible = [w for w in window_manager.windows
+                                   if w.isVisible()]
+                        if len(visible) >= 5:
+                            # ДЩЛКМ по заголовку: развернуть на весь экран
+                            window_manager.expand_window(self, fullscreen=True)
+                            return True, 0
+            except Exception:
+                pass
+
+        return super().nativeEvent(eventType, message)
+
+    # --------------------------------------------------------------
+    # Двойной клик по полю (разворот из предпросмотра)
+    # --------------------------------------------------------------
+    def eventFilter(self, watched, event):
+        """Перехватывает ДЩЛКМ по полю в режиме предпросмотра."""
+        if watched is self.view and event.type() == QEvent.MouseButtonDblClick:
+            window_manager = getattr(self, "_window_manager", None)
+            if window_manager is not None:
+                visible = [w for w in window_manager.windows if w.isVisible()]
+                if len(visible) >= 5:
+                    # ДЩЛКМ по полю: переместить в центр
+                    window_manager.expand_window(self, fullscreen=False)
+                    return True
+        return super().eventFilter(watched, event)
 
     # --------------------------------------------------------------
     # Вспомогательный метод создания tool action
@@ -427,10 +487,11 @@ class ScreenshotApp(QMainWindow):
         if event.type() == QEvent.WindowStateChange and self.isMinimized():
             self._saved_window_state = self.windowState()
             QTimer.singleShot(0, self.hide)
-            self.tray_manager.show_message(
-                "Скриншотер",
-                "Приложение свёрнуто в трей"
-            )
+            if self.tray_manager is not None:
+                self.tray_manager.show_message(
+                    "Скриншотер",
+                    "Приложение свернуто в трей"
+                )
         super().changeEvent(event)
 
     def show_from_tray(self):
@@ -483,8 +544,12 @@ class ScreenshotApp(QMainWindow):
     # Вставка изображений
     # --------------------------------------------------------------
     def insert_image_from_file(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Вставить изображение", "",
-                                             "Изображения (*.png *.jpg *.jpeg *.bmp)")
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Вставить изображение",
+            "",
+            "Изображения (*.png *.jpg *.jpeg *.bmp)"
+        )
         if path:
             pixmap = QPixmap(path)
             if not pixmap.isNull():
