@@ -32,14 +32,14 @@ class ClipboardController:
     """
 
     PASTE_OFFSET = 20  # Смещение при вставке в пикселях
+    _shared_clipboard = []
+    _shared_paste_count = 0
 
     def __init__(self, view):
         """
         :param view: ссылка на EditorView (QGraphicsView)
         """
         self.view = view
-        self._clipboard = []
-        self._paste_count = 0  # Счётчик вставок для нарастающего смещения
 
     # --------------------------------------------------------------
     # Публичные методы
@@ -51,22 +51,22 @@ class ClipboardController:
         if not items:
             return False
 
-        self._clipboard = []
-        self._paste_count = 0  # Сброс счётчика при новом копировании
+        ClipboardController._shared_clipboard = []
+        ClipboardController._shared_paste_count = 0
 
         for item in items:
             data = self._serialize_item(item)
             if data:
-                self._clipboard.append(data)
+                ClipboardController._shared_clipboard.append(data)
 
-        if self._clipboard:
+        if ClipboardController._shared_clipboard:
             # Помечаем системный буфер нашим маркером
             mime = QMimeData()
             mime.setData(INTERNAL_MIME_TYPE, b"1")
             QApplication.clipboard().setMimeData(mime)
 
             self.view.show_status_message(
-                f"Скопировано элементов: {len(self._clipboard)}", 3000)
+                f"Скопировано элементов: {len(ClipboardController._shared_clipboard)}", 3000)
             return True
         return False
 
@@ -79,17 +79,17 @@ class ClipboardController:
 
     def paste(self):
         """Создаёт элементы из внутреннего буфера со смещением."""
-        if not self._clipboard:
+        if not ClipboardController._shared_clipboard:
             return
 
         self.view.scene().clearSelection()
         new_items = []
-        self._paste_count += 1
-        offset = QPointF(self.PASTE_OFFSET * self._paste_count,
-                         self.PASTE_OFFSET * self._paste_count)
+        ClipboardController._shared_paste_count += 1
+        offset = QPointF(self.PASTE_OFFSET * ClipboardController._shared_paste_count,
+                         self.PASTE_OFFSET * ClipboardController._shared_paste_count)
         blur_added = False
 
-        for data in self._clipboard:
+        for data in ClipboardController._shared_clipboard:
             item = self._deserialize_item(data, offset)
             if item is not None:
                 new_items.append(item)
@@ -118,7 +118,7 @@ class ClipboardController:
     @property
     def has_clipboard(self):
         """Есть ли данные в буфере."""
-        return len(self._clipboard) > 0
+        return len(ClipboardController._shared_clipboard) > 0
 
     # --------------------------------------------------------------
     # Сериализация пера

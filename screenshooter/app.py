@@ -9,10 +9,9 @@
 import sys
 import os
 import time
-import keyboard
 from PyQt5 import sip
 from PyQt5.QtCore import Qt, QRectF, QTimer, pyqtSignal, QDir, QSettings, QEvent
-from PyQt5.QtGui import QPixmap, QPainter, QImage, QColor, QIcon, QKeySequence
+from PyQt5.QtGui import QPixmap, QPainter, QImage, QColor, QIcon, QKeySequence, QGuiApplication
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                              QGraphicsScene, QGraphicsPixmapItem, QActionGroup,
                              QAction, QFileDialog, QMessageBox, QApplication, QSizePolicy, QDialog,
@@ -69,12 +68,10 @@ class ScreenshotApp(QMainWindow):
         self.setWindowIcon(load_app_icon())
 
         self._force_quit = False
+        self._hotkey_manager = None
         self._saved_window_state = None
         self._window_state_before_fullscreen = None
 
-        self._printscreen_hook = None
-        self._alt_printscreen_hotkey = None
-        self._ctrl_printscreen_hotkey = None
 
         cw = QWidget()
         self.setCentralWidget(cw)
@@ -105,9 +102,17 @@ class ScreenshotApp(QMainWindow):
         self.redo_btn.clicked.connect(self.redo_action)
         left_group_layout.addWidget(self.redo_btn)
 
-        self.capture_btn = QPushButton("Снимок")
-        self.capture_btn.clicked.connect(self.capture_screen)
-        left_group_layout.addWidget(self.capture_btn)
+        self.capture_buttons = []
+        screens = QGuiApplication.screens()
+        capture_label = "Экран" if len(screens) == 1 else None
+        for index, screen in enumerate(screens):
+            label = capture_label or f"Экран {index + 1}"
+            button = QPushButton(label)
+            button.clicked.connect(
+                lambda checked=False, current_screen=screen:
+                self.capture_screen(current_screen))
+            self.capture_buttons.append(button)
+            left_group_layout.addWidget(button)
 
         self.clear_btn = QPushButton("Очистить")
         self.clear_btn.clicked.connect(self.clear_scene_action)
@@ -205,7 +210,7 @@ class ScreenshotApp(QMainWindow):
         main_action_buttons = (
             self.undo_btn,
             self.redo_btn,
-            self.capture_btn,
+            *self.capture_buttons,
             self.clear_btn,
             self.copy_btn,
             self.insert_file_btn,
@@ -340,7 +345,6 @@ class ScreenshotApp(QMainWindow):
         self.view.blur_mode_changed.connect(self._on_blur_mode_changed)
         self.view.background_changed.connect(self._update_image_actions_enabled)
 
-        self.setup_global_hotkeys()
         self._update_image_actions_enabled()
 
         self._update_window_minimum_width()
@@ -439,14 +443,22 @@ class ScreenshotApp(QMainWindow):
 
     def closeEvent(self, event):
         self.settings.save()
-        self._remove_keyboard_hooks()
         event.accept()
 
     def quit_app(self):
         self._force_quit = True
         self.settings.save()
-        self._remove_keyboard_hooks()
         QApplication.quit()
+
+    def is_empty(self):
+        return self.view.background_item is None or sip.isdeleted(self.view.background_item)
+
+    def has_no_pasted_images(self):
+        if self.is_empty():
+            return False
+        from .items.pasted_image_item import PastedImageItem
+        return not any(isinstance(item, PastedImageItem)
+                       for item in self.scene.items())
 
     # --------------------------------------------------------------
     # Применение темы
@@ -553,6 +565,9 @@ class ScreenshotApp(QMainWindow):
 
         if msg_box.clickedButton() == yes_btn:
             self.view.clear_scene()
+            window_manager = getattr(self, "_window_manager", None)
+            if window_manager is not None:
+                window_manager.mark_window_reusable(self)
             self._update_image_actions_enabled()
             self._update_undo_buttons()
 
@@ -678,8 +693,11 @@ class ScreenshotApp(QMainWindow):
     # --------------------------------------------------------------
     # Захват экрана — делегирование в ScreenCapture
     # --------------------------------------------------------------
-    def capture_screen(self):
-        self.capture.capture_screen()
+    def capture_screen(self, screen=None):
+        if self._hotkey_manager is not None and screen is not None:
+            self._hotkey_manager.capture_specific_screen(screen)
+            return
+        self.capture.capture_screen(screen)
 
     def capture_monitor(self):
         if self.capture.is_capturing():
@@ -758,69 +776,6 @@ class ScreenshotApp(QMainWindow):
         self.crop_buttons_widget.setVisible(False)
 
         self._update_image_actions_enabled()
-
-    # --------------------------------------------------------------
-    # Горячие клавиши
-    # --------------------------------------------------------------
-    def setup_global_hotkeys(self):
-        self._remove_keyboard_hooks()
-        try:
-            self._alt_printscreen_hotkey = keyboard.add_hotkey(
-                "alt+print screen", self._on_alt_printscreen_hotkey,
-                suppress=True, trigger_on_release=False)
-            self._ctrl_printscreen_hotkey = keyboard.add_hotkey(
-                "ctrl+print screen", self._on_ctrl_printscreen_hotkey,
-                suppress=True, trigger_on_release=False)
-            self._printscreen_hook = keyboard.hook_key(
-                "print screen", self._on_printscreen_key, suppress=True)
-            print("Горячие клавиши зарегистрированы: PrintScreen (монитор), Alt+PrintScreen (окно), Ctrl+PrintScreen (область)")
-        except Exception as e:
-            self._printscreen_hook = None
-            self._alt_printscreen_hotkey = None
-            self._ctrl_printscreen_hotkey = None
-            print(f"Ошибка регистрации горячих клавиш: {e}")
-
-    def _on_printscreen_key(self, event):
-        if event.event_type != keyboard.KEY_DOWN:
-            return True
-        if getattr(event, "is_keypad", False):
-            return True
-        if keyboard.is_pressed("ctrl") or keyboard.is_pressed("alt"):
-            return True
-        if self.capture.is_capturing():
-            return True
-        self.capture_monitor_requested.emit()
-        return True
-
-    def _on_alt_printscreen_hotkey(self):
-        if self.capture.is_capturing():
-            return
-        self.capture_window_requested.emit()
-
-    def _on_ctrl_printscreen_hotkey(self):
-        if self.capture.is_capturing():
-            return
-        self.capture_region_requested.emit()
-
-    def _remove_keyboard_hooks(self):
-        if self._printscreen_hook is not None:
-            try:
-                keyboard.unhook_key(self._printscreen_hook)
-            except Exception:
-                pass
-            self._printscreen_hook = None
-        if self._alt_printscreen_hotkey is not None:
-            try:
-                keyboard.remove_hotkey(self._alt_printscreen_hotkey)
-            except Exception:
-                pass
-            self._alt_printscreen_hotkey = None
-        if self._ctrl_printscreen_hotkey is not None:
-            try:
-                keyboard.remove_hotkey(self._ctrl_printscreen_hotkey)
-            except Exception:
-                pass
-            self._ctrl_printscreen_hotkey = None
 
     # --------------------------------------------------------------
     # Прочие методы
