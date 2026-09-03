@@ -116,8 +116,12 @@ class TrayManager(QObject):
         if window is None:
             return
         if visible:
+            # Восстанавливаем нормальные ограничения
             if hasattr(self.window_manager, "restore_normal_constraints"):
                 self.window_manager.restore_normal_constraints(window)
+            # Выход из предпросмотра: показываем тулбары и плавающие виджеты
+            if hasattr(window, 'set_preview_mode'):
+                window.set_preview_mode(False)
             if window.isMinimized():
                 window.showNormal()
             else:
