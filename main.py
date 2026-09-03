@@ -71,6 +71,8 @@ def main():
 
     # Блокировка получена успешно — создаём полноценное приложение
     app = QApplication(sys.argv)
+    # Окна редактора могут быть скрыты в трее во время захвата.
+    app.setQuitOnLastWindowClosed(False)
 
     # Устанавливаем иконку приложения глобально
     app.setWindowIcon(load_app_icon())

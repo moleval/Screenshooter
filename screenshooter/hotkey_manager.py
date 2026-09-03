@@ -21,6 +21,7 @@ class HotkeyManager(QObject):
         self._hooks = []
         self._hidden_windows = []
         self._last_external_hwnd = None
+        self._request_pending = False
         self._monitor_requested.connect(self._capture_monitor)
         self._window_requested.connect(self._capture_window)
         self._region_requested.connect(self._capture_region)
@@ -34,16 +35,21 @@ class HotkeyManager(QObject):
             ("hotkey", keyboard.add_hotkey(
                 "ctrl+print screen", self._on_ctrl,
                 suppress=True, trigger_on_release=False)),
-            ("hook", keyboard.hook_key(
-                "print screen", self._on_print, suppress=True)),
+            ("hotkey", keyboard.add_hotkey(
+                "print screen", self._on_print,
+                suppress=True, trigger_on_release=False)),
         ]
 
-    def _on_print(self, event):
-        if event.event_type == keyboard.KEY_DOWN and not keyboard.is_pressed("alt") and not keyboard.is_pressed("ctrl"):
-            self._monitor_requested.emit()
-        return True
+    def _on_print(self):
+        if self._request_pending:
+            return
+        self._request_pending = True
+        self._monitor_requested.emit()
 
     def _on_alt(self):
+        if self._request_pending:
+            return
+        self._request_pending = True
         hwnd = win32gui.GetForegroundWindow()
         app_hwnds = {int(w.winId()) for w in self.window_manager.windows}
         if hwnd and hwnd not in app_hwnds:
@@ -51,6 +57,9 @@ class HotkeyManager(QObject):
         self._window_requested.emit(self._last_external_hwnd)
 
     def _on_ctrl(self):
+        if self._request_pending:
+            return
+        self._request_pending = True
         self._region_requested.emit()
 
     def _begin(self):
@@ -116,6 +125,7 @@ class HotkeyManager(QObject):
     @pyqtSlot()
     def _capture_monitor(self):
         if not self._begin():
+            self._request_pending = False
             return
         try:
             target = self._target()
@@ -123,12 +133,16 @@ class HotkeyManager(QObject):
             if pixmap is not None:
                 target = target or self.window_manager.create_editor_window(reusable=False)
                 self._deliver(target, pixmap)
+        except Exception as error:
+            print(f"Ошибка захвата экрана: {error}")
         finally:
             self._finish()
+            self._request_pending = False
 
     @pyqtSlot(object)
     def _capture_window(self, hwnd):
         if not self._begin():
+            self._request_pending = False
             return
         try:
             target = self._target()
@@ -136,12 +150,16 @@ class HotkeyManager(QObject):
             if pixmap is not None:
                 target = target or self.window_manager.create_editor_window(reusable=False)
                 self._deliver(target, pixmap)
+        except Exception as error:
+            print(f"Ошибка захвата окна: {error}")
         finally:
             self._finish()
+            self._request_pending = False
 
     @pyqtSlot()
     def _capture_region(self):
         if not self._begin():
+            self._request_pending = False
             return
         try:
             target = self._target()
@@ -149,13 +167,14 @@ class HotkeyManager(QObject):
             if pixmap is not None:
                 target = target or self.window_manager.create_editor_window(reusable=False)
                 self._deliver(target, pixmap)
+        except Exception as error:
+            print(f"Ошибка захвата области: {error}")
         finally:
             self._finish()
+            self._request_pending = False
 
     def cleanup(self):
         for hook_type, hook in self._hooks:
             if hook_type == "hotkey":
                 keyboard.remove_hotkey(hook)
-            else:
-                keyboard.unhook_key(hook)
         self._hooks.clear()
