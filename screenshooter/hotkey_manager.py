@@ -46,14 +46,51 @@ class HotkeyManager(QObject):
         self._request_pending = True
         self._monitor_requested.emit()
 
+    def _find_top_external_window(self, exclude_hwnds):
+        """Find top-most visible window that is not in exclude_hwnds.
+
+        EnumWindows enumerates top-level windows from top to bottom, so
+        the first visible non-app window with a non-empty title is a good
+        candidate for an external target.
+        """
+        found = {"hwnd": None}
+
+        def _enum(hwnd, lparam):
+            try:
+                if not win32gui.IsWindowVisible(hwnd):
+                    return True
+                if hwnd in exclude_hwnds:
+                    return True
+                text = win32gui.GetWindowText(hwnd)
+                if text and not text.isspace():
+                    found["hwnd"] = hwnd
+                    return False
+            except Exception:
+                # ignore windows we can't query
+                return True
+            return True
+
+        try:
+            win32gui.EnumWindows(_enum, None)
+        except Exception:
+            pass
+        return found["hwnd"]
+
     def _on_alt(self):
         if self._request_pending:
             return
         self._request_pending = True
         hwnd = win32gui.GetForegroundWindow()
         app_hwnds = {int(w.winId()) for w in self.window_manager.windows}
+        # Prefer the current foreground if it's external, otherwise try to
+        # find the top-most external window. This avoids capturing the app
+        # itself when the app holds focus.
         if hwnd and hwnd not in app_hwnds:
             self._last_external_hwnd = hwnd
+        else:
+            fallback = self._find_top_external_window(app_hwnds)
+            if fallback:
+                self._last_external_hwnd = fallback
         self._window_requested.emit(self._last_external_hwnd)
 
     def _on_ctrl(self):
@@ -158,6 +195,16 @@ class HotkeyManager(QObject):
             return
         target = None
         try:
+            app_hwnds = {int(window.winId()) for window in self.window_manager.windows}
+            if hwnd in app_hwnds:
+                hwnd = None
+            if hwnd is None:
+                QApplication.processEvents()
+                foreground_hwnd = win32gui.GetForegroundWindow()
+                if foreground_hwnd and foreground_hwnd not in app_hwnds:
+                    hwnd = foreground_hwnd
+            if hwnd in app_hwnds:
+                hwnd = None
             target = self._target()
             pixmap = self._capture_pixmap("active_window", hwnd)
             if pixmap is not None:

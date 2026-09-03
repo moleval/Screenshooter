@@ -2,6 +2,7 @@
 
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import QApplication, QDialog
+import win32gui
 
 from .capture.screen_overlay import ScreenCaptureOverlay
 from .capture.region_overlay import RegionCaptureOverlay
@@ -88,6 +89,15 @@ class ScreenCapture:
             self._window_state_before_capture = self.app.windowState()
             self.app.hide()
             QApplication.processEvents()
+            if hwnd is None:
+                window_manager = getattr(self.app, "_window_manager", None)
+                app_hwnds = (
+                    {int(window.winId()) for window in window_manager.windows}
+                    if window_manager is not None else set()
+                )
+                candidate = win32gui.GetForegroundWindow()
+                if candidate and candidate not in app_hwnds:
+                    hwnd = candidate
             pixmap = capture_active_window(hwnd)
             self._restore_main_window()
             if pixmap is not None:
