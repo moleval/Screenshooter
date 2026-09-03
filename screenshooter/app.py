@@ -176,7 +176,7 @@ class ScreenshotApp(QMainWindow):
         right_group_layout.setContentsMargins(0, 0, 0, 0)
         right_group_layout.setSpacing(6)
 
-        self.copy_btn = QPushButton("Копировать")
+        self.copy_btn = QPushButton("В буфер")
         self.copy_btn.clicked.connect(self.copy_to_clipboard)
         right_group_layout.addWidget(self.copy_btn)
 
