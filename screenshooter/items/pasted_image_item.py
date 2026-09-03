@@ -22,7 +22,9 @@ class PastedImageItem(QGraphicsPixmapItem):
         self.original_pixmap = pixmap
         self.scale = 1.0
 
-        self.setFlags(QGraphicsPixmapItem.ItemIsMovable | QGraphicsPixmapItem.ItemIsSelectable)
+        # Перемещением управляет ManipulationController, чтобы не смешивать
+        # его с автоматическим drag-механизмом QGraphicsItem.
+        self.setFlag(QGraphicsPixmapItem.ItemIsSelectable, True)
         self.setTransformationMode(Qt.SmoothTransformation)
         self.setZValue(500)
 
