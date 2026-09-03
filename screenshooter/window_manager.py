@@ -12,6 +12,112 @@ class WindowManager(QObject):
         self._windows = []
         self._active_window = None
         self._next_window_number = 1
+        self.tray_manager = None
+
+    @staticmethod
+    def build_window_title(window_number):
+        return f"Скриншотер {window_number}"
+
+    def toggle_all_windows(self):
+        windows = list(self.windows)
+        if not windows:
+            return
+
+        all_visible = all(window.isVisible() and not window.isMinimized() for window in windows)
+        if all_visible:
+            for window in windows:
+                window.hide()
+            return
+
+        for window in windows:
+            if window.isMinimized():
+                window.showNormal()
+            else:
+                window.show()
+            self._restore_saved_geometry(window)
+            window.raise_()
+        self.layout_all_windows()
+
+    def layout_all_windows(self):
+        windows = sorted(self.windows, key=lambda w: getattr(w, "_window_number", 0) or 0)
+        if not windows:
+            return
+
+        screen = QApplication.primaryScreen()
+        if screen is None:
+            return
+        rect = screen.availableGeometry()
+        left = rect.left()
+        top = rect.top()
+        width = rect.width()
+        height = rect.height()
+        count = len(windows)
+
+        gap = 12
+        half_gap = gap // 2
+
+        def clamp(v, lo, hi):
+            return max(lo, min(v, hi))
+
+        if count == 1:
+            w = max(260, int(width * 0.38))
+            h = max(220, int(height * 0.46))
+            x = left + (width - w) // 2
+            y = top + (height - h) // 2
+            positions = [(x, y)]
+            sizes = [(w, h)]
+        elif count == 2:
+            w = max(210, int(width * 0.42))
+            h = max(180, int((height - gap) * 0.42))
+            positions = [(left + 12, top + 12), (left + 12, top + h + gap + 12)]
+            sizes = [(w, h), (w, h)]
+        elif count == 3:
+            w = max(210, int(width * 0.36))
+            h = max(180, int((height - gap) * 0.32))
+            positions = [
+                (left + 12, top + 12),
+                (left + 12, top + h + gap + 12),
+                (left + width - w - 12, top + h + gap + 12),
+            ]
+            sizes = [(w, h), (w, h), (w, h)]
+        elif count == 4:
+            w = max(180, int(width * 0.28))
+            h = max(170, int(height * 0.28))
+            positions = [
+                (left + 12, top + 12),
+                (left + width - w - 12, top + 12),
+                (left + width - w - 12, top + height - h - 12),
+                (left + 12, top + height - h - 12),
+            ]
+            sizes = [(w, h), (w, h), (w, h), (w, h)]
+        else:
+            rows = min(5, max(2, (count + 1) // 2))
+            h = max(120, int((height - (rows - 1) * gap - 24) / rows))
+            w = max(150, int(width * 0.24))
+            positions = []
+            sizes = []
+            for index in range(count):
+                row = index // 2
+                x_side = 0 if index % 2 == 0 else 1
+                x = left + 12 if x_side == 0 else left + width - w - 12
+                y = top + 12 + row * (h + gap)
+                positions.append((x, y))
+                sizes.append((w, h))
+
+        for window, (w, h), (x, y) in zip(windows, sizes, positions):
+            w = clamp(w, 120, width - 24)
+            h = clamp(h, 120, height - 24)
+            x = clamp(x, left, left + width - w)
+            y = clamp(y, top, top + height - h)
+            window.setGeometry(x, y, w, h)
+            window._saved_geometry = window.geometry()
+
+    def _restore_saved_geometry(self, window):
+        saved_geometry = getattr(window, "_saved_geometry", None)
+        if saved_geometry is not None:
+            window.setGeometry(saved_geometry)
+            return
+        window.resize(window.sizeHint().width(), window.sizeHint().height())
 
     @property
     def windows(self):
@@ -28,11 +134,15 @@ class WindowManager(QObject):
             window_number = self._next_window_number
             self._next_window_number += 1
             window._window_number = window_number
-            window.setWindowTitle(f"Скриншотер с редактором — Окно {window_number}")
+            window.setWindowTitle(self.build_window_title(window_number))
             event_filter = _WindowEventFilter(self, window)
             window.installEventFilter(event_filter)
             window._window_manager_event_filter = event_filter
+            if self.tray_manager is not None:
+                window.tray_manager = self.tray_manager
         self.set_active_window(window)
+        if self.tray_manager is not None:
+            self.tray_manager.update_windows_menu()
 
     def remove_window(self, window):
         if window in self._windows:
@@ -41,6 +151,8 @@ class WindowManager(QObject):
             self._active_window = self._windows[-1] if self._windows else None
         if not self._windows:
             QApplication.quit()
+        if self.tray_manager is not None:
+            self.tray_manager.update_windows_menu()
 
     def set_active_window(self, window):
         if window in self._windows:
@@ -48,6 +160,8 @@ class WindowManager(QObject):
             self._windows.remove(window)
             self._windows.append(window)
             self.window_activated.emit(window)
+            if self.tray_manager is not None:
+                self.tray_manager.update_windows_menu()
 
     @staticmethod
     def mark_window_reusable(window):

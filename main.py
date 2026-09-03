@@ -26,6 +26,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from screenshooter.app import ScreenshotApp
 from screenshooter.window_manager import WindowManager
 from screenshooter.hotkey_manager import HotkeyManager
+from screenshooter.tray import TrayManager
 from screenshooter.utils import load_app_icon
 
 
@@ -79,6 +80,8 @@ def main():
 
     window_manager = WindowManager(app)
     window = window_manager.create_editor_window(reusable=True, show=False)
+    tray_manager = TrayManager(window_manager)
+    window_manager.tray_manager = tray_manager
     hotkey_manager = HotkeyManager(window_manager, app)
     window_manager.hotkey_manager = hotkey_manager
     for editor_window in window_manager.windows:

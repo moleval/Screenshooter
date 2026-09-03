@@ -1,9 +1,9 @@
-"""
-Модуль: app.py
-Описание: Главное окно приложения ScreenshotApp.
-          Создаёт тулбары с инструментами аннотаций, кнопки захвата,
-          управляет горячими клавишами. Интегрирует настройки, системный трей
-          и темы оформления.
+﻿"""
+РњРѕРґСѓР»СЊ: app.py
+РћРїРёСЃР°РЅРёРµ: Р“Р»Р°РІРЅРѕРµ РѕРєРЅРѕ РїСЂРёР»РѕР¶РµРЅРёСЏ ScreenshotApp.
+          РЎРѕР·РґР°С‘С‚ С‚СѓР»Р±Р°СЂС‹ СЃ РёРЅСЃС‚СЂСѓРјРµРЅС‚Р°РјРё Р°РЅРЅРѕС‚Р°С†РёР№, РєРЅРѕРїРєРё Р·Р°С…РІР°С‚Р°,
+          СѓРїСЂР°РІР»СЏРµС‚ РіРѕСЂСЏС‡РёРјРё РєР»Р°РІРёС€Р°РјРё. РРЅС‚РµРіСЂРёСЂСѓРµС‚ РЅР°СЃС‚СЂРѕР№РєРё, СЃРёСЃС‚РµРјРЅС‹Р№ С‚СЂРµР№
+          Рё С‚РµРјС‹ РѕС„РѕСЂРјР»РµРЅРёСЏ.
 """
 
 import sys
@@ -29,7 +29,6 @@ from .widgets.tool_icons import (
     create_blur_icon
 )
 from .settings import AppSettings
-from .tray import TrayManager
 from .utils import load_app_icon
 from .theme import theme_manager
 from .controllers.crop_cursor_factory import CropCursorFactory
@@ -61,6 +60,7 @@ class ScreenshotApp(QMainWindow):
         self.setMinimumHeight(WINDOW_MIN_HEIGHT)
 
         self.settings = AppSettings()
+        self.tray_manager = None
 
         theme_manager.set_theme(self.settings.theme)
         theme_manager.apply(QApplication.instance())
@@ -129,8 +129,6 @@ class ScreenshotApp(QMainWindow):
         self.exporter = Exporter(self.view, self.scene, self.settings)
         self.exporter.load_save_directory_from_settings()
 
-        self.tray_manager = TrayManager(self)
-
         self.undo_shortcut = QShortcut(QKeySequence("Ctrl+Z"), self)
         self.undo_shortcut.activated.connect(self._on_undo_shortcut)
         self.redo_shortcut = QShortcut(QKeySequence("Ctrl+Y"), self)
@@ -138,13 +136,13 @@ class ScreenshotApp(QMainWindow):
         self.paste_shortcut = QShortcut(QKeySequence("Ctrl+V"), self)
         self.paste_shortcut.activated.connect(self._on_paste_shortcut)
 
-        # Шорткаты полноэкранного режима
+        # РЁРѕСЂС‚РєР°С‚С‹ РїРѕР»РЅРѕСЌРєСЂР°РЅРЅРѕРіРѕ СЂРµР¶РёРјР°
         self.fullscreen_shortcut_f11 = QShortcut(QKeySequence("F11"), self)
         self.fullscreen_shortcut_f11.activated.connect(self.toggle_fullscreen)
         self.fullscreen_shortcut_ctrl_enter = QShortcut(QKeySequence("Ctrl+Return"), self)
         self.fullscreen_shortcut_ctrl_enter.activated.connect(self.toggle_fullscreen)
 
-        # Шорткат для справки
+        # РЁРѕСЂС‚РєР°С‚ РґР»СЏ СЃРїСЂР°РІРєРё
         self.help_shortcut = QShortcut(QKeySequence("F1"), self)
         self.help_shortcut.activated.connect(self.show_help)
 
@@ -174,7 +172,7 @@ class ScreenshotApp(QMainWindow):
         right_group_layout.setContentsMargins(0, 0, 0, 0)
         right_group_layout.setSpacing(6)
 
-        self.copy_btn = QPushButton("В буфер")
+        self.copy_btn = QPushButton("Копировать")
         self.copy_btn.clicked.connect(self.copy_to_clipboard)
         right_group_layout.addWidget(self.copy_btn)
 
@@ -186,7 +184,7 @@ class ScreenshotApp(QMainWindow):
         self.insert_clipboard_btn.clicked.connect(self.insert_image_from_clipboard)
         right_group_layout.addWidget(self.insert_clipboard_btn)
 
-        self.save_as_btn = QPushButton(" Сохранить как ")
+        self.save_as_btn = QPushButton("Сохранить как")
         self.save_as_btn.clicked.connect(self.save_image)
         right_group_layout.addWidget(self.save_as_btn)
 
@@ -196,9 +194,9 @@ class ScreenshotApp(QMainWindow):
         self.quick_save_btn.customContextMenuRequested.connect(self.show_quick_save_menu)
         right_group_layout.addWidget(self.quick_save_btn)
 
-        # Кнопка справки
+        # РљРЅРѕРїРєР° СЃРїСЂР°РІРєРё
         self.help_btn = QPushButton("?")
-        self.help_btn.setFixedSize(32, TOOLBAR_CONTROL_HEIGHT) # ширина 32, высота 26
+        self.help_btn.setFixedSize(32, TOOLBAR_CONTROL_HEIGHT) # С€РёСЂРёРЅР° 32, РІС‹СЃРѕС‚Р° 26
         self.help_btn.setToolTip("Справка (F1)")
         self.help_btn.clicked.connect(self.show_help)
         right_group_layout.addWidget(self.help_btn)
@@ -206,7 +204,7 @@ class ScreenshotApp(QMainWindow):
         top_actions_layout.addWidget(right_group_widget)
         layout.addWidget(top_actions_widget)
 
-        # Фиксируем высоту кнопок MainActionBar = 26 px
+        # Р¤РёРєСЃРёСЂСѓРµРј РІС‹СЃРѕС‚Сѓ РєРЅРѕРїРѕРє MainActionBar = 26 px
         main_action_buttons = (
             self.undo_btn,
             self.redo_btn,
@@ -222,7 +220,7 @@ class ScreenshotApp(QMainWindow):
         for btn in main_action_buttons:
             btn.setFixedHeight(TOOLBAR_CONTROL_HEIGHT)
 
-        # Кнопки crop тоже высотой 26
+        # РљРЅРѕРїРєРё crop С‚РѕР¶Рµ РІС‹СЃРѕС‚РѕР№ 26
         self.apply_crop_btn.setFixedHeight(TOOLBAR_CONTROL_HEIGHT)
         self.cancel_crop_btn.setFixedHeight(TOOLBAR_CONTROL_HEIGHT)
 
@@ -349,13 +347,13 @@ class ScreenshotApp(QMainWindow):
 
         self._update_window_minimum_width()
 
-        # Устанавливаем стартовую ширину равной минимальной,
-        # чтобы убрать зазор между ImageToolbar и OptionsToolbar
+        # РЈСЃС‚Р°РЅР°РІР»РёРІР°РµРј СЃС‚Р°СЂС‚РѕРІСѓСЋ С€РёСЂРёРЅСѓ СЂР°РІРЅРѕР№ РјРёРЅРёРјР°Р»СЊРЅРѕР№,
+        # С‡С‚РѕР±С‹ СѓР±СЂР°С‚СЊ Р·Р°Р·РѕСЂ РјРµР¶РґСѓ ImageToolbar Рё OptionsToolbar
         self.resize(self.minimumWidth(), self.height())
         self.view.setFocus()
 
     # --------------------------------------------------------------
-    # Динамическое вычисление минимальной ширины окна
+    # Р”РёРЅР°РјРёС‡РµСЃРєРѕРµ РІС‹С‡РёСЃР»РµРЅРёРµ РјРёРЅРёРјР°Р»СЊРЅРѕР№ С€РёСЂРёРЅС‹ РѕРєРЅР°
     # --------------------------------------------------------------
     def _update_window_minimum_width(self):
         self.ensurePolished()
@@ -388,7 +386,7 @@ class ScreenshotApp(QMainWindow):
             self.resize(min_width, self.height())
 
     # --------------------------------------------------------------
-    # Вспомогательный метод создания tool action
+    # Р’СЃРїРѕРјРѕРіР°С‚РµР»СЊРЅС‹Р№ РјРµС‚РѕРґ СЃРѕР·РґР°РЅРёСЏ tool action
     # --------------------------------------------------------------
     def _create_tool_action(self, text, tool_name, group, icon=None, tooltip=None):
         act = QAction(text, self)
@@ -402,7 +400,7 @@ class ScreenshotApp(QMainWindow):
         return act
 
     # --------------------------------------------------------------
-    # Синхронизация палитры с инструментом
+    # РЎРёРЅС…СЂРѕРЅРёР·Р°С†РёСЏ РїР°Р»РёС‚СЂС‹ СЃ РёРЅСЃС‚СЂСѓРјРµРЅС‚РѕРј
     # --------------------------------------------------------------
     def _sync_palette_to_tool(self, tool_name):
         if tool_name == 'text':
@@ -421,16 +419,17 @@ class ScreenshotApp(QMainWindow):
             self._sync_palette_to_tool('rect')
 
     # --------------------------------------------------------------
-    # Интеграция с системным треем
+    # РРЅС‚РµРіСЂР°С†РёСЏ СЃ СЃРёСЃС‚РµРјРЅС‹Рј С‚СЂРµРµРј
     # --------------------------------------------------------------
     def changeEvent(self, event):
         if event.type() == QEvent.WindowStateChange and self.isMinimized():
             self._saved_window_state = self.windowState()
             QTimer.singleShot(0, self.hide)
-            self.tray_manager.show_message(
-                "Скриншотер",
-                "Приложение свёрнуто в трей"
-            )
+            if self.tray_manager is not None:
+                self.tray_manager.show_message(
+                    "Скриншотер",
+                    "Приложение свернуто в трей"
+                )
         super().changeEvent(event)
 
     def show_from_tray(self):
@@ -461,7 +460,7 @@ class ScreenshotApp(QMainWindow):
                        for item in self.scene.items())
 
     # --------------------------------------------------------------
-    # Применение темы
+    # РџСЂРёРјРµРЅРµРЅРёРµ С‚РµРјС‹
     # --------------------------------------------------------------
     def apply_theme(self, theme_key: str):
         theme_manager.set_theme(theme_key)
@@ -475,16 +474,20 @@ class ScreenshotApp(QMainWindow):
 
         theme_names = {"light": "Светлая", "dark": "Тёмная", "system": "Системная"}
         label = theme_names.get(theme_key, theme_key)
-        self.view.show_status_message(f"Тема: {label}", 2000)
+        self.view.show_status_message(f"РўРµРјР°: {label}", 2000)
 
         self._update_window_minimum_width()
 
     # --------------------------------------------------------------
-    # Вставка изображений
+    # Р’СЃС‚Р°РІРєР° РёР·РѕР±СЂР°Р¶РµРЅРёР№
     # --------------------------------------------------------------
     def insert_image_from_file(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Вставить изображение", "",
-                                             "Изображения (*.png *.jpg *.jpeg *.bmp)")
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Вставить изображение",
+            "",
+            "Изображения (*.png *.jpg *.jpeg *.bmp)"
+        )
         if path:
             pixmap = QPixmap(path)
             if not pixmap.isNull():
@@ -537,7 +540,7 @@ class ScreenshotApp(QMainWindow):
         self.view.show_status_message("Не удалось вставить изображение из буфера.", 5000)
 
     # --------------------------------------------------------------
-    # Очистка сцены
+    # РћС‡РёСЃС‚РєР° СЃС†РµРЅС‹
     # --------------------------------------------------------------
     def clear_scene_action(self):
         has_bg = self.view.background_item is not None and not sip.isdeleted(self.view.background_item)
@@ -572,7 +575,7 @@ class ScreenshotApp(QMainWindow):
             self._update_undo_buttons()
 
     # --------------------------------------------------------------
-    # Активация кнопок тулбара изображения
+    # РђРєС‚РёРІР°С†РёСЏ РєРЅРѕРїРѕРє С‚СѓР»Р±Р°СЂР° РёР·РѕР±СЂР°Р¶РµРЅРёСЏ
     # --------------------------------------------------------------
     def _update_image_actions_enabled(self):
         has_bg = self.view.background_item is not None and not sip.isdeleted(self.view.background_item)
@@ -582,7 +585,7 @@ class ScreenshotApp(QMainWindow):
         self.blur_action.setEnabled(has_bg)
 
     # --------------------------------------------------------------
-    # Обработчики режимов изображения
+    # РћР±СЂР°Р±РѕС‚С‡РёРєРё СЂРµР¶РёРјРѕРІ РёР·РѕР±СЂР°Р¶РµРЅРёСЏ
     # --------------------------------------------------------------
     def _on_crop_action_triggered(self):
         if self.view.blur_mode:
@@ -625,7 +628,7 @@ class ScreenshotApp(QMainWindow):
         self.view.viewport().update()
 
     # --------------------------------------------------------------
-    # Undo/Redo и горячие клавиши
+    # Undo/Redo Рё РіРѕСЂСЏС‡РёРµ РєР»Р°РІРёС€Рё
     # --------------------------------------------------------------
     def _on_undo_shortcut(self):
         from PyQt5.QtWidgets import QLineEdit, QTextEdit, QPlainTextEdit
@@ -691,7 +694,7 @@ class ScreenshotApp(QMainWindow):
             self.redo_btn.setEnabled(False)
 
     # --------------------------------------------------------------
-    # Захват экрана — делегирование в ScreenCapture
+    # Р—Р°С…РІР°С‚ СЌРєСЂР°РЅР° вЂ” РґРµР»РµРіРёСЂРѕРІР°РЅРёРµ РІ ScreenCapture
     # --------------------------------------------------------------
     def capture_screen(self, screen=None):
         if self._hotkey_manager is not None and screen is not None:
@@ -715,7 +718,7 @@ class ScreenshotApp(QMainWindow):
         self.capture.capture_region()
 
     # --------------------------------------------------------------
-    # Экспорт — делегирование в Exporter
+    # Р­РєСЃРїРѕСЂС‚ вЂ” РґРµР»РµРіРёСЂРѕРІР°РЅРёРµ РІ Exporter
     # --------------------------------------------------------------
     def render_scene_to_image(self):
         return self.exporter.render_scene_to_image()
@@ -736,7 +739,7 @@ class ScreenshotApp(QMainWindow):
         self.exporter.show_quick_save_menu(pos, self.quick_save_btn)
 
     # --------------------------------------------------------------
-    # Отображение скриншота
+    # РћС‚РѕР±СЂР°Р¶РµРЅРёРµ СЃРєСЂРёРЅС€РѕС‚Р°
     # --------------------------------------------------------------
     def display_screenshot(self):
         self.view.clear_pasted_images()
@@ -744,7 +747,7 @@ class ScreenshotApp(QMainWindow):
         self.view.active_text_item = None
         self.view.history.clear()
 
-        # Сбрасываем ссылки на фоновое изображение
+        # РЎР±СЂР°СЃС‹РІР°РµРј СЃСЃС‹Р»РєРё РЅР° С„РѕРЅРѕРІРѕРµ РёР·РѕР±СЂР°Р¶РµРЅРёРµ
         self.view.image_editor.background_item = None
         self.view.image_editor.crop_target_item = None
 
@@ -767,7 +770,7 @@ class ScreenshotApp(QMainWindow):
         if self.screenshot_pixmap:
             w = self.screenshot_pixmap.width()
             h = self.screenshot_pixmap.height()
-            self.view.set_resolution_text(f"{w}×{h}")
+            self.view.set_resolution_text(f"{w}Г—{h}")
         else:
             self.view.set_resolution_text("")
 
@@ -778,7 +781,7 @@ class ScreenshotApp(QMainWindow):
         self._update_image_actions_enabled()
 
     # --------------------------------------------------------------
-    # Прочие методы
+    # РџСЂРѕС‡РёРµ РјРµС‚РѕРґС‹
     # --------------------------------------------------------------
     def set_tool(self, tn):
         self.view.set_tool(tn)
@@ -824,26 +827,26 @@ class ScreenshotApp(QMainWindow):
         self.view.delete_selected()
 
     def toggle_fullscreen(self):
-        """Переключает полноэкранный режим без артефактов."""
+        """РџРµСЂРµРєР»СЋС‡Р°РµС‚ РїРѕР»РЅРѕСЌРєСЂР°РЅРЅС‹Р№ СЂРµР¶РёРј Р±РµР· Р°СЂС‚РµС„Р°РєС‚РѕРІ."""
         if self.isFullScreen():
-            # Выход из полноэкранного режима
+            # Р’С‹С…РѕРґ РёР· РїРѕР»РЅРѕСЌРєСЂР°РЅРЅРѕРіРѕ СЂРµР¶РёРјР°
             was_maximized = bool(self._window_state_before_fullscreen & Qt.WindowMaximized)
             self._window_state_before_fullscreen = None
 
-            # Отключаем обновление окна, чтобы скрыть промежуточные состояния
+            # РћС‚РєР»СЋС‡Р°РµРј РѕР±РЅРѕРІР»РµРЅРёРµ РѕРєРЅР°, С‡С‚РѕР±С‹ СЃРєСЂС‹С‚СЊ РїСЂРѕРјРµР¶СѓС‚РѕС‡РЅС‹Рµ СЃРѕСЃС‚РѕСЏРЅРёСЏ
             self.setUpdatesEnabled(False)
-            # Снимаем полноэкранный режим
+            # РЎРЅРёРјР°РµРј РїРѕР»РЅРѕСЌРєСЂР°РЅРЅС‹Р№ СЂРµР¶РёРј
             self.setWindowState(self.windowState() & ~Qt.WindowFullScreen)
-            # Отложенно восстанавливаем нужное состояние
+            # РћС‚Р»РѕР¶РµРЅРЅРѕ РІРѕСЃСЃС‚Р°РЅР°РІР»РёРІР°РµРј РЅСѓР¶РЅРѕРµ СЃРѕСЃС‚РѕСЏРЅРёРµ
             QTimer.singleShot(0, lambda: self._restore_after_fullscreen(was_maximized))
         else:
-            # Вход в полноэкранный режим
+            # Р’С…РѕРґ РІ РїРѕР»РЅРѕСЌРєСЂР°РЅРЅС‹Р№ СЂРµР¶РёРј
             self._window_state_before_fullscreen = self.windowState()
             self.setUpdatesEnabled(True)
             self.showFullScreen()
 
     def _restore_after_fullscreen(self, was_maximized):
-        """Восстанавливает состояние окна после выхода из fullscreen."""
+        """Р’РѕСЃСЃС‚Р°РЅР°РІР»РёРІР°РµС‚ СЃРѕСЃС‚РѕСЏРЅРёРµ РѕРєРЅР° РїРѕСЃР»Рµ РІС‹С…РѕРґР° РёР· fullscreen."""
         if was_maximized:
             self.setWindowState(Qt.WindowMaximized)
         else:
@@ -851,22 +854,22 @@ class ScreenshotApp(QMainWindow):
         self.setUpdatesEnabled(True)
 
     def show_help(self):
-        """Отображает окно справки."""
+        """РћС‚РѕР±СЂР°Р¶Р°РµС‚ РѕРєРЅРѕ СЃРїСЂР°РІРєРё."""
         dialog = QDialog(self)
         dialog.setWindowTitle("Справка")
         dialog.resize(560, 480)
 
-        # Убираем кнопку "?" в заголовке окна
+        # РЈР±РёСЂР°РµРј РєРЅРѕРїРєСѓ "?" РІ Р·Р°РіРѕР»РѕРІРєРµ РѕРєРЅР°
         dialog.setWindowFlags(dialog.windowFlags() & ~Qt.WindowContextHelpButtonHint)
 
-        # Убираем рамку/линию у самого диалога
+        # РЈР±РёСЂР°РµРј СЂР°РјРєСѓ/Р»РёРЅРёСЋ Сѓ СЃР°РјРѕРіРѕ РґРёР°Р»РѕРіР°
         dialog.setStyleSheet("QDialog { border: none; }")
 
         layout = QVBoxLayout(dialog)
         text_browser = QTextBrowser()
         text_browser.setOpenExternalLinks(True)
 
-        # Убираем рамку текстового поля
+        # РЈР±РёСЂР°РµРј СЂР°РјРєСѓ С‚РµРєСЃС‚РѕРІРѕРіРѕ РїРѕР»СЏ
         text_browser.setFrameShape(QTextBrowser.NoFrame)
         text_browser.setStyleSheet("QTextBrowser { border: none; }")
 
