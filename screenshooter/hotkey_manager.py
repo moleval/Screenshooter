@@ -2,7 +2,7 @@
 
 import keyboard
 import win32gui
-from PyQt5.QtCore import QObject, Qt, pyqtSignal, pyqtSlot
+from PyQt5.QtCore import QObject, QTimer, Qt, pyqtSignal, pyqtSlot
 from PyQt5.QtWidgets import QApplication, QDialog
 from .capture.screen_overlay import ScreenCaptureOverlay
 from .capture.region_overlay import RegionCaptureOverlay
@@ -118,6 +118,9 @@ class HotkeyManager(QObject):
         """Захватывает выбранный монитор по общей логике распределения окон."""
         if not self._begin():
             return
+        QTimer.singleShot(50, lambda: self._capture_specific_screen(screen))
+
+    def _capture_specific_screen(self, screen):
         target = None
         try:
             target = self._target()
