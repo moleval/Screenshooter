@@ -130,8 +130,9 @@ class BlurController:
     def _apply_crop_to_blur_regions(self, crop_rect: QRectF):
         """Обновляет зоны размытия после обрезки фона."""
         if self.blur_base_pixmap is not None:
-            from ..image_processing import crop_pixmap
-            self.blur_base_pixmap = crop_pixmap(self.blur_base_pixmap, crop_rect)
+            from ..image_processing import crop_pixmap_with_padding
+            self.blur_base_pixmap = crop_pixmap_with_padding(
+                self.blur_base_pixmap, crop_rect)
 
         new_regions = []
         for item in self.blur_region_items:
