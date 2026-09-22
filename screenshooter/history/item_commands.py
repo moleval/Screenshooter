@@ -59,21 +59,49 @@ class MoveItemCommand(QUndoCommand):
 
 
 class MoveItemsCommand(QUndoCommand):
-    """Команда перемещения нескольких элементов одновременно."""
+    """Команда перемещения объектов вместе с изменением подложки."""
 
-    def __init__(self, items, old_positions, new_positions):
+    def __init__(self, items, old_positions, new_positions,
+                 background_item=None, old_pixmap=None, new_pixmap=None,
+                 old_background_pos=None, new_background_pos=None,
+                 blur_controller=None, old_blur_state=None, new_blur_state=None):
         super().__init__("Переместить объекты")
         self.items = items
         self.old_positions = old_positions
         self.new_positions = new_positions
+        self.background_item = background_item
+        self.old_pixmap = old_pixmap
+        self.new_pixmap = new_pixmap
+        self.old_background_pos = old_background_pos
+        self.new_background_pos = new_background_pos
+        self.blur_controller = blur_controller
+        self.old_blur_state = old_blur_state
+        self.new_blur_state = new_blur_state
+
+    def _apply_canvas(self, pixmap, pos, blur_state):
+        if self.background_item is not None and pixmap is not None:
+            self.background_item.setPixmap(pixmap)
+            if pos is not None:
+                self.background_item.setPos(pos)
+            self.background_item.update()
+        if self.blur_controller is not None and blur_state is not None:
+            self.blur_controller._restore_blur_state(blur_state)
+        if self.background_item is not None and self.background_item.scene() is not None:
+            views = self.background_item.scene().views()
+            if views:
+                view = views[0]
+                view.setSceneRect(self.background_item.sceneBoundingRect())
+                view.update_resolution_from_background()
 
     def redo(self):
         for item, pos in zip(self.items, self.new_positions):
             item.setPos(pos)
+        self._apply_canvas(self.new_pixmap, self.new_background_pos, self.new_blur_state)
 
     def undo(self):
         for item, pos in zip(self.items, self.old_positions):
             item.setPos(pos)
+        self._apply_canvas(self.old_pixmap, self.old_background_pos, self.old_blur_state)
 
 
 class ResizeItemCommand(QUndoCommand):
