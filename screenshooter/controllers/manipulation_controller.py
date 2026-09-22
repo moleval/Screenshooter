@@ -401,9 +401,10 @@ class ManipulationController:
                 li.pos() if not isinstance(li, BlurRegionItem)
                 else li.rect().topLeft())
 
-            # Не расширяем sceneRect в момент захвата: это меняет диапазон
-            # прокрутки и визуально дёргает viewport. При необходимости
-            # рабочая область расширяется позже, без ложного срабатывания.
+            # Даём перетаскиванию большую временную рабочую область
+            # один раз в начале. Она не влияет на подложку и позволяет
+            # полностью вывести объект за левый/верхний край.
+            self.view.prepare_drag_scene_rect()
             self._drag_old_background = self.view.get_background_canvas_state()
             self._drag_old_blur_state = self.view.blur_controller._get_blur_state()
             return True
@@ -545,11 +546,6 @@ class ManipulationController:
                 if isinstance(drag_item, PastedImageItem):
                     drag_item.show_handles()
 
-        # Когда объект упирается в край текущей sceneRect, расширяем
-        # только рабочую область. Это позволяет продолжить drag влево/вверх
-        # без скачка viewport; сама подложка по-прежнему перестраивается
-        # один раз после отпускания кнопки.
-        self.view.ensure_drag_scene_rect()
         self.view.scene().update()
         self.view._update_pasted_image_handles()
         return True
