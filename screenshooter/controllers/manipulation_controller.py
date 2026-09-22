@@ -48,7 +48,6 @@ class ManipulationController:
         # Изменение размера вставленных изображений
         self._resizing_pasted_item = None
         self.view._interaction_dragging = False
-        self.view.widget_manager.update_floating_widgets_visibility()
         self._resize_handle = None
         self._resize_start_rect = None
         self._resize_start_scale = 1.0
