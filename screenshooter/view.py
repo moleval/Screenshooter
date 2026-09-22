@@ -864,7 +864,7 @@ class EditorView(QGraphicsView):
             return
 
         layer = getattr(selected[0], 'layer', 1)
-        self.layer_widget.set_layer(layer)
+        self.layer_widget.set_current_mode(layer)
         self.layer_widget.setVisible(True)
         self.layer_widget.raise_()
         self.layout_manager.update_all(immediate=True)
