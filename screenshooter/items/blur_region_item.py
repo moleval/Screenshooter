@@ -4,7 +4,7 @@
 """
 
 from PyQt5.QtCore import Qt, QRectF
-from PyQt5.QtGui import QPen, QColor, QBrush
+from PyQt5.QtGui import QPen, QColor, QBrush, QPainter, QPixmap
 from PyQt5.QtWidgets import QGraphicsRectItem
 from .crop_handles import CropHandles
 from ..theme import theme_manager
@@ -17,6 +17,7 @@ class BlurRegionItem(QGraphicsRectItem):
         self.mode = mode
         self.handles = None
         self.layer = 1
+        self.blurred_pixmap = QPixmap()
 
         self.set_layer(self.layer)
         self.setAcceptedMouseButtons(Qt.LeftButton)
@@ -29,6 +30,25 @@ class BlurRegionItem(QGraphicsRectItem):
         self.layer = 1 if int(layer) == 1 else 2
         self.setZValue(-100 * self.layer)
         self.update()
+
+    def set_blurred_pixmap(self, pixmap):
+        """Устанавливает готовый фрагмент изображения под эффектом размытия."""
+        self.blurred_pixmap = QPixmap(pixmap) if pixmap and not pixmap.isNull() else QPixmap()
+        self.update()
+
+    def paint(self, painter, option, widget=None):
+        if not self.blurred_pixmap.isNull():
+            painter.save()
+            painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
+            painter.drawPixmap(self.rect(), self.blurred_pixmap)
+            painter.restore()
+
+        painter.save()
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        painter.setBrush(Qt.NoBrush)
+        painter.setPen(self.pen())
+        painter.drawRect(self.rect())
+        painter.restore()
 
     def _apply_mode(self):
         if self.mode == 'drawing':
