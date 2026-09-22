@@ -52,7 +52,7 @@ class EditorView(QGraphicsView):
 
     def __init__(self, scene):
         super().__init__(scene)
-        self.setViewportUpdateMode(QGraphicsView.SmartViewportUpdate)
+        self.setViewportUpdateMode(QGraphicsView.FullViewportUpdate)
         # Полосы появляются только когда реальная подложка/масштаб
         # требуют прокрутки. Временное расширение sceneRect не используется
         # при захвате объекта, поэтому ложного появления быть не должно.
@@ -839,6 +839,10 @@ class EditorView(QGraphicsView):
         if self.blur_controller.blur_regions:
             self.blur_controller._force_blur_recompute()
         self.manipulation_controller._restore_tool_if_needed()
+        self._invalidate_cursor_cache()
+        self._update_pasted_image_handles()
+        self._update_blur_region_handles()
+        self.viewport().update()
 
 
     # ==============================================================
