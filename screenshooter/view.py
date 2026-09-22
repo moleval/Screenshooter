@@ -43,7 +43,7 @@ from .theme import theme_manager
 class EditorView(QGraphicsView):
     TEXT_FORMAT_TOP_OFFSET = 10
     TEXT_FORMAT_RIGHT_OFFSET = 8
-    zoomChangedByWheel = pyqtSignal(int)
+    zoomChangedByWheel = pyqtSignal(float, object)
     crop_mode_changed = pyqtSignal(bool)
     blur_mode_changed = pyqtSignal(bool)
     background_changed = pyqtSignal()
@@ -726,16 +726,15 @@ class EditorView(QGraphicsView):
 
     def wheelEvent(self, e):
         if e.modifiers() & Qt.ShiftModifier:
-            d = e.angleDelta().y()
-            if d != 0:
-                cur = self.transform().m11()
-                factor = 1.1 if d > 0 else 0.9
-                new_scale = cur * factor
-                new_percent = max(10, min(400, int(new_scale * 100)))
-                self.resetTransform()
-                self.scale(new_percent / 100, new_percent / 100)
+            delta = e.angleDelta().y()
+            if delta != 0:
+                cur_percent = self.transform().m11() * 100.0
+                # Малый multiplicative шаг сохраняет qreal-масштаб без
+                # округления каждого события до целого процента.
+                factor = 1.05 if delta > 0 else (1.0 / 1.05)
+                new_percent = max(10.0, min(400.0, cur_percent * factor))
                 self.auto_fit = False
-                self.zoomChangedByWheel.emit(new_percent)
+                self.zoomChangedByWheel.emit(new_percent, e.pos())
                 e.accept()
                 return
             e.accept()
