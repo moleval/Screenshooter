@@ -200,15 +200,19 @@ class HotkeyManager(QObject):
 
         self._request_pending = True
 
+        # По требованию приложения:
+        #   PrintScreen      -> выделение участка экрана
+        #   Ctrl+PrintScreen -> снимок всего монитора
+        # Alt+PrintScreen остаётся захватом активного окна.
         if ctrl_down:
-            self._region_requested.emit()
+            self._monitor_requested.emit()
             return
 
         if alt_down:
             self._prepare_window_capture()
             return
 
-        self._monitor_requested.emit()
+        self._region_requested.emit()
 
     # ==============================================================
     # Проверка принадлежности окна текущему процессу
