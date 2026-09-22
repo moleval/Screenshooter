@@ -454,6 +454,7 @@ class HotkeyManager(QObject):
     # ==============================================================
 
     def capture_specific_screen(self, screen):
+        """Захватывает выбранный экран в новое окно (горячие клавиши)."""
         if not self._begin():
             return
         QTimer.singleShot(
@@ -474,6 +475,28 @@ class HotkeyManager(QObject):
                 self._deliver(target, pixmap)
         except Exception as error:
             print(f"Ошибка захвата выбранного экрана: {error}")
+        finally:
+            self._finish(target)
+
+    def capture_specific_screen_into_window(self, screen, target):
+        """Захватывает выбранный экран и вставляет его в текущую подложку."""
+        if target is None or target not in self.window_manager.windows:
+            return
+        if not self._begin():
+            return
+
+        QTimer.singleShot(
+            self.HIDE_SETTLE_DELAY_MS,
+            lambda: self._capture_specific_screen_into_window(screen, target),
+        )
+
+    def _capture_specific_screen_into_window(self, screen, target):
+        try:
+            pixmap = screen.grabWindow(0)
+            if not pixmap.isNull():
+                self._deliver(target, pixmap)
+        except Exception as error:
+            print(f"Ошибка вставки снимка выбранного экрана: {error}")
         finally:
             self._finish(target)
 
