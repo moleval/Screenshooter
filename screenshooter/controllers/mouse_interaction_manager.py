@@ -177,7 +177,7 @@ class MouseInteractionManager:
             if self.view._tool.finish_draw(self.view.temp_item):
                 self.view.scene().clearSelection()
                 self.view.temp_item.setSelected(True)
-                self.view.expand_background_to_content()
+                self.view.expand_background_to_content(margin=0)
                 self.view.history.push(AddItemCommand(self.view.scene(), self.view.temp_item))
                 if self.view.background_item is not None:
                     self.view.setSceneRect(self.view.background_item.sceneBoundingRect())
