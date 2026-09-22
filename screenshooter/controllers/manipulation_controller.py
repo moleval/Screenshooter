@@ -38,6 +38,7 @@ class ManipulationController:
         self._drag_old_rects = []
         self._drag_start_scene_pos = QPointF()
         self._drag_start_view_pos = QPoint()
+        self._drag_start_scroll = QPoint()
         self._drag_start_item_pos = QPointF()
         self._drag_blur_needs_recompute = False
         self._drag_old_background = None
@@ -407,6 +408,9 @@ class ManipulationController:
             # один раз в начале. Она не влияет на подложку и позволяет
             # полностью вывести объект за левый/верхний край.
             self.view.prepare_drag_scene_rect(event.pos())
+            self._drag_start_scroll = QPoint(
+                self.view.horizontalScrollBar().value(),
+                self.view.verticalScrollBar().value())
             self._drag_old_background = self.view.get_background_canvas_state()
             self._drag_old_blur_state = self.view.blur_controller._get_blur_state()
             return True
@@ -518,13 +522,37 @@ class ManipulationController:
         if not self._drag_items:
             return False
 
-        # Используем смещение курсора в viewport, а не повторный mapToScene().
-        # Это исключает насыщение координат при выходе через левый/верхний край.
+        # Автопрокрутка у края viewport позволяет вывести объект за
+        # левую/верхнюю границу подложки без упора курсора в край окна.
+        edge = 24
+        speed = 24
+        vp = self.view.viewport().rect()
+        hbar = self.view.horizontalScrollBar()
+        vbar = self.view.verticalScrollBar()
+
+        if event.pos().x() <= vp.left() + edge:
+            hbar.setValue(hbar.value() - speed)
+        elif event.pos().x() >= vp.right() - edge:
+            hbar.setValue(hbar.value() + speed)
+
+        if event.pos().y() <= vp.top() + edge:
+            vbar.setValue(vbar.value() - speed)
+        elif event.pos().y() >= vp.bottom() - edge:
+            vbar.setValue(vbar.value() + speed)
+
         scale = abs(self.view.transform().m11())
         if scale < 0.0001:
             scale = 1.0
+
         view_delta = event.pos() - self._drag_start_view_pos
-        delta = QPointF(view_delta.x() / scale, view_delta.y() / scale)
+        scroll_delta = QPoint(
+            hbar.value() - self._drag_start_scroll.x(),
+            vbar.value() - self._drag_start_scroll.y()
+        )
+        delta = QPointF(
+            view_delta.x() / scale + scroll_delta.x(),
+            view_delta.y() / scale + scroll_delta.y()
+        )
 
         if event.modifiers() & Qt.ShiftModifier:
             if abs(delta.x()) > abs(delta.y()):
@@ -643,6 +671,8 @@ class ManipulationController:
         self._drag_old_positions = []
         self._drag_old_rects = []
         self._drag_start_scene_pos = QPointF()
+        self._drag_start_view_pos = QPoint()
+        self._drag_start_scroll = QPoint()
         self._drag_start_item_pos = QPointF()
         self._drag_old_background = None
         self._drag_old_blur_state = None
