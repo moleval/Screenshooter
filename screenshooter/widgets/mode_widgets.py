@@ -6,6 +6,7 @@
 """
 
 from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import (QFrame, QHBoxLayout, QPushButton, QButtonGroup,
                              QSizePolicy)
 from .tool_icons import (create_shape_mode_icon, create_ellipse_mode_icon,
@@ -143,13 +144,11 @@ class LayerModeWidget(BaseModeWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.layer1_btn = self._add_button(
-            None, "Слой 1 — выше слоя 2", 1)
+            QIcon(), "Слой 1 — выше слоя 2", 1)
         self.layer2_btn = self._add_button(
-            None, "Слой 2 — ниже слоя 1", 2)
+            QIcon(), "Слой 2 — ниже слоя 1", 2)
         self.layer1_btn.setText("1")
         self.layer2_btn.setText("2")
-        self.layer1_btn.setIcon(self.layer1_btn.icon())
-        self.layer2_btn.setIcon(self.layer2_btn.icon())
         self.layer1_btn.setStyleSheet(self._button_style())
         self.layer2_btn.setStyleSheet(self._button_style())
         self._current_mode = 1
