@@ -136,3 +136,54 @@ class LineModeWidget(BaseModeWidget):
         self.straight_btn.setChecked(mode == 'straight')
         self.dashed_btn.setChecked(mode == 'dashed')
         self.wavy_btn.setChecked(mode == 'wavy')
+
+class LayerModeWidget(BaseModeWidget):
+    """Две кнопки выбора слоя для изображения/размытия."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.layer1_btn = self._add_button(
+            None, "Слой 1 — выше слоя 2", 1)
+        self.layer2_btn = self._add_button(
+            None, "Слой 2 — ниже слоя 1", 2)
+        self.layer1_btn.setText("1")
+        self.layer2_btn.setText("2")
+        self.layer1_btn.setIcon(self.layer1_btn.icon())
+        self.layer2_btn.setIcon(self.layer2_btn.icon())
+        self.layer1_btn.setStyleSheet(self._button_style())
+        self.layer2_btn.setStyleSheet(self._button_style())
+        self.button_group.buttonClicked.connect(
+            lambda button: self._set_mode(button.property("layer")))
+        self.layer1_btn.setProperty("layer", 1)
+        self.layer2_btn.setProperty("layer", 2)
+        self._current_mode = 1
+        self.layer1_btn.setChecked(True)
+        self.setFixedSize(self.sizeHint())
+
+    @staticmethod
+    def _button_style():
+        return """
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                font-weight: bold;
+                font-size: 13px;
+            }
+            QPushButton:hover {
+                background-color: rgba(0, 0, 0, 20);
+            }
+            QPushButton:checked {
+                background-color: #b0d4f1;
+                border: 2px solid #005a9e;
+                border-radius: 4px;
+            }
+        """
+
+    def set_current_mode(self, mode):
+        mode = 1 if int(mode) == 1 else 2
+        self._current_mode = mode
+        self.layer1_btn.setChecked(mode == 1)
+        self.layer2_btn.setChecked(mode == 2)
+
+    def get_mode(self):
+        return self._current_mode
