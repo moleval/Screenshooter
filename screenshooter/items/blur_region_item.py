@@ -16,12 +16,19 @@ class BlurRegionItem(QGraphicsRectItem):
         self.view = view
         self.mode = mode
         self.handles = None
+        self.layer = 1
 
-        self.setZValue(500)
+        self.set_layer(self.layer)
         self.setAcceptedMouseButtons(Qt.LeftButton)
         self.setFlag(QGraphicsRectItem.ItemIsMovable, False)
         self.setFlag(QGraphicsRectItem.ItemIsSelectable, True)
         self._apply_mode()
+
+    def set_layer(self, layer: int):
+        """Устанавливает пользовательский слой зоны размытия."""
+        self.layer = max(0, min(2, int(layer)))
+        self.setZValue(-100 * self.layer)
+        self.update()
 
     def _apply_mode(self):
         if self.mode == 'drawing':
