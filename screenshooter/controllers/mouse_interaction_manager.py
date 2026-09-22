@@ -28,7 +28,7 @@ class MouseInteractionManager:
         """Обрабатывает нажатие мыши. Возвращает True, если событие поглощено."""
         if self.blur_controller.blur_mode:
             sp = self.view.mapToScene(event.pos())
-            item = self.view.scene().itemAt(sp, self.view.transform())
+            item = self.view._interactive_item_at(sp)
             li = self.view._item_for_manipulation(item) if item else None
 
             is_blur_handle = False
