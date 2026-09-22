@@ -731,8 +731,8 @@ class EditorView(QGraphicsView):
             super().mouseDoubleClickEvent(e)
             return
         sp = self.mapToScene(e.pos())
-        item = self.scene().itemAt(sp, self.transform())
-        li = self._item_for_manipulation(item) if item else None
+        item = self._interactive_item_at(sp)
+        li = item
 
         if isinstance(li, TextItem):
             if self.active_text_item is not None and self.active_text_item is not li:
@@ -987,6 +987,21 @@ class EditorView(QGraphicsView):
     # ==============================================================
     # Работа с элементами
     # ==============================================================
+    def _interactive_item_at(self, scene_pos):
+        """Возвращает верхний реально выбираемый объект в точке сцены.
+
+        QGraphicsScene.itemAt() может вернуть служебные ручки изменения
+        размера, которые находятся выше всех объектов. Для выбора картинки
+        и размытия нужен именно верхний selectable-объект с учётом z-order.
+        """
+        for item in self.scene().items(QPointF(scene_pos)):
+            if self._is_background_item(item):
+                continue
+            if not (item.flags() & QGraphicsItem.ItemIsSelectable):
+                continue
+            return self._item_for_manipulation(item)
+        return None
+
     def _item_for_manipulation(self, item):
         d = self._dimension_parent(item)
         return d if d else item
