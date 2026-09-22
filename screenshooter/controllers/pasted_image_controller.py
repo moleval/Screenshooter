@@ -161,12 +161,6 @@ class PastedImageController:
 
     def update_handles(self):
         """Обновляет маркеры изображений только в режиме указателя."""
-        if self.view.current_tool is not None:
-            for item in self.pasted_images:
-                if not sip.isdeleted(item):
-                    item.hide_handles()
-            return
-
         for item in self.pasted_images:
             if item.isSelected() and not sip.isdeleted(item):
                 item.show_handles()
