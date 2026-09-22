@@ -80,6 +80,13 @@ class BlurController:
     def _is_deleted(obj):
         return obj is None or sip.isdeleted(obj)
 
+    def _scene_rect_to_pixmap_rect(self, rect):
+        """Преобразует прямоугольник из координат сцены в координаты pixmap."""
+        background_item = self.view.image_editor.background_item
+        if background_item is None or self._is_deleted(background_item):
+            return QRectF()
+        return background_item.mapRectFromScene(QRectF(rect))
+
     # ==============================================================
     # Внутренние методы управления зонами
     # ==============================================================
@@ -131,8 +138,9 @@ class BlurController:
         """Обновляет зоны размытия после обрезки фона."""
         if self.blur_base_pixmap is not None:
             from ..image_processing import crop_pixmap_with_padding
+            local_crop_rect = self._scene_rect_to_pixmap_rect(crop_rect)
             self.blur_base_pixmap = crop_pixmap_with_padding(
-                self.blur_base_pixmap, crop_rect)
+                self.blur_base_pixmap, local_crop_rect)
 
         new_regions = []
         for item in self.blur_region_items:
@@ -290,9 +298,11 @@ class BlurController:
                 for idx, rect in enumerate(self.blur_regions):
                     if idx == moving_index:
                         continue
+                    local_rect = self._scene_rect_to_pixmap_rect(rect)
                     small_rect = QRectF(
-                        rect.x() * scale_x, rect.y() * scale_y,
-                        rect.width() * scale_x, rect.height() * scale_y)
+                        local_rect.x() * scale_x, local_rect.y() * scale_y,
+                        local_rect.width() * scale_x,
+                        local_rect.height() * scale_y)
                     pixmap = blur_region(pixmap, small_rect, radius=radius)
 
                 if moving_index is not None:
@@ -301,9 +311,11 @@ class BlurController:
 
             if moving_index is not None and moving_index < len(self.blur_regions):
                 rect = self.blur_regions[moving_index]
+                local_rect = self._scene_rect_to_pixmap_rect(rect)
                 small_rect = QRectF(
-                    rect.x() * scale_x, rect.y() * scale_y,
-                    rect.width() * scale_x, rect.height() * scale_y)
+                    local_rect.x() * scale_x, local_rect.y() * scale_y,
+                    local_rect.width() * scale_x,
+                    local_rect.height() * scale_y)
                 pixmap = blur_region(pixmap, small_rect, radius=radius)
 
             pixmap = pixmap.scaled(
@@ -313,7 +325,8 @@ class BlurController:
         else:
             pixmap = QPixmap(self.blur_base_pixmap)
             for rect in self.blur_regions:
-                pixmap = blur_region(pixmap, rect, radius=radius)
+                local_rect = self._scene_rect_to_pixmap_rect(rect)
+                pixmap = blur_region(pixmap, local_rect, radius=radius)
 
         background_item.prepareGeometryChange()
         background_item.setPixmap(pixmap)
@@ -439,7 +452,8 @@ class BlurController:
         background_item = self.view.image_editor.background_item
         if not background_item or rect.isEmpty():
             return
-        image_rect = QRectF(background_item.pixmap().rect())
+        image_rect = background_item.mapRectToScene(
+            QRectF(background_item.pixmap().rect()))
         blur_rect = rect.intersected(image_rect)
         if blur_rect.isEmpty():
             return
@@ -748,7 +762,8 @@ class BlurController:
         rect = item.rect()
         left, top, right, bottom = rect.left(), rect.top(), rect.right(), rect.bottom()
         background_item = self.view.image_editor.background_item
-        image_rect = QRectF(background_item.pixmap().rect())
+        image_rect = background_item.mapRectToScene(
+            QRectF(background_item.pixmap().rect()))
         min_size = MIN_RECT_SIZE
 
         x = max(image_rect.left(), min(image_rect.right(), new_scene_pos.x()))
@@ -779,7 +794,8 @@ class BlurController:
 
     def _constrain_move(self, old_rect: QRectF, delta: QPointF):
         background_item = self.view.image_editor.background_item
-        image_rect = QRectF(background_item.pixmap().rect())
+        image_rect = background_item.mapRectToScene(
+            QRectF(background_item.pixmap().rect()))
         new_rect = old_rect.translated(delta)
 
         if new_rect.left() < image_rect.left():
