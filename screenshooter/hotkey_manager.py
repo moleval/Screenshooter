@@ -445,7 +445,9 @@ class HotkeyManager(QObject):
             target.view.add_pasted_image(pixmap)
 
     def _target(self):
-        return self.window_manager.find_target_window_for_reuse()
+        # Каждый новый скриншот должен попадать в отдельное окно.
+        # Не переиспользуем окна с уже сохранённым скриншотом.
+        return None
 
     # ==============================================================
     # Захват выбранного монитора
