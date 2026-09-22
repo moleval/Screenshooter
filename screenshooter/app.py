@@ -879,7 +879,6 @@ class ScreenshotApp(QMainWindow):
             anchor_scene_pos = self.view.mapToScene(
                 self.view.viewport().rect().center())
 
-        self.view.setTransformationAnchor(self.view.NoAnchor)
         self.view.resetTransform()
         self.view.scale(scale, scale)
         self.view.centerOn(anchor_scene_pos)
