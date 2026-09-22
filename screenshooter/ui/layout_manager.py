@@ -261,7 +261,14 @@ class LayoutManager:
         vw = vp_rect.width()
         sw = self._scrollbar_width()
         x = vw - lw.width() - sw - self.TEXT_FORMAT_RIGHT_OFFSET
-        y = self.TEXT_FORMAT_TOP_OFFSET
+
+        # При активном тексте TextFormatWidget занимает верхнюю позицию.
+        # Панель слоёв размещаем непосредственно под ним.
+        tfw = self.text_format_widget
+        if tfw and tfw.isVisible():
+            y = tfw.y() + tfw.height() + 4
+        else:
+            y = self.TEXT_FORMAT_TOP_OFFSET
         x = max(0, x)
         y = max(0, y)
         lw.move(x, y)
