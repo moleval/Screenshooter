@@ -403,6 +403,15 @@ class EditorView(QGraphicsView):
         painter.setRenderHint(QPainter.SmoothPixmapTransform)
         painter.drawPixmap(int(round(left_extra)), int(round(top_extra)), old_pixmap)
         painter.end()
+        if self.blur_controller.blur_base_pixmap is not None:
+            blur_base = QPixmap(new_width, new_height)
+            blur_base.fill(Qt.white)
+            bp = QPainter(blur_base)
+            bp.setRenderHint(QPainter.SmoothPixmapTransform)
+            bp.drawPixmap(int(round(left_extra)), int(round(top_extra)),
+                          self.blur_controller.blur_base_pixmap)
+            bp.end()
+            self.blur_controller.blur_base_pixmap = blur_base
         shift = QPointF(left_extra, top_extra)
         for item in self.scene().items():
             if item is bg or self._is_background_item(item):
@@ -421,6 +430,8 @@ class EditorView(QGraphicsView):
             self.blur_controller.blur_regions[idx] = rect.translated(shift)
         bg.setPixmap(new_pixmap)
         bg.update()
+        self.blur_controller._invalidate_blur_cache()
+        self.blur_controller._recompute_blurred_pixmap()
         self.setSceneRect(QRectF(0, 0, new_width, new_height))
         self.update_resolution_from_background()
         self.scene().update()
