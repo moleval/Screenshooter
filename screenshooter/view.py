@@ -833,6 +833,11 @@ class EditorView(QGraphicsView):
             self.history.push(command)
 
         self.scene().clearSelection()
+
+        # Удаление/отмена аннотации не должно оставлять старый результат
+        # размытия после её пересечения с blur.
+        if self.blur_controller.blur_regions:
+            self.blur_controller._force_blur_recompute()
         self.manipulation_controller._restore_tool_if_needed()
 
 
