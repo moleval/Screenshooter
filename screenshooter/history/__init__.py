@@ -18,6 +18,7 @@ from .image_commands import (AddPastedImageCommand, RemovePastedImageCommand,
                              ResizePastedImageCommand, CropPastedImageCommand,
                              RotatePastedImageCommand)
 from .composite_commands import RemoveSelectedItemsCommand, PasteItemsCommand
+from .layer_commands import ChangeLayerCommand
 
 __all__ = [
     'HistoryManager',
@@ -36,6 +37,7 @@ __all__ = [
     'RotatePastedImageCommand',
     # Составные команды
     'RemoveSelectedItemsCommand', 'PasteItemsCommand',
+    'ChangeLayerCommand',
 ]
 
 
