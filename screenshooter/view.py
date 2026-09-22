@@ -153,6 +153,20 @@ class EditorView(QGraphicsView):
     # ==============================================================
     # Вспомогательные
     # ==============================================================
+    def set_scene_rect_preserving_view(self, rect):
+        """Меняет sceneRect без скачка текущего вида/центра."""
+        rect = QRectF(rect)
+        if rect.isEmpty():
+            self.setSceneRect(rect)
+            return
+
+        try:
+            center = self.mapToScene(self.viewport().rect().center())
+            self.setSceneRect(rect)
+            QTimer.singleShot(0, lambda: self.centerOn(center))
+        except (RuntimeError, AttributeError):
+            self.setSceneRect(rect)
+
     def _is_point_inside_background(self, scene_pos):
         """Проверяет, попадает ли точка в пределы подложки."""
         bg = self.image_editor.background_item
@@ -245,7 +259,8 @@ class EditorView(QGraphicsView):
         if (self.image_editor.background_item and
                 not sip.isdeleted(self.image_editor.background_item) and
                 self.image_editor.background_item.scene() is self.scene()):
-            self.setSceneRect(QRectF(self.image_editor.background_item.pixmap().rect()))
+            self.set_scene_rect_preserving_view(
+                self.image_editor.background_item.sceneBoundingRect())
             self.update_resolution_from_background()
         self.widget_manager.update_floating_widgets_visibility()
         self._update_pasted_image_handles()
@@ -386,7 +401,7 @@ class EditorView(QGraphicsView):
         pad_x = max(1000.0, visible_w * 2.0)
         pad_y = max(1000.0, visible_h * 2.0)
         work_rect = bg_rect.adjusted(-pad_x, -pad_y, pad_x, pad_y)
-        self.setSceneRect(self.sceneRect().united(work_rect))
+        self.set_scene_rect_preserving_view(self.sceneRect().united(work_rect))
 
     def expand_background_to_content(self, margin=50, threshold=1):
         """Расширяет подложку белыми полями под вышедшие за неё объекты."""
@@ -415,7 +430,7 @@ class EditorView(QGraphicsView):
         extras = [0.0 if value <= threshold else value + margin for value in extras]
         left_extra, top_extra, right_extra, bottom_extra = extras
         if not any(extras):
-            self.setSceneRect(bg_rect)
+            self.set_scene_rect_preserving_view(bg_rect)
             return False
         new_width = int(round(old_pixmap.width() + left_extra + right_extra))
         new_height = int(round(old_pixmap.height() + top_extra + bottom_extra))
@@ -454,7 +469,7 @@ class EditorView(QGraphicsView):
         bg.update()
         self.blur_controller._invalidate_blur_cache()
         self.blur_controller._recompute_blurred_pixmap()
-        self.setSceneRect(QRectF(0, 0, new_width, new_height))
+        self.set_scene_rect_preserving_view(QRectF(0, 0, new_width, new_height))
         self.update_resolution_from_background()
         self.scene().update()
         return True
