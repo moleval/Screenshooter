@@ -17,7 +17,7 @@ from .controllers.crop_overlay_controller import CropOverlayController
 from .controllers.status_bar_manager import StatusBarManager
 from .history import (CropCommand, RotateCommand,
                       CropPastedImageCommand, RotatePastedImageCommand)
-from .image_processing import crop_pixmap, rotate_pixmap
+from .image_processing import crop_pixmap, crop_pixmap_with_padding, rotate_pixmap
 from .items.pasted_image_item import PastedImageItem
 from .items.blur_region_item import BlurRegionItem
 
@@ -77,16 +77,15 @@ class ImageEditController:
     # Ограничение точки пределами целевого изображения
     # --------------------------------------------------------------
     def _clamp_to_target(self, scene_pos):
-        """Ограничивает точку пределами целевого изображения."""
+        """Ограничивает точку только для вставленного изображения."""
         if self.crop_target_item is None:
             return scene_pos
-
+        if self.crop_target_item is self.background_item:
+            return scene_pos
         image_rect = self.crop_target_item.mapRectToScene(
             QRectF(self.crop_target_item.pixmap().rect()))
-
         x = max(image_rect.left(), min(image_rect.right(), scene_pos.x()))
         y = max(image_rect.top(), min(image_rect.bottom(), scene_pos.y()))
-
         return QPointF(x, y)
 
     # --------------------------------------------------------------
@@ -112,6 +111,8 @@ class ImageEditController:
         if self.crop_target_item:
             self.crop_rect = self.crop_target_item.mapRectToScene(
                 QRectF(self.crop_target_item.pixmap().rect()))
+            if self.crop_target_item is self.background_item:
+                self.view.setSceneRect(self.crop_rect.adjusted(-5000, -5000, 5000, 5000))
         else:
             self.crop_rect = self.view.sceneRect()
 
@@ -154,8 +155,12 @@ class ImageEditController:
         image_rect = self.crop_target_item.mapRectToScene(
             QRectF(self.crop_target_item.pixmap().rect()))
 
-        x = max(image_rect.left(), min(image_rect.right(), new_scene_pos.x()))
-        y = max(image_rect.top(), min(image_rect.bottom(), new_scene_pos.y()))
+        if self.crop_target_item is self.background_item:
+            x = new_scene_pos.x()
+            y = new_scene_pos.y()
+        else:
+            x = max(image_rect.left(), min(image_rect.right(), new_scene_pos.x()))
+            y = max(image_rect.top(), min(image_rect.bottom(), new_scene_pos.y()))
 
         if handle_id == 'tl':
             left = min(x, right - MIN_RECT_SIZE)
@@ -199,7 +204,7 @@ class ImageEditController:
             self._collect_items_for_crop(crop)
 
         old_pixmap = self.background_item.pixmap()
-        new_pixmap = crop_pixmap(old_pixmap, crop)
+        new_pixmap = crop_pixmap_with_padding(old_pixmap, crop)
         if new_pixmap.isNull():
             self.overlay.clear()
             return
