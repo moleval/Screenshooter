@@ -689,19 +689,25 @@ class BlurController:
                     item.setSelected(True)
                 return True
 
-        for idx, rect in enumerate(self.blur_regions):
-            if idx == self.active_blur_index:
-                continue
-            if rect.contains(sp):
-                self._set_active_blur(idx)
-                self.blur_outside_mode = True
-                self.blur_outside_interaction = 'moving'
-                self.blur_move_start = sp
-                self.blur_old_rect = QRectF(rect)
-                item = self.blur_region_items[idx]
-                self.view.scene().clearSelection()
-                item.setSelected(True)
-                return True
+        top_item = self.view._interactive_item_at(sp)
+        if isinstance(top_item, BlurRegionItem):
+            try:
+                idx = self.blur_region_items.index(top_item)
+            except ValueError:
+                idx = None
+
+            if idx is not None and idx != self.active_blur_index:
+                rect = self.blur_regions[idx]
+                if rect.contains(sp):
+                    self._set_active_blur(idx)
+                    self.blur_outside_mode = True
+                    self.blur_outside_interaction = 'moving'
+                    self.blur_move_start = sp
+                    self.blur_old_rect = QRectF(rect)
+                    item = self.blur_region_items[idx]
+                    self.view.scene().clearSelection()
+                    item.setSelected(True)
+                    return True
 
         self._clear_active_blur()
         return False
