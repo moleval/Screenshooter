@@ -22,6 +22,7 @@ from .items.blur_region_item import BlurRegionItem
 from .widgets.zoom_widget import ZoomWidget
 from .widgets.text_format_widget import TextFormatWidget
 from .widgets.info_widget import InfoWidget
+from .widgets.layer_widget import LayerWidget
 from .widgets.mode_widgets import (ShapeModeWidget, ShapeModeWidgetEllipse,
                                    ShapeModeWidgetArrow, LineModeWidget)
 from .history import (HistoryManager, AddItemCommand, RemoveItemCommand,
@@ -107,6 +108,10 @@ class EditorView(QGraphicsView):
         self.info_widget = InfoWidget(self)
         self.info_widget.setVisible(True)
 
+        self.layer_widget = LayerWidget(self)
+        self.layer_widget.setVisible(False)
+        self.layer_widget.layerChanged.connect(self._on_layer_widget_changed)
+
         self.status_label = QLabel(self)
         self.status_label.setObjectName("statusLabel")
         self.status_label.setAttribute(Qt.WA_TranslucentBackground)
@@ -139,7 +144,7 @@ class EditorView(QGraphicsView):
         for w in (self.zoom_widget, self.text_format_widget,
                   self.shape_mode_widget, self.ellipse_mode_widget,
                   self.arrow_mode_widget, self.line_mode_widget,
-                  self.info_widget, self.status_label):
+                  self.info_widget, self.layer_widget, self.status_label):
             w.setCursor(Qt.ArrowCursor)
 
         self.scene().selectionChanged.connect(self._schedule_selection_update)
@@ -208,6 +213,7 @@ class EditorView(QGraphicsView):
     def _do_selection_update(self):
         try:
             self.widget_manager.sync_selection_properties()
+            self.update_layer_widget()
             self.widget_manager.update_floating_widgets_visibility()
             self.widget_manager.update_resolution_for_selection()
             self._update_blur_region_handles()
@@ -341,7 +347,7 @@ class EditorView(QGraphicsView):
         item = QGraphicsPixmapItem(pixmap)
         item.setTransformationMode(Qt.SmoothTransformation)
         item.setAcceptedMouseButtons(Qt.NoButton)
-        item.setZValue(-1)
+        item.setZValue(-1000)
 
         self.scene().addItem(item)
         self.set_background_item(item)
@@ -818,6 +824,44 @@ class EditorView(QGraphicsView):
 
         self.scene().clearSelection()
         self.manipulation_controller._restore_tool_if_needed()
+
+
+    # ==============================================================
+    # Слои изображений и размытия
+    # ==============================================================
+    def _is_layerable_item(self, item):
+        return isinstance(item, (PastedImageItem, BlurRegionItem))
+
+    def _on_layer_widget_changed(self, layer):
+        selected = [
+            item for item in self.scene().selectedItems()
+            if self._is_layerable_item(item)
+        ]
+        if not selected:
+            return
+
+        old_layers = [getattr(item, 'layer', 1) for item in selected]
+        layer = max(0, min(2, int(layer)))
+        if all(old == layer for old in old_layers):
+            return
+
+        self.history.push(ChangeLayerCommand(selected, old_layers, layer))
+        self.layer_widget.set_layer(layer)
+
+    def update_layer_widget(self):
+        selected = [
+            item for item in self.scene().selectedItems()
+            if self._is_layerable_item(item)
+        ]
+        if not selected:
+            self.layer_widget.setVisible(False)
+            return
+
+        layer = getattr(selected[0], 'layer', 1)
+        self.layer_widget.set_layer(layer)
+        self.layer_widget.setVisible(True)
+        self.layer_widget.raise_()
+        self.layout_manager.update_all(immediate=True)
 
     # ==============================================================
     # Обёртки для совместимости
