@@ -86,8 +86,7 @@ class ZoomWidget(QWidget):
 
     def _on_slider_changed(self, value):
         percent = value / 10.0
-        text = f"{percent:.1f}%" if percent % 1 else f"{int(percent)}%"
-        self.percent_edit.setText(text)
+        self.percent_edit.setText(f"{round(percent)}%")
         self.zoomChanged.emit(percent)
 
     def zoom_in(self):
