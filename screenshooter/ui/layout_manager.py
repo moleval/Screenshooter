@@ -33,6 +33,7 @@ class LayoutManager:
         self.arrow_mode_widget = view.arrow_mode_widget
         self.line_mode_widget = view.line_mode_widget
         self.info_widget = view.info_widget
+        self.layer_widget = view.layer_widget
         self.status_label = view.status_label
 
         # ЭТАП 3: таймер дебаунса для update_all()
@@ -63,6 +64,7 @@ class LayoutManager:
         self.update_arrow_mode_widget_position()
         self.update_line_mode_widget_position()
         self.update_info_widget_position()
+        self.update_layer_widget_position()
         self.update_status_label_position()
 
     # ---- Вспомогательные методы для получения размеров viewport и полос прокрутки ----
@@ -246,6 +248,29 @@ class LayoutManager:
         y = max(0, y)
         iw.move(x, y)
         iw.raise_()
+
+
+    def update_layer_widget_position(self):
+        """Размещает виджет слоя рядом с информационным виджетом."""
+        lw = self.layer_widget
+        if not lw or not lw.isVisible():
+            return
+        vp_rect = self._viewport_rect()
+        if not vp_rect:
+            return
+
+        iw = self.info_widget
+        if iw and iw.isVisible():
+            x = iw.x() - lw.width() - 4
+            y = iw.y()
+        else:
+            x = vp_rect.width() - lw.width() - self._scrollbar_width() - 4
+            y = 4
+
+        x = max(0, x)
+        y = max(0, y)
+        lw.move(x, y)
+        lw.raise_()
 
     def update_status_label_position(self):
         """
