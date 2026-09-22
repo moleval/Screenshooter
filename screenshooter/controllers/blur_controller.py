@@ -117,18 +117,27 @@ class BlurController:
     def _get_blur_state(self):
         return {
             'rects': [QRectF(r) for r in self.blur_regions],
+            'layers': [
+                int(getattr(item, 'layer', 1))
+                for item in self.blur_region_items
+                if not self._is_deleted(item)
+            ],
             'base_pixmap': self.blur_base_pixmap.copy() if self.blur_base_pixmap else None,
             'active_index': self.active_blur_index,
         }
 
     def _restore_blur_state(self, state):
         self._clear_all_blur_regions()
-        self.blur_regions = state['rects']
-        self.blur_base_pixmap = state['base_pixmap']
+        self.blur_regions = [QRectF(r) for r in state.get('rects', [])]
+        self.blur_base_pixmap = state.get('base_pixmap')
         self.active_blur_index = None
         self.blur_region_items = []
-        for rect in self.blur_regions:
+
+        layers = state.get('layers', [])
+        for index, rect in enumerate(self.blur_regions):
             item = BlurRegionItem(rect, self.view, mode='inactive')
+            if index < len(layers):
+                item.set_layer(layers[index])
             self.view.scene().addItem(item)
             self.blur_region_items.append(item)
         for it in self.view.scene().items():
