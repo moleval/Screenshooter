@@ -51,6 +51,10 @@ class EditorView(QGraphicsView):
     def __init__(self, scene):
         super().__init__(scene)
         self.setViewportUpdateMode(QGraphicsView.SmartViewportUpdate)
+        # Полосы прокрутки не должны всплывать при временном расширении
+        # рабочей сцены: навигация выполняется колесом/средней кнопкой.
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.current_tool = None
         self.start_point = None
         self.temp_item = None
