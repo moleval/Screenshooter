@@ -115,6 +115,11 @@ class MouseInteractionManager:
 
         # Drawing tools
         if self.view.current_tool in ('rect', 'ellipse', 'arrow', 'line'):
+            sp = self.view.mapToScene(event.pos())
+            existing = self.view._interactive_item_at(sp)
+            if existing is not None and not self.view._is_background_item(existing):
+                return True
+
             if self.view._tool is not None:
                 sp = self.view.mapToScene(event.pos())
                 self.view.start_point = sp
