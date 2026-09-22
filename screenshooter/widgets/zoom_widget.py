@@ -13,7 +13,7 @@ class ZoomSlider(QSlider):
     def wheelEvent(self, event):
         if self.underMouse():
             delta = event.angleDelta().y()
-            step = 5
+            step = 1
             self.setValue(self.value() + (step if delta > 0 else -step))
             event.accept()
         else:
@@ -49,10 +49,10 @@ class ZoomWidget(QWidget):
         layout.addWidget(self.minus_btn)
 
         self.slider = ZoomSlider(Qt.Horizontal)
-        self.slider.setRange(100, 4000)
-        self.slider.setSingleStep(5)
-        self.slider.setPageStep(50)
-        self.slider.setValue(1000)
+        self.slider.setRange(10, 400)
+        self.slider.setSingleStep(1)
+        self.slider.setPageStep(10)
+        self.slider.setValue(100)
         self.slider.setFixedWidth(100)
         self.slider.setFixedHeight(24)
         self.slider.valueChanged.connect(self._on_slider_changed)
@@ -85,9 +85,9 @@ class ZoomWidget(QWidget):
         self.setFixedSize(self.sizeHint())
 
     def _on_slider_changed(self, value):
-        percent = value / 10.0
-        self.percent_edit.setText(f"{round(percent)}%")
-        self.zoomChanged.emit(percent)
+        percent = int(value)
+        self.percent_edit.setText(f"{percent}%")
+        self.zoomChanged.emit(float(percent))
 
     def zoom_in(self):
         """Увеличить масштаб на 10%."""
@@ -102,13 +102,13 @@ class ZoomWidget(QWidget):
         try:
             value = float(text)
             if 10 <= value <= 400:
-                self.slider.setValue(round(value * 10))
+                self.slider.setValue(round(value))
         except ValueError:
             pass
 
     def set_zoom(self, percent):
         self.slider.blockSignals(True)
         percent = max(10.0, min(400.0, float(percent)))
-        self.slider.setValue(round(percent * 10))
+        self.slider.setValue(round(percent))
         self.slider.blockSignals(False)
         self.percent_edit.setText(f"{int(percent + 0.5)}%")
