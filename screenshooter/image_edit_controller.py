@@ -142,6 +142,8 @@ class ImageEditController:
 
         self.view.setCursor(Qt.CrossCursor)
         self.view.setBackgroundBrush(self.view.normal_background_color)
+        if self.background_item is not None and not self._is_deleted(self.background_item):
+            self.view.setSceneRect(QRectF(self.background_item.pixmap().rect()))
         self.view.crop_mode_changed.emit(False)
         self.view._update_floating_widgets_visibility()
         self.crop_target_item = None
