@@ -46,8 +46,6 @@ class ManipulationController:
         self._drag_old_blur_state = None
 
         # Изменение размера вставленных изображений
-        if self.view.blur_controller.blur_regions:
-            self.view.blur_controller._force_blur_recompute()
         self._resizing_pasted_item = None
         self._resize_handle = None
         self._resize_start_rect = None
@@ -632,6 +630,8 @@ class ManipulationController:
         if old_scale != new_scale:
             self.view.history.push(
                 ResizePastedImageCommand(item, old_scale, new_scale))
+        if self.view.blur_controller.blur_regions:
+            self.view.blur_controller._force_blur_recompute()
         self._resizing_pasted_item = None
         self._resize_handle = None
         self._resize_start_rect = None
