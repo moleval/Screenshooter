@@ -47,13 +47,14 @@ class Exporter:
         self.view.blur_controller.hide_blur_regions_for_render()
         self.view.hide_pasted_image_handles_for_render()
 
-        target = bg_pixmap.rect()
-        img = QImage(target.size(), QImage.Format_ARGB32)
+        target = bg.sceneBoundingRect()
+        target_rect = target.toAlignedRect()
+        img = QImage(target_rect.size(), QImage.Format_ARGB32)
         img.fill(Qt.transparent)
         p = QPainter(img)
         p.setRenderHint(QPainter.Antialiasing)
         p.setRenderHint(QPainter.SmoothPixmapTransform)
-        self.scene.render(p, QRectF(img.rect()), QRectF(target))
+        self.scene.render(p, QRectF(img.rect()), QRectF(target_rect))
         p.end()
 
         # Возвращаем служебные элементы после рендера
