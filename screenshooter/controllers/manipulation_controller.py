@@ -545,6 +545,11 @@ class ManipulationController:
                 if isinstance(drag_item, PastedImageItem):
                     drag_item.show_handles()
 
+        # Когда объект упирается в край текущей sceneRect, расширяем
+        # только рабочую область. Это позволяет продолжить drag влево/вверх
+        # без скачка viewport; сама подложка по-прежнему перестраивается
+        # один раз после отпускания кнопки.
+        self.view.ensure_drag_scene_rect()
         self.view.scene().update()
         self.view._update_pasted_image_handles()
         return True
