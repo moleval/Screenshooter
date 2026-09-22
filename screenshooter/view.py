@@ -22,9 +22,10 @@ from .items.blur_region_item import BlurRegionItem
 from .widgets.zoom_widget import ZoomWidget
 from .widgets.text_format_widget import TextFormatWidget
 from .widgets.info_widget import InfoWidget
-from .widgets.layer_widget import LayerWidget
+from .widgets.mode_widgets import LayerModeWidget
 from .widgets.mode_widgets import (ShapeModeWidget, ShapeModeWidgetEllipse,
-                                   ShapeModeWidgetArrow, LineModeWidget)
+                                   ShapeModeWidgetArrow, LineModeWidget,
+                                   LayerModeWidget)
 from .history import (HistoryManager, AddItemCommand, RemoveItemCommand,
                       MoveItemCommand, MoveItemsCommand, ChangePenCommand,
                       AddPastedImageCommand, RemovePastedImageCommand,
@@ -109,7 +110,7 @@ class EditorView(QGraphicsView):
         self.info_widget = InfoWidget(self)
         self.info_widget.setVisible(True)
 
-        self.layer_widget = LayerWidget(self)
+        self.layer_widget = LayerModeWidget(self)
         self.layer_widget.setVisible(False)
         self.layer_widget.layerChanged.connect(self._on_layer_widget_changed)
 
@@ -845,7 +846,7 @@ class EditorView(QGraphicsView):
             return
 
         old_layers = [getattr(item, 'layer', 1) for item in selected]
-        layer = max(0, min(2, int(layer)))
+        layer = 1 if int(layer) == 1 else 2
         if all(old == layer for old in old_layers):
             return
 
