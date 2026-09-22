@@ -37,6 +37,26 @@ def _ensure_blur_scene():
         _blur_scene.addItem(_blur_item)
 
 
+def crop_pixmap_with_padding(pixmap: QPixmap, rect: QRectF, fill=Qt.white) -> QPixmap:
+    """Вырезает область, дополняя её белым цветом за пределами исходника."""
+    if pixmap.isNull() or rect.isEmpty():
+        return QPixmap()
+    width = max(1, int(round(rect.width())))
+    height = max(1, int(round(rect.height())))
+    result = QPixmap(width, height)
+    result.fill(fill)
+    painter = QPainter(result)
+    painter.setRenderHint(QPainter.SmoothPixmapTransform)
+    source = QRectF(pixmap.rect())
+    visible = rect.intersected(source)
+    if not visible.isEmpty():
+        target = QRectF(visible.left() - rect.left(),
+                        visible.top() - rect.top(),
+                        visible.width(), visible.height())
+        painter.drawPixmap(target, pixmap, visible)
+    painter.end()
+    return result
+
 def crop_pixmap(pixmap: QPixmap, rect: QRectF) -> QPixmap:
     if pixmap.isNull() or rect.isEmpty():
         return QPixmap()
