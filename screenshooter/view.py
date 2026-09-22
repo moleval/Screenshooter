@@ -366,6 +366,23 @@ class EditorView(QGraphicsView):
     def pasted_images(self):
         return self.pasted_image_controller.pasted_images
 
+    def expand_interaction_scene_rect(self):
+        """Расширяет только рабочую область сцены вокруг подложки."""
+        bg = self.image_editor.background_item
+        if bg is None or sip.isdeleted(bg) or bg.scene() is not self.scene():
+            return
+
+        bg_rect = bg.sceneBoundingRect()
+        scale = abs(self.transform().m11())
+        if scale < 0.001:
+            scale = 1.0
+        visible_w = max(1.0, self.viewport().width() / scale)
+        visible_h = max(1.0, self.viewport().height() / scale)
+        pad_x = max(1000.0, visible_w * 2.0)
+        pad_y = max(1000.0, visible_h * 2.0)
+        work_rect = bg_rect.adjusted(-pad_x, -pad_y, pad_x, pad_y)
+        self.setSceneRect(self.sceneRect().united(work_rect))
+
     def expand_background_to_content(self, margin=50, threshold=1):
         """Расширяет подложку белыми полями под вышедшие за неё объекты."""
         bg = self.image_editor.background_item
@@ -604,9 +621,6 @@ class EditorView(QGraphicsView):
             return
 
         if self.current_tool == 'text' and (li is None or self._is_background_item(li)):
-            if not self._is_point_inside_background(sp):
-                e.accept()
-                return
             self._deactivate_active_text()
             ti = TextItem(self, bg_color=self.current_text_bg)
             ti.setDefaultTextColor(QColor("#F9D556"))
@@ -740,6 +754,17 @@ class EditorView(QGraphicsView):
     def _apply_tool(self, t):
         self.current_tool = t
         self.setDragMode(QGraphicsView.NoDrag if t else QGraphicsView.RubberBandDrag)
+
+        # Временное рабочее поле вокруг подложки: элементы можно свободно
+        # создавать и перемещать за её пределами. Сама подложка меняется
+        # только после завершения операции.
+        if t:
+            self.expand_interaction_scene_rect()
+        else:
+            bg = self.image_editor.background_item
+            if (bg is not None and not sip.isdeleted(bg)
+                    and bg.scene() is self.scene()):
+                self.setSceneRect(bg.sceneBoundingRect())
 
     def set_tool(self, t):
         self._deactivate_active_text()
