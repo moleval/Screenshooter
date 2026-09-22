@@ -10,6 +10,10 @@ from ..utils import SelectAllLineEdit
 
 
 class ZoomSlider(QSlider):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.setCursor(Qt.ArrowCursor)
+
     def wheelEvent(self, event):
         if self.underMouse():
             delta = event.angleDelta().y()
@@ -49,6 +53,7 @@ class ZoomWidget(QWidget):
         layout.addWidget(self.minus_btn)
 
         self.slider = ZoomSlider(Qt.Horizontal)
+        self.slider.setCursor(Qt.ArrowCursor)
         self.slider.setRange(10, 400)
         self.slider.setSingleStep(1)
         self.slider.setPageStep(10)
