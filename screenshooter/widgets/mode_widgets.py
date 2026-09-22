@@ -152,10 +152,6 @@ class LayerModeWidget(BaseModeWidget):
         self.layer2_btn.setIcon(self.layer2_btn.icon())
         self.layer1_btn.setStyleSheet(self._button_style())
         self.layer2_btn.setStyleSheet(self._button_style())
-        self.button_group.buttonClicked.connect(
-            lambda button: self._set_mode(button.property("layer")))
-        self.layer1_btn.setProperty("layer", 1)
-        self.layer2_btn.setProperty("layer", 2)
         self._current_mode = 1
         self.layer1_btn.setChecked(True)
         self.setFixedSize(self.sizeHint())
