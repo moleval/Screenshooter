@@ -834,7 +834,7 @@ class ScreenshotApp(QMainWindow):
         item.setTransformationMode(Qt.SmoothTransformation)
 
         item.setAcceptedMouseButtons(Qt.NoButton)
-        item.setZValue(-1)
+        item.setZValue(-1000)
 
         self.scene.addItem(item)
         self.view.set_background_item(item)
