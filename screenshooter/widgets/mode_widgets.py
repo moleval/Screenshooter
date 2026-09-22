@@ -141,6 +141,8 @@ class LineModeWidget(BaseModeWidget):
 class LayerModeWidget(BaseModeWidget):
     """Две кнопки выбора слоя для изображения/размытия."""
 
+    layerChanged = pyqtSignal(int)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.layer1_btn = self._add_button(
@@ -173,6 +175,10 @@ class LayerModeWidget(BaseModeWidget):
                 border-radius: 4px;
             }
         """
+
+    def _set_mode(self, mode):
+        self._current_mode = 1 if int(mode) == 1 else 2
+        self.layerChanged.emit(self._current_mode)
 
     def set_current_mode(self, mode):
         mode = 1 if int(mode) == 1 else 2
