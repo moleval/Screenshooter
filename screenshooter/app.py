@@ -865,16 +865,28 @@ class ScreenshotApp(QMainWindow):
         self.view.setFocus()
         self.view.setTransform(transform)
 
-    def set_zoom(self, p):
+    def set_zoom(self, p, anchor_pos=None):
         self.user_zoomed = True
         self.view.auto_fit = False
-        scale = p / 100
+        p = max(10.0, min(400.0, float(p)))
+        scale = p / 100.0
+
+        # При масштабировании от Shift+колёсика сохраняем точку под курсором.
+        # Для кнопок/ползунка anchor_pos=None — сохраняется центр вида.
+        if anchor_pos is not None:
+            anchor_scene_pos = self.view.mapToScene(anchor_pos)
+        else:
+            anchor_scene_pos = self.view.mapToScene(
+                self.view.viewport().rect().center())
+
+        self.view.setTransformationAnchor(self.view.NoAnchor)
         self.view.resetTransform()
         self.view.scale(scale, scale)
+        self.view.centerOn(anchor_scene_pos)
         self.view.zoom_widget.set_zoom(p)
 
-    def _on_view_zoom_changed(self, p):
-        self.set_zoom(p)
+    def _on_view_zoom_changed(self, p, anchor_pos=None):
+        self.set_zoom(p, anchor_pos)
 
     def _on_scene_selection_changed(self):
         if sip.isdeleted(self.scene):
