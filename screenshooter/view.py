@@ -22,7 +22,6 @@ from .items.blur_region_item import BlurRegionItem
 from .widgets.zoom_widget import ZoomWidget
 from .widgets.text_format_widget import TextFormatWidget
 from .widgets.info_widget import InfoWidget
-from .widgets.mode_widgets import LayerModeWidget
 from .widgets.mode_widgets import (ShapeModeWidget, ShapeModeWidgetEllipse,
                                    ShapeModeWidgetArrow, LineModeWidget,
                                    LayerModeWidget)
