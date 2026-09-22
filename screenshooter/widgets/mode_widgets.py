@@ -163,7 +163,7 @@ class LayerModeWidget(BaseModeWidget):
             QPushButton {
                 background-color: transparent;
                 border: none;
-                font-weight: bold;
+                font-weight: normal;
                 font-size: 13px;
             }
             QPushButton:hover {
