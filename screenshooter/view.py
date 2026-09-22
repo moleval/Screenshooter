@@ -452,8 +452,10 @@ class EditorView(QGraphicsView):
     def expand_background_to_content(self, margin=50, threshold=1):
         """Расширяет подложку белыми полями под вышедшие за неё объекты.
 
-        Все границы считаются в координатах сцены. Это важно для левой/верхней
-        стороны: локальные координаты QPixmap нельзя смешивать с sceneBoundingRect().
+        Подложка расширяется именно в сторону выхода объекта:
+        при выходе влево/вверх двигается сама подложка, а объект остаётся
+        в прежних координатах сцены. Это не даёт левому/верхнему расширению
+        превращаться в рост canvas вправо/вниз.
         """
         bg = self.image_editor.background_item
         if bg is None or sip.isdeleted(bg) or bg.scene() is not self.scene():
@@ -523,32 +525,20 @@ class EditorView(QGraphicsView):
             bp.end()
             self.blur_controller.blur_base_pixmap = blur_base
 
-        shift = QPointF(left_extra, top_extra)
-
-        for item in self.scene().items():
-            if item is bg or self._is_background_item(item):
-                continue
-            if isinstance(item, BlurRegionItem):
-                continue
-            try:
-                item.setPos(item.pos() + shift)
-            except RuntimeError:
-                pass
-
-        for blur_item in self.blur_controller.blur_region_items:
-            if blur_item is None or sip.isdeleted(blur_item):
-                continue
-            blur_item.setRect(blur_item.rect().translated(shift))
-
-        for idx, rect in enumerate(self.blur_controller.blur_regions):
-            self.blur_controller.blur_regions[idx] = rect.translated(shift)
+        # При расширении слева/сверху двигаем только подложку.
+        # Все объекты остаются в своих сценовых координатах, поэтому их
+        # положение относительно курсора/экрана не меняется.
+        bg.setPos(
+            bg.pos() + QPointF(-left_extra, -top_extra)
+        )
 
         bg.setPixmap(new_pixmap)
         bg.update()
         self.blur_controller._invalidate_blur_cache()
         self.blur_controller._recompute_blurred_pixmap()
 
-        self.set_scene_rect_preserving_view(QRectF(0, 0, new_width, new_height))
+        new_bg_rect = bg.sceneBoundingRect()
+        self.set_scene_rect_preserving_view(new_bg_rect)
         self.update_resolution_from_background()
         self.scene().update()
         return True
