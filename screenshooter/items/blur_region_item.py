@@ -40,7 +40,7 @@ class BlurRegionItem(QGraphicsRectItem):
         if not self.blurred_pixmap.isNull():
             painter.save()
             painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
-            painter.drawPixmap(self.boundingRect().toRect(), self.blurred_pixmap)
+            painter.drawPixmap(self.rect().toRect(), self.blurred_pixmap)
             painter.restore()
 
         painter.save()
