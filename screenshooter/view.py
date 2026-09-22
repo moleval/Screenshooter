@@ -64,6 +64,7 @@ class EditorView(QGraphicsView):
         self.horizontalScrollBar().setCursor(Qt.ArrowCursor)
         self.verticalScrollBar().setCursor(Qt.ArrowCursor)
 
+        self._interaction_dragging = False
         self.current_tool = None
         self.start_point = None
         self.temp_item = None
