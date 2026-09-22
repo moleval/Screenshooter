@@ -851,6 +851,8 @@ class EditorView(QGraphicsView):
 
         self.history.push(ChangeLayerCommand(selected, old_layers, layer))
         self.layer_widget.set_current_mode(layer)
+        if any(isinstance(item, (PastedImageItem, BlurRegionItem)) for item in selected):
+            self.blur_controller._force_blur_recompute()
 
     def update_layer_widget(self):
         selected = [
