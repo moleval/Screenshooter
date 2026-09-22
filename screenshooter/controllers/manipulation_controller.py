@@ -405,10 +405,10 @@ class ManipulationController:
                 li.pos() if not isinstance(li, BlurRegionItem)
                 else li.rect().topLeft())
 
-            # Даём перетаскиванию большую временную рабочую область
-            # один раз в начале. Она не влияет на подложку и позволяет
-            # полностью вывести объект за левый/верхний край.
-            self.view.prepare_drag_scene_rect(event.pos())
+            # Временную рабочую область расширяем только после
+            # фактического начала движения в _handle_drag_move().
+            # Само выделение не должно создавать sceneRect и ползунки.
+            self._drag_scene_prepared = False
             self._drag_start_scroll = QPoint(
                 self.view.horizontalScrollBar().value(),
                 self.view.verticalScrollBar().value())
