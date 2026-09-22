@@ -7,7 +7,7 @@
 
 from PyQt5 import sip
 from PyQt5.QtCore import Qt, QRectF, QPointF, QTimer
-from PyQt5.QtGui import QPixmap
+from PyQt5.QtGui import QPixmap, QImage, QPainter
 
 from ..constants import MIN_RECT_SIZE
 from ..items.blur_region_item import BlurRegionItem
@@ -264,73 +264,107 @@ class BlurController:
         radius, scale = self._get_preview_settings()
         self._do_blur_recompute(radius=radius, preview=True, preview_scale=scale)
 
+    def _render_blur_source(self, item):
+        """Рендерит только содержимое слоёв ниже конкретной зоны размытия."""
+        rect = item.sceneBoundingRect().normalized()
+        width = max(1, int(round(rect.width())))
+        height = max(1, int(round(rect.height())))
+
+        image = QImage(width, height, QImage.Format_ARGB32_Premultiplied)
+        image.fill(Qt.transparent)
+
+        scene_items = list(self.view.scene().items())
+        hidden = []
+        z_limit = item.zValue()
+
+        for scene_item in scene_items:
+            if scene_item is item:
+                scene_item.setVisible(False)
+                hidden.append(scene_item)
+                continue
+            if scene_item.zValue() >= z_limit:
+                if scene_item.isVisible():
+                    scene_item.setVisible(False)
+                    hidden.append(scene_item)
+
+        painter = QPainter(image)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
+        self.view.scene().render(
+            painter,
+            QRectF(0, 0, width, height),
+            rect,
+            Qt.KeepAspectRatioByExpanding,
+        )
+        painter.end()
+
+        for scene_item in hidden:
+            scene_item.setVisible(True)
+
+        return QPixmap.fromImage(image)
+
     def _do_blur_recompute(self, radius=10.0, moving_index=None,
                            preview=False, preview_scale=None):
-        if self.blur_base_pixmap is None:
-            return
         background_item = self.view.image_editor.background_item
         if background_item is None or self._is_deleted(background_item):
             return
 
         if not self.blur_regions:
-            background_item.prepareGeometryChange()
-            background_item.setPixmap(self.blur_base_pixmap)
-            background_item.update()
+            if self.blur_base_pixmap is not None:
+                background_item.prepareGeometryChange()
+                background_item.setPixmap(self.blur_base_pixmap)
+                background_item.update()
             self.view.viewport().update()
             return
 
-        if preview_scale is None:
-            preview_scale = self.PREVIEW_SCALE
-
-        if preview:
-            small_w = max(1, self.blur_base_pixmap.width() // preview_scale)
-            small_h = max(1, self.blur_base_pixmap.height() // preview_scale)
-            scale_x = small_w / self.blur_base_pixmap.width()
-            scale_y = small_h / self.blur_base_pixmap.height()
-
-            if (moving_index is not None and
-                    self._blur_cache_index == moving_index and
-                    self._blur_cache_pixmap is not None):
-                pixmap = QPixmap(self._blur_cache_pixmap)
-            else:
-                pixmap = self.blur_base_pixmap.scaled(
-                    small_w, small_h, Qt.IgnoreAspectRatio, Qt.FastTransformation)
-                for idx, rect in enumerate(self.blur_regions):
-                    if idx == moving_index:
-                        continue
-                    local_rect = self._scene_rect_to_pixmap_rect(rect)
-                    small_rect = QRectF(
-                        local_rect.x() * scale_x, local_rect.y() * scale_y,
-                        local_rect.width() * scale_x,
-                        local_rect.height() * scale_y)
-                    pixmap = blur_region(pixmap, small_rect, radius=radius)
-
-                if moving_index is not None:
-                    self._blur_cache_pixmap = QPixmap(pixmap)
-                    self._blur_cache_index = moving_index
-
-            if moving_index is not None and moving_index < len(self.blur_regions):
-                rect = self.blur_regions[moving_index]
-                local_rect = self._scene_rect_to_pixmap_rect(rect)
-                small_rect = QRectF(
-                    local_rect.x() * scale_x, local_rect.y() * scale_y,
-                    local_rect.width() * scale_x,
-                    local_rect.height() * scale_y)
-                pixmap = blur_region(pixmap, small_rect, radius=radius)
-
-            pixmap = pixmap.scaled(
-                self.blur_base_pixmap.width(),
-                self.blur_base_pixmap.height(),
-                Qt.IgnoreAspectRatio, Qt.FastTransformation)
-        else:
-            pixmap = QPixmap(self.blur_base_pixmap)
-            for rect in self.blur_regions:
-                local_rect = self._scene_rect_to_pixmap_rect(rect)
-                pixmap = blur_region(pixmap, local_rect, radius=radius)
-
+        # Размытие является отдельным графическим слоем. Оно не меняет
+        # пиксмап подложки: так оно может размывать изображения, находящиеся
+        # на более низком пользовательском слое.
         background_item.prepareGeometryChange()
-        background_item.setPixmap(pixmap)
+        if self.blur_base_pixmap is not None:
+            background_item.setPixmap(self.blur_base_pixmap)
         background_item.update()
+
+        items = [
+            item for item in self.blur_region_items
+            if not self._is_deleted(item) and item.scene() is self.view.scene()
+        ]
+
+        # Сначала нижние слои: верхний blur может использовать уже отрисованный
+        # результат нижнего blur.
+        items.sort(key=lambda it: it.zValue())
+
+        for item in items:
+            source = self._render_blur_source(item)
+            if source.isNull():
+                item.set_blurred_pixmap(QPixmap())
+                continue
+
+            if preview and preview_scale and preview_scale > 1:
+                sw = max(1, source.width() // preview_scale)
+                sh = max(1, source.height() // preview_scale)
+                source = source.scaled(
+                    sw, sh, Qt.IgnoreAspectRatio, Qt.FastTransformation)
+                blurred = blur_region(
+                    source,
+                    QRectF(0, 0, source.width(), source.height()),
+                    radius=radius,
+                )
+                blurred = blurred.scaled(
+                    max(1, int(round(item.sceneBoundingRect().width()))),
+                    max(1, int(round(item.sceneBoundingRect().height()))),
+                    Qt.IgnoreAspectRatio,
+                    Qt.FastTransformation,
+                )
+            else:
+                blurred = blur_region(
+                    source,
+                    QRectF(0, 0, source.width(), source.height()),
+                    radius=radius,
+                )
+
+            item.set_blurred_pixmap(blurred)
+
         self.view.viewport().update()
 
     def _schedule_blur_recompute(self, moving_index=None):
