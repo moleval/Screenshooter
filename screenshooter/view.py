@@ -993,19 +993,28 @@ class EditorView(QGraphicsView):
     # Работа с элементами
     # ==============================================================
     def _interactive_item_at(self, scene_pos):
-        """Возвращает верхний реально выбираемый объект в точке сцены.
+        """Возвращает объект, с которым должен взаимодействовать курсор.
 
-        QGraphicsScene.itemAt() может вернуть служебные ручки изменения
-        размера, которые находятся выше всех объектов. Для выбора картинки
-        и размытия нужен именно верхний selectable-объект с учётом z-order.
+        Сначала учитывается уже выбранная зона размытия: аннотация поверх
+        blur не должна внезапно перехватывать его перетаскивание/выделение.
+        Для нового выбора сохраняется обычный z-order: аннотации (z=0)
+        остаются выше изображений/blur.
         """
+        items = []
         for item in self.scene().items(QPointF(scene_pos)):
             if self._is_background_item(item):
                 continue
             if not (item.flags() & QGraphicsItem.ItemIsSelectable):
                 continue
-            return self._item_for_manipulation(item)
-        return None
+            items.append(self._item_for_manipulation(item))
+
+        # Уже выбранный blur имеет приоритет над перекрывающей его
+        # аннотацией. Это устраняет потерю выделения и рывки при drag.
+        for item in items:
+            if isinstance(item, BlurRegionItem) and item.isSelected():
+                return item
+
+        return items[0] if items else None
 
     def _item_for_manipulation(self, item):
         d = self._dimension_parent(item)
