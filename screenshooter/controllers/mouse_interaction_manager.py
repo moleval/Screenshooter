@@ -97,8 +97,6 @@ class MouseInteractionManager:
                 if self.view.active_text_item and self.view.active_text_item._editable:
                     self.view._deactivate_active_text()
                 if li is None or self.view._is_background_item(li):
-                    if not self.view._is_point_inside_background(sp):
-                        return True
                     if self.view._first_click_after_activation:
                         ti = TextItem(self.view, bg_color=self.view.current_text_bg)
                         ti.setDefaultTextColor(QColor("#F9D556"))
@@ -119,8 +117,6 @@ class MouseInteractionManager:
         if self.view.current_tool in ('rect', 'ellipse', 'arrow', 'line'):
             if self.view._tool is not None:
                 sp = self.view.mapToScene(event.pos())
-                if not self.view._is_point_inside_background(sp):
-                    return True
                 self.view.start_point = sp
                 self.view.temp_item = self.view._tool.start_draw(sp)
                 if self.view.temp_item:
@@ -151,12 +147,6 @@ class MouseInteractionManager:
                 self.view.current_tool not in ('text',)):
             # Обновление курсора теперь выполняется в EditorView после менеджера
             sp = self.view.mapToScene(event.pos())
-            if self.view.image_editor.background_item is not None:
-                bg_rect = self.view.image_editor.background_item.mapRectToScene(
-                    QRectF(self.view.image_editor.background_item.pixmap().rect()))
-                if not bg_rect.contains(sp):
-                    sp.setX(max(bg_rect.left(), min(bg_rect.right(), sp.x())))
-                    sp.setY(max(bg_rect.top(), min(bg_rect.bottom(), sp.y())))
             self.view._tool.update_draw(self.view.temp_item, sp, event.modifiers())
             return True
 
@@ -187,7 +177,10 @@ class MouseInteractionManager:
             if self.view._tool.finish_draw(self.view.temp_item):
                 self.view.scene().clearSelection()
                 self.view.temp_item.setSelected(True)
+                self.view.expand_background_to_content()
                 self.view.history.push(AddItemCommand(self.view.scene(), self.view.temp_item))
+                if self.view.background_item is not None:
+                    self.view.setSceneRect(self.view.background_item.sceneBoundingRect())
             else:
                 self.view.scene().removeItem(self.view.temp_item)
             self.view.temp_item = None
