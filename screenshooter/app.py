@@ -128,6 +128,7 @@ class ScreenshotApp(QMainWindow):
         self.scene = QGraphicsScene()
         self.view = EditorView(self.scene)
         self.view.zoomChangedByWheel.connect(self._on_view_zoom_changed)
+        self.view.zoom_widget.zoomChanged.connect(self.set_zoom)
 
         self.capture = ScreenCapture(self)
         self.exporter = Exporter(self.view, self.scene, self.settings)
