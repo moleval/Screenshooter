@@ -151,9 +151,24 @@ class EditorView(QGraphicsView):
         self.zoom_out_shortcut = QShortcut(QKeySequence(Qt.Key_Minus), self)
         self.zoom_out_shortcut.activated.connect(self._on_zoom_out_shortcut)
 
+        # Горячая клавиша разворачивания/восстановления окна.
+        # Shift+Enter не должен зависеть от состояния фокуса дочерних виджетов.
+        self.fullscreen_shortcut = QShortcut(
+            QKeySequence(Qt.SHIFT + Qt.Key_Return), self)
+        self.fullscreen_shortcut.setContext(Qt.ApplicationShortcut)
+        self.fullscreen_shortcut.activated.connect(self._on_fullscreen_shortcut)
+
         # Горячая клавиша вписывания изображения в окно
         self.fit_shortcut = QShortcut(QKeySequence(Qt.ALT + Qt.Key_Return), self)
         self.fit_shortcut.activated.connect(self._on_fit_shortcut)
+
+    def _on_fullscreen_shortcut(self):
+        """Разворачивает окно или возвращает его к прежнему размеру."""
+        window = self.window()
+        if window.isMaximized():
+            window.showNormal()
+        else:
+            window.showMaximized()
 
     # ==============================================================
     # Вспомогательные
