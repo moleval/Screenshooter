@@ -630,11 +630,6 @@ class EditorView(QGraphicsView):
     # ==============================================================
     def _update_blur_region_handles(self):
         try:
-            # В режиме рисования аннотации ручки не должны оставаться
-            # активными поверх рабочего инструмента.
-            if self.current_tool is not None:
-                self.blur_controller._clear_active_blur()
-                return
             if self.blur_controller.blur_outside_mode:
                 return
             if self.blur_controller.blur_interaction is not None:
