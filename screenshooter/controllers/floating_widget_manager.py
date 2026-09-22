@@ -401,7 +401,8 @@ class FloatingWidgetManager:
         # После завершения редактирования текста фиксируем новую границу,
         # если текст оказался за пределами исходной подложки.
         view.expand_background_to_content(margin=0)
-        if view.background_item is not None:
-            view.setSceneRect(view.background_item.sceneBoundingRect())
+        # expand_background_to_content() сам синхронизирует sceneRect
+        # с сохранением текущего вида; прямой setSceneRect здесь вызывал
+        # скачок viewport после завершения редактирования текста.
 
         self.update_floating_widgets_visibility()
