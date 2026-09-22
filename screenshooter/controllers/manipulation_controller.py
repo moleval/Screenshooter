@@ -638,7 +638,8 @@ class ManipulationController:
         new_canvas = self.view.get_background_canvas_state()
         new_blur_state = self.view.blur_controller._get_blur_state()
 
-        blur_changed = old_blur_state != new_blur_state
+        blur_changed = (old_blur_state is not None and new_blur_state is not None and
+                        old_blur_state.get('rects') != new_blur_state.get('rects'))
         positions_changed = old_positions != new_positions
         if positions_changed or canvas_changed or blur_changed:
             old_pixmap, old_pos = old_canvas if old_canvas else (None, None)
