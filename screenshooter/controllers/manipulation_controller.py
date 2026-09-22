@@ -144,7 +144,7 @@ class ManipulationController:
             item = self._last_cursor_item
         else:
             sp = view.mapToScene(pos)
-            item = view.scene().itemAt(sp, view.transform())
+            item = view._interactive_item_at(sp)
             self._last_cursor_pos = pos
             self._last_cursor_item = item
 
@@ -239,7 +239,7 @@ class ManipulationController:
         is_shift = bool(modifiers & Qt.ShiftModifier)
 
         sp = self.view.mapToScene(event.pos())
-        item = self.view.scene().itemAt(sp, self.view.transform())
+        item = self.view._interactive_item_at(sp)
         li = self.view._item_for_manipulation(item) if item else None
 
         skip_blur_handler = False
@@ -361,7 +361,7 @@ class ManipulationController:
             return False
 
         sp = self.view.mapToScene(event.pos())
-        item = self.view.scene().itemAt(sp, self.view.transform())
+        item = self.view._interactive_item_at(sp)
         if isinstance(item, TextItem) and item._editable:
             return False
 
@@ -426,7 +426,7 @@ class ManipulationController:
         if ((self.right_click_temp_pointer or self.modifier_temp_pointer)
                 and self.view.current_tool is None):
             sp = self.view.mapToScene(event.pos())
-            item = self.view.scene().itemAt(sp, self.view.transform())
+            item = self.view._interactive_item_at(sp)
             li = self.view._item_for_manipulation(item) if item else None
 
             if li is None or self.view._is_background_item(li):
