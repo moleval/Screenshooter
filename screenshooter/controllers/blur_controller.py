@@ -671,6 +671,7 @@ class BlurController:
             item = self.blur_region_items[self.active_blur_index]
             handle_id = item.handles.hit_test(QPointF(event.pos()))
             if handle_id:
+                # Ручки активного blur имеют приоритет над любым объектом.
                 self.blur_outside_mode = True
                 self.blur_outside_interaction = 'resizing'
                 self.blur_resize_handle = handle_id
@@ -679,7 +680,12 @@ class BlurController:
                     self.view.scene().clearSelection()
                     item.setSelected(True)
                 return True
-            if item.rect().contains(sp):
+
+            # Сам прямоугольник активного blur НЕ должен перехватывать клик,
+            # если поверх него находится картинка/аннотация. В таком случае
+            # выбор обязан идти по фактическому верхнему selectable-item.
+            top_item = self.view._interactive_item_at(sp)
+            if top_item is item and item.rect().contains(sp):
                 self.blur_outside_mode = True
                 self.blur_outside_interaction = 'moving'
                 self.blur_move_start = sp
