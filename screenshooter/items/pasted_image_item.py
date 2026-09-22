@@ -21,14 +21,22 @@ class PastedImageItem(QGraphicsPixmapItem):
         self.view = view
         self.original_pixmap = pixmap
         self.scale = 1.0
+        self.layer = 1
 
         # Перемещением управляет ManipulationController, чтобы не смешивать
         # его с автоматическим drag-механизмом QGraphicsItem.
         self.setFlag(QGraphicsPixmapItem.ItemIsSelectable, True)
         self.setTransformationMode(Qt.SmoothTransformation)
-        self.setZValue(500)
+        self.set_layer(self.layer)
 
         self.handles = None
+
+    def set_layer(self, layer: int):
+        """Устанавливает пользовательский слой изображения (0 — верх, 2 — ниже)."""
+        self.layer = max(0, min(2, int(layer)))
+        # Аннотации имеют z=0. Изображения на слое 1/2 должны быть ниже них.
+        self.setZValue(-100 * self.layer)
+        self.update()
 
     def set_image_scale(self, scale: float):
         if scale <= 0:
