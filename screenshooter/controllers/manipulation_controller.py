@@ -400,6 +400,10 @@ class ManipulationController:
             self._drag_start_item_pos = (
                 li.pos() if not isinstance(li, BlurRegionItem)
                 else li.rect().topLeft())
+
+            # Во время перетаскивания границы подложки не ограничивают элемент.
+            self.view.expand_interaction_scene_rect()
+
             self._drag_old_background = self.view.get_background_canvas_state()
             self._drag_old_blur_state = self.view.blur_controller._get_blur_state()
             return True
@@ -524,17 +528,6 @@ class ManipulationController:
             if isinstance(drag_item, BlurRegionItem):
                 old_rect = self._drag_old_rects[idx]
                 new_rect = old_rect.translated(delta)
-                if self.view.image_editor.background_item is not None:
-                    image_rect = QRectF(
-                        self.view.image_editor.background_item.pixmap().rect())
-                    if new_rect.left() < image_rect.left():
-                        new_rect.moveLeft(image_rect.left())
-                    elif new_rect.right() > image_rect.right():
-                        new_rect.moveRight(image_rect.right())
-                    if new_rect.top() < image_rect.top():
-                        new_rect.moveTop(image_rect.top())
-                    elif new_rect.bottom() > image_rect.bottom():
-                        new_rect.moveBottom(image_rect.bottom())
                 drag_item.setRect(new_rect)
                 try:
                     idx_blur = self.view.blur_controller.blur_region_items.index(drag_item)
@@ -548,28 +541,6 @@ class ManipulationController:
             else:
                 old_pos = self._drag_old_positions[idx]
                 new_pos = old_pos + delta
-                if self.view.image_editor.background_item is not None:
-                    image_rect = QRectF(
-                        self.view.image_editor.background_item.pixmap().rect())
-                    item_rect = drag_item.boundingRect()
-                    proposed_rect = QRectF(
-                        new_pos + item_rect.topLeft(),
-                        new_pos + item_rect.bottomRight())
-                    if proposed_rect.left() < image_rect.left():
-                        new_pos.setX(new_pos.x() + (
-                            image_rect.left() - proposed_rect.left()))
-                    elif proposed_rect.right() > image_rect.right():
-                        new_pos.setX(new_pos.x() - (
-                            proposed_rect.right() - image_rect.right()))
-                    proposed_rect = QRectF(
-                        new_pos + item_rect.topLeft(),
-                        new_pos + item_rect.bottomRight())
-                    if proposed_rect.top() < image_rect.top():
-                        new_pos.setY(new_pos.y() + (
-                            image_rect.top() - proposed_rect.top()))
-                    elif proposed_rect.bottom() > image_rect.bottom():
-                        new_pos.setY(new_pos.y() - (
-                            proposed_rect.bottom() - image_rect.bottom()))
                 drag_item.setPos(new_pos)
                 if isinstance(drag_item, PastedImageItem):
                     drag_item.show_handles()
