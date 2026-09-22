@@ -760,10 +760,26 @@ class ScreenshotApp(QMainWindow):
     # Захват экрана — делегирование в ScreenCapture
     # --------------------------------------------------------------
     def capture_screen(self, screen=None):
-        if self._hotkey_manager is not None and screen is not None:
-            self._hotkey_manager.capture_specific_screen(screen)
+        """Снимок выбранного экрана вставляется в текущую подложку."""
+        if screen is None:
+            self.capture.capture_screen(screen)
             return
-        self.capture.capture_screen(screen)
+
+        hotkey_manager = self._hotkey_manager
+        if hotkey_manager is not None:
+            hotkey_manager.capture_specific_screen_into_window(screen, self)
+            return
+
+        # Запасной путь: если менеджер горячих клавиш ещё не подключён,
+        # снимаем экран напрямую и добавляем его как обычное изображение.
+        pixmap = screen.grabWindow(0)
+        if pixmap.isNull():
+            return
+
+        if self.view.background_item is None or sip.isdeleted(self.view.background_item):
+            self.view.set_background_from_pixmap(pixmap)
+        else:
+            self.view.add_pasted_image(pixmap)
 
     def capture_monitor(self):
         if self.capture.is_capturing():
