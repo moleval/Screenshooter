@@ -407,6 +407,8 @@ class EditorView(QGraphicsView):
         for item in self.scene().items():
             if item is bg or self._is_background_item(item):
                 continue
+            if isinstance(item, BlurRegionItem):
+                continue
             try:
                 item.setPos(item.pos() + shift)
             except RuntimeError:
