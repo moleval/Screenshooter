@@ -92,11 +92,11 @@ class ZoomWidget(QWidget):
 
     def zoom_in(self):
         """Увеличить масштаб на 10%."""
-        self.slider.setValue(self.slider.value() + 50)
+        self.slider.setValue(self.slider.value() + 10)
 
     def zoom_out(self):
         """Уменьшить масштаб на 10%."""
-        self.slider.setValue(self.slider.value() - 50)
+        self.slider.setValue(self.slider.value() - 10)
 
     def _on_edit(self):
         text = self.percent_edit.text().replace('%', '')
