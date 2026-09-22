@@ -26,7 +26,7 @@ class BlurRegionItem(QGraphicsRectItem):
 
     def set_layer(self, layer: int):
         """Устанавливает пользовательский слой зоны размытия."""
-        self.layer = max(0, min(2, int(layer)))
+        self.layer = 1 if int(layer) == 1 else 2
         self.setZValue(-100 * self.layer)
         self.update()
 
