@@ -605,7 +605,7 @@ class ManipulationController:
 
         old_canvas = self._drag_old_background
         old_blur_state = self._drag_old_blur_state
-        canvas_changed = self.view.expand_background_to_content()
+        canvas_changed = self.view.expand_background_to_content(margin=0)
         new_canvas = self.view.get_background_canvas_state()
         new_blur_state = self.view.blur_controller._get_blur_state()
 
