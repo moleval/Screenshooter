@@ -408,12 +408,12 @@ class EditorView(QGraphicsView):
         work_rect = bg_rect.adjusted(-pad_x, -pad_y, pad_x, pad_y)
         self.set_scene_rect_preserving_view(self.sceneRect().united(work_rect))
 
-    def prepare_drag_scene_rect(self):
-        """Даёт drag временную рабочую область вокруг подложки.
+    def prepare_drag_scene_rect(self, cursor_pos=None):
+        """Расширяет временную рабочую область для перетаскивания.
 
-        Подложка не меняется. SceneRect расширяется один раз в начале
-        перетаскивания, поэтому мышь может увести весь объект за любой край,
-        включая левый и верхний, без упора в границу исходной sceneRect.
+        При переданной позиции курсора сохраняется именно точка сцены под
+        курсором. Это предотвращает скачок при изменении scrollbars, особенно
+        при начале движения объекта влево или вверх.
         """
         bg = self.image_editor.background_item
         if bg is None or sip.isdeleted(bg) or bg.scene() is not self.scene():
@@ -426,17 +426,28 @@ class EditorView(QGraphicsView):
 
         visible_w = max(1.0, self.viewport().width() / scale)
         visible_h = max(1.0, self.viewport().height() / scale)
-
-        # Запас значительно больше типичного размера аннотации/картинки.
-        # При необходимости sceneRect потом всё равно восстанавливается
-        # до реальной подложки после отпускания кнопки.
         pad_x = max(5000.0, visible_w * 4.0)
         pad_y = max(5000.0, visible_h * 4.0)
         work_rect = bg_rect.adjusted(-pad_x, -pad_y, pad_x, pad_y)
+        new_rect = self.sceneRect().united(work_rect)
 
-        self.set_scene_rect_preserving_view(
-            self.sceneRect().united(work_rect)
-        )
+        if cursor_pos is None:
+            self.set_scene_rect_preserving_view(new_rect)
+            return
+
+        anchor_before = self.mapToScene(cursor_pos)
+        self.setSceneRect(new_rect)
+        anchor_after = self.mapToScene(cursor_pos)
+
+        dx = anchor_before.x() - anchor_after.x()
+        dy = anchor_before.y() - anchor_after.y()
+        if abs(dx) > 0.0001 or abs(dy) > 0.0001:
+            self.horizontalScrollBar().setValue(
+                self.horizontalScrollBar().value() - int(round(dx * scale))
+            )
+            self.verticalScrollBar().setValue(
+                self.verticalScrollBar().value() - int(round(dy * scale))
+            )
 
     def expand_background_to_content(self, margin=50, threshold=1):
         """Расширяет подложку белыми полями под вышедшие за неё объекты.
