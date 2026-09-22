@@ -408,6 +408,19 @@ class BlurController:
 
             item.set_blurred_pixmap(blurred)
 
+        # Аннотации могут временно перекрывать blur. После их ухода
+        # существующий BlurRegionItem должен быть явно инвалидирован,
+        # иначе Qt иногда оставляет старую dirty-region и новый blur
+        # случайно "оживляет" старые зоны.
+        scene = self.view.scene()
+        for blur_item in items:
+            if not self._is_deleted(blur_item):
+                blur_item.update()
+        try:
+            scene.invalidate(scene.sceneRect())
+        except (RuntimeError, AttributeError):
+            pass
+        scene.update()
         self.view.viewport().update()
 
     def _schedule_blur_recompute(self, moving_index=None):
