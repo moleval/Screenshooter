@@ -265,7 +265,13 @@ class BlurController:
         self._do_blur_recompute(radius=radius, preview=True, preview_scale=scale)
 
     def _render_blur_source(self, item):
-        """Рендерит только содержимое слоёв ниже конкретной зоны размытия."""
+        """Рендерит состав слоёв, которые находятся НИЖЕ данного blur.
+
+        Не полагаемся только на zValue при построении источника размытия:
+        пользовательский слой является семантическим уровнем, поэтому
+        изображение с layer=2 обязано попасть в источник blur layer=1.
+        Одновременно объекты layer=1 и все аннотации layer=0 исключаются.
+        """
         rect = item.sceneBoundingRect().normalized()
         width = max(1, int(round(rect.width())))
         height = max(1, int(round(rect.height())))
@@ -273,33 +279,53 @@ class BlurController:
         image = QImage(width, height, QImage.Format_ARGB32_Premultiplied)
         image.fill(Qt.transparent)
 
+        current_layer = int(getattr(item, 'layer', 1))
         scene_items = list(self.view.scene().items())
         hidden = []
-        z_limit = item.zValue()
 
         for scene_item in scene_items:
             if scene_item is item:
-                scene_item.setVisible(False)
-                hidden.append(scene_item)
+                if scene_item.isVisible():
+                    scene_item.setVisible(False)
+                    hidden.append(scene_item)
                 continue
-            if scene_item.zValue() >= z_limit:
+
+            # Подложка всегда является источником.
+            if scene_item is self.view.image_editor.background_item:
+                continue
+
+            if isinstance(scene_item, (BlurRegionItem,)):
+                item_layer = int(getattr(scene_item, 'layer', 1))
+                include = item_layer > current_layer
+            else:
+                # Для вставленных картинок layer=1/2. Все остальные
+                # аннотации считаются верхним слоем 0 и не попадают в blur.
+                item_layer = getattr(scene_item, 'layer', None)
+                if item_layer is not None:
+                    include = int(item_layer) > current_layer
+                else:
+                    include = False
+
+            if not include:
                 if scene_item.isVisible():
                     scene_item.setVisible(False)
                     hidden.append(scene_item)
 
-        painter = QPainter(image)
-        painter.setRenderHint(QPainter.Antialiasing, True)
-        painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
-        self.view.scene().render(
-            painter,
-            QRectF(0, 0, width, height),
-            rect,
-            Qt.IgnoreAspectRatio,
-        )
-        painter.end()
-
-        for scene_item in hidden:
-            scene_item.setVisible(True)
+        try:
+            painter = QPainter(image)
+            painter.setRenderHint(QPainter.Antialiasing, True)
+            painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
+            self.view.scene().render(
+                painter,
+                QRectF(0, 0, width, height),
+                rect,
+                Qt.IgnoreAspectRatio,
+            )
+            painter.end()
+        finally:
+            for scene_item in hidden:
+                if not self._is_deleted(scene_item):
+                    scene_item.setVisible(True)
 
         return QPixmap.fromImage(image)
 
