@@ -37,6 +37,7 @@ class ManipulationController:
         self._drag_old_positions = []
         self._drag_old_rects = []
         self._drag_start_scene_pos = QPointF()
+        self._drag_start_view_pos = QPoint()
         self._drag_start_item_pos = QPointF()
         self._drag_blur_needs_recompute = False
         self._drag_old_background = None
@@ -397,6 +398,7 @@ class ManipulationController:
                     self._drag_old_rects.append(None)
 
             self._drag_start_scene_pos = sp
+            self._drag_start_view_pos = QPoint(event.pos())
             self._drag_start_item_pos = (
                 li.pos() if not isinstance(li, BlurRegionItem)
                 else li.rect().topLeft())
@@ -516,8 +518,13 @@ class ManipulationController:
         if not self._drag_items:
             return False
 
-        current_scene_pos = self.view.mapToScene(event.pos())
-        delta = current_scene_pos - self._drag_start_scene_pos
+        # Используем смещение курсора в viewport, а не повторный mapToScene().
+        # Это исключает насыщение координат при выходе через левый/верхний край.
+        scale = abs(self.view.transform().m11())
+        if scale < 0.0001:
+            scale = 1.0
+        view_delta = event.pos() - self._drag_start_view_pos
+        delta = QPointF(view_delta.x() / scale, view_delta.y() / scale)
 
         if event.modifiers() & Qt.ShiftModifier:
             if abs(delta.x()) > abs(delta.y()):
