@@ -366,6 +366,70 @@ class EditorView(QGraphicsView):
     def pasted_images(self):
         return self.pasted_image_controller.pasted_images
 
+    def expand_background_to_content(self, margin=50, threshold=1):
+        """Расширяет подложку белыми полями под вышедшие за неё объекты."""
+        bg = self.image_editor.background_item
+        if bg is None or sip.isdeleted(bg) or bg.scene() is not self.scene():
+            return False
+        old_pixmap = bg.pixmap()
+        if old_pixmap.isNull():
+            return False
+        bg_rect = QRectF(0, 0, old_pixmap.width(), old_pixmap.height())
+        content_rect = QRectF(bg_rect)
+        for item in self.scene().items():
+            if item is bg or self._is_background_item(item):
+                continue
+            try:
+                if not item.isVisible():
+                    continue
+                content_rect = content_rect.united(item.sceneBoundingRect())
+            except RuntimeError:
+                continue
+        left_extra = max(0.0, bg_rect.left() - content_rect.left())
+        top_extra = max(0.0, bg_rect.top() - content_rect.top())
+        right_extra = max(0.0, content_rect.right() - bg_rect.right())
+        bottom_extra = max(0.0, content_rect.bottom() - bg_rect.bottom())
+        extras = [left_extra, top_extra, right_extra, bottom_extra]
+        extras = [0.0 if value <= threshold else value + margin for value in extras]
+        left_extra, top_extra, right_extra, bottom_extra = extras
+        if not any(extras):
+            self.setSceneRect(bg_rect)
+            return False
+        new_width = int(round(old_pixmap.width() + left_extra + right_extra))
+        new_height = int(round(old_pixmap.height() + top_extra + bottom_extra))
+        new_pixmap = QPixmap(new_width, new_height)
+        new_pixmap.fill(Qt.white)
+        painter = QPainter(new_pixmap)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+        painter.drawPixmap(int(round(left_extra)), int(round(top_extra)), old_pixmap)
+        painter.end()
+        shift = QPointF(left_extra, top_extra)
+        for item in self.scene().items():
+            if item is bg or self._is_background_item(item):
+                continue
+            try:
+                item.setPos(item.pos() + shift)
+            except RuntimeError:
+                pass
+        for blur_item in self.blur_controller.blur_region_items:
+            if blur_item is None or sip.isdeleted(blur_item):
+                continue
+            blur_item.setRect(blur_item.rect().translated(shift))
+        for idx, rect in enumerate(self.blur_controller.blur_regions):
+            self.blur_controller.blur_regions[idx] = rect.translated(shift)
+        bg.setPixmap(new_pixmap)
+        bg.update()
+        self.setSceneRect(QRectF(0, 0, new_width, new_height))
+        self.update_resolution_from_background()
+        self.scene().update()
+        return True
+
+    def get_background_canvas_state(self):
+        bg = self.image_editor.background_item
+        if bg is None or sip.isdeleted(bg):
+            return None
+        return bg.pixmap(), bg.pos()
+
     def add_pasted_image(self, pixmap, scene_pos=None):
         """Добавляет изображение на сцену."""
         if self.background_item is None or sip.isdeleted(self.background_item):
