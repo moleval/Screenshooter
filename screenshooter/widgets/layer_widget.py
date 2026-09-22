@@ -36,15 +36,18 @@ class LayerWidget(QWidget):
         self.adjustSize()
 
     def _style(self):
-        bg = theme_manager.get_color('widget_bg')
-        text = theme_manager.get_color('widget_text')
-        border = theme_manager.get_color('widget_border')
         return (
             "#layerWidget {"
-            f"background-color: rgba({bg.red()}, {bg.green()}, {bg.blue()}, {bg.alpha()});"
-            f"color: rgba({text.red()}, {text.green()}, {text.blue()}, {text.alpha()});"
-            "border-radius: 6px;"
-            f"border: 1px solid rgba({border.red()}, {border.green()}, {border.blue()}, {border.alpha()});"
+            "background-color: rgba(200,200,200,100);"
+            "color: #333;"
+            "border-radius: 8px;"
+            "border: 1px solid rgba(80,80,80,180);"
+            "}"
+            "QComboBox {"
+            "background-color: rgba(255,255,255,180);"
+            "border: 1px solid rgba(80,80,80,120);"
+            "border-radius: 4px;"
+            "padding: 1px 4px;"
             "}"
         )
 
