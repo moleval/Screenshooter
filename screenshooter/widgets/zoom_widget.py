@@ -21,7 +21,7 @@ class ZoomSlider(QSlider):
 
 
 class ZoomWidget(QWidget):
-    zoomChanged = pyqtSignal(int)
+    zoomChanged = pyqtSignal(float)
     fitRequested = pyqtSignal()
 
     def __init__(self, parent=None):
@@ -49,8 +49,10 @@ class ZoomWidget(QWidget):
         layout.addWidget(self.minus_btn)
 
         self.slider = ZoomSlider(Qt.Horizontal)
-        self.slider.setRange(10, 400)
-        self.slider.setValue(100)
+        self.slider.setRange(100, 4000)
+        self.slider.setSingleStep(5)
+        self.slider.setPageStep(50)
+        self.slider.setValue(1000)
         self.slider.setFixedWidth(100)
         self.slider.setFixedHeight(24)
         self.slider.valueChanged.connect(self._on_slider_changed)
@@ -83,28 +85,32 @@ class ZoomWidget(QWidget):
         self.setFixedSize(self.sizeHint())
 
     def _on_slider_changed(self, value):
-        self.percent_edit.setText(f"{value}%")
-        self.zoomChanged.emit(value)
+        percent = value / 10.0
+        text = f"{percent:.1f}%" if percent % 1 else f"{int(percent)}%"
+        self.percent_edit.setText(text)
+        self.zoomChanged.emit(percent)
 
     def zoom_in(self):
         """Увеличить масштаб на 10%."""
-        self.slider.setValue(self.slider.value() + 10)
+        self.slider.setValue(self.slider.value() + 50)
 
     def zoom_out(self):
         """Уменьшить масштаб на 10%."""
-        self.slider.setValue(self.slider.value() - 10)
+        self.slider.setValue(self.slider.value() - 50)
 
     def _on_edit(self):
         text = self.percent_edit.text().replace('%', '')
         try:
-            value = int(text)
+            value = float(text)
             if 10 <= value <= 400:
-                self.slider.setValue(value)
+                self.slider.setValue(round(value * 10))
         except ValueError:
             pass
 
     def set_zoom(self, percent):
         self.slider.blockSignals(True)
-        self.slider.setValue(int(percent))
+        percent = max(10.0, min(400.0, float(percent)))
+        self.slider.setValue(round(percent * 10))
         self.slider.blockSignals(False)
-        self.percent_edit.setText(f"{int(percent)}%")
+        text = f"{percent:.1f}%" if percent % 1 else f"{int(percent)}%"
+        self.percent_edit.setText(text)
