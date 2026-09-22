@@ -57,6 +57,8 @@ class CropCommand(QUndoCommand):
 
     def undo(self):
         self.background_item.setPixmap(self.old_pixmap)
+        if self.background_pos is not None:
+            self.background_item.setPos(self.background_pos)
         self.background_item.update()
 
         for item, old_pos in zip(self.items_to_shift, self.old_positions):
@@ -82,7 +84,7 @@ class RotateCommand(QUndoCommand):
     """
 
     def __init__(self, scene, background_item, old_pixmap, new_pixmap, items_to_remove,
-                 blur_controller=None):
+                 blur_controller=None, background_pos=None):
         super().__init__("Поворот")
         self.scene = scene
         self.background_item = background_item
@@ -91,6 +93,7 @@ class RotateCommand(QUndoCommand):
         self.items_to_remove = items_to_remove
         self.removed_items = []
         self.blur_controller = blur_controller
+        self.background_pos = background_pos
 
         if self.blur_controller is not None:
             self.blur_state = self.blur_controller._get_blur_state()
@@ -104,11 +107,14 @@ class RotateCommand(QUndoCommand):
                 self.removed_items.append(item)
 
         self.background_item.setPixmap(self.new_pixmap)
+        if self.background_pos is not None:
+            self.background_item.setPos(self.background_pos)
         self.background_item.update()
 
         if self.blur_controller is not None:
             self.blur_controller._clear_blur_regions()
-            self.blur_controller.view.setSceneRect(QRectF(self.new_pixmap.rect()))
+            self.blur_controller.view.setSceneRect(
+                self.background_item.sceneBoundingRect())
             self.blur_controller.view.update_resolution_from_background()
             self.blur_controller.view.fit_background_to_view()
 
@@ -123,7 +129,8 @@ class RotateCommand(QUndoCommand):
 
         if self.blur_controller is not None and self.blur_state is not None:
             self.blur_controller._restore_blur_state(self.blur_state)
-            self.blur_controller.view.setSceneRect(QRectF(self.old_pixmap.rect()))
+            self.blur_controller.view.setSceneRect(
+                self.background_item.sceneBoundingRect())
             self.blur_controller.view.update_resolution_from_background()
             self.blur_controller.view.fit_background_to_view()
 
