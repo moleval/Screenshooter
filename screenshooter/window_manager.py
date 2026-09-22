@@ -384,7 +384,10 @@ class WindowManager(QObject):
         if self._active_window is window:
             self._active_window = self._windows[-1] if self._windows else None
         if not self._windows:
-            QApplication.quit()
+            # Закрытие последнего окна не завершает приложение.
+            # Screenshooter продолжает работать в фоне и остаётся в системном трее.
+            if self.tray_manager is not None:
+                self.tray_manager.update_windows_menu()
             return
         if self.tray_manager is not None:
             self.tray_manager.update_windows_menu()
