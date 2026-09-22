@@ -439,52 +439,81 @@ class EditorView(QGraphicsView):
         )
 
     def expand_background_to_content(self, margin=50, threshold=1):
-        """Расширяет подложку белыми полями под вышедшие за неё объекты."""
+        """Расширяет подложку белыми полями под вышедшие за неё объекты.
+
+        Все границы считаются в координатах сцены. Это важно для левой/верхней
+        стороны: локальные координаты QPixmap нельзя смешивать с sceneBoundingRect().
+        """
         bg = self.image_editor.background_item
         if bg is None or sip.isdeleted(bg) or bg.scene() is not self.scene():
             return False
+
         old_pixmap = bg.pixmap()
         if old_pixmap.isNull():
             return False
-        bg_rect = QRectF(0, 0, old_pixmap.width(), old_pixmap.height())
-        content_rect = QRectF(bg_rect)
+
+        old_bg_rect = bg.sceneBoundingRect()
+        content_rect = QRectF(old_bg_rect)
+
         for item in self.scene().items():
             if item is bg or self._is_background_item(item):
                 continue
             try:
                 if not item.isVisible():
                     continue
-                content_rect = content_rect.united(item.sceneBoundingRect())
+                item_rect = item.sceneBoundingRect()
+                if item_rect.isValid() and not item_rect.isEmpty():
+                    content_rect = content_rect.united(item_rect)
             except RuntimeError:
                 continue
-        left_extra = max(0.0, bg_rect.left() - content_rect.left())
-        top_extra = max(0.0, bg_rect.top() - content_rect.top())
-        right_extra = max(0.0, content_rect.right() - bg_rect.right())
-        bottom_extra = max(0.0, content_rect.bottom() - bg_rect.bottom())
+
+        left_extra = max(0.0, old_bg_rect.left() - content_rect.left())
+        top_extra = max(0.0, old_bg_rect.top() - content_rect.top())
+        right_extra = max(0.0, content_rect.right() - old_bg_rect.right())
+        bottom_extra = max(0.0, content_rect.bottom() - old_bg_rect.bottom())
+
         extras = [left_extra, top_extra, right_extra, bottom_extra]
         extras = [0.0 if value <= threshold else value + margin for value in extras]
         left_extra, top_extra, right_extra, bottom_extra = extras
+
         if not any(extras):
-            self.set_scene_rect_preserving_view(bg_rect)
+            self.set_scene_rect_preserving_view(old_bg_rect)
             return False
-        new_width = int(round(old_pixmap.width() + left_extra + right_extra))
-        new_height = int(round(old_pixmap.height() + top_extra + bottom_extra))
+
+        new_width = max(
+            1, int(round(old_pixmap.width() + left_extra + right_extra))
+        )
+        new_height = max(
+            1, int(round(old_pixmap.height() + top_extra + bottom_extra))
+        )
+
         new_pixmap = QPixmap(new_width, new_height)
         new_pixmap.fill(Qt.white)
+
         painter = QPainter(new_pixmap)
         painter.setRenderHint(QPainter.SmoothPixmapTransform)
-        painter.drawPixmap(int(round(left_extra)), int(round(top_extra)), old_pixmap)
+        painter.drawPixmap(
+            int(round(left_extra)),
+            int(round(top_extra)),
+            old_pixmap,
+        )
         painter.end()
+
         if self.blur_controller.blur_base_pixmap is not None:
             blur_base = QPixmap(new_width, new_height)
             blur_base.fill(Qt.white)
             bp = QPainter(blur_base)
             bp.setRenderHint(QPainter.SmoothPixmapTransform)
-            bp.drawPixmap(int(round(left_extra)), int(round(top_extra)),
-                          self.blur_controller.blur_base_pixmap)
+            bp.drawPixmap(
+                int(round(left_extra)),
+                int(round(top_extra)),
+                self.blur_controller.blur_base_pixmap,
+            )
             bp.end()
             self.blur_controller.blur_base_pixmap = blur_base
+
         shift = QPointF(left_extra, top_extra)
+
         for item in self.scene().items():
             if item is bg or self._is_background_item(item):
                 continue
@@ -494,16 +523,20 @@ class EditorView(QGraphicsView):
                 item.setPos(item.pos() + shift)
             except RuntimeError:
                 pass
+
         for blur_item in self.blur_controller.blur_region_items:
             if blur_item is None or sip.isdeleted(blur_item):
                 continue
             blur_item.setRect(blur_item.rect().translated(shift))
+
         for idx, rect in enumerate(self.blur_controller.blur_regions):
             self.blur_controller.blur_regions[idx] = rect.translated(shift)
+
         bg.setPixmap(new_pixmap)
         bg.update()
         self.blur_controller._invalidate_blur_cache()
         self.blur_controller._recompute_blurred_pixmap()
+
         self.set_scene_rect_preserving_view(QRectF(0, 0, new_width, new_height))
         self.update_resolution_from_background()
         self.scene().update()
