@@ -760,6 +760,8 @@ class EditorView(QGraphicsView):
             ti.setEditable(True)
             self._first_click_after_activation = False
             self.history.push(AddItemCommand(self.scene(), ti))
+            if self.blur_controller.blur_regions:
+                self.blur_controller._force_blur_recompute()
             e.accept()
             return
 
