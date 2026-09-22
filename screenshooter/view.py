@@ -56,6 +56,12 @@ class EditorView(QGraphicsView):
         # при захвате объекта, поэтому ложного появления быть не должно.
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+
+        # Полосы прокрутки — отдельные дочерние виджеты QGraphicsView.
+        # Курсор редактора (крест) не должен наследоваться ими.
+        self.horizontalScrollBar().setCursor(Qt.ArrowCursor)
+        self.verticalScrollBar().setCursor(Qt.ArrowCursor)
+
         self.current_tool = None
         self.start_point = None
         self.temp_item = None
