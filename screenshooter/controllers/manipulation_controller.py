@@ -39,6 +39,8 @@ class ManipulationController:
         self._drag_start_scene_pos = QPointF()
         self._drag_start_item_pos = QPointF()
         self._drag_blur_needs_recompute = False
+        self._drag_old_background = None
+        self._drag_old_blur_state = None
 
         # Изменение размера вставленных изображений
         self._resizing_pasted_item = None
@@ -398,6 +400,8 @@ class ManipulationController:
             self._drag_start_item_pos = (
                 li.pos() if not isinstance(li, BlurRegionItem)
                 else li.rect().topLeft())
+            self._drag_old_background = self.view.get_background_canvas_state()
+            self._drag_old_blur_state = self.view.blur_controller._get_blur_state()
             return True
 
         return False
@@ -615,35 +619,41 @@ class ManipulationController:
         return True
 
     def _handle_drag_release(self, event) -> bool:
-        """Завершение группового перетаскивания."""
+        """Завершение группового перетаскивания и расширение подложки."""
         if not self._drag_items:
             return False
 
         normal_items = [it for it in self._drag_items
                         if not isinstance(it, BlurRegionItem)]
-
-        if normal_items:
-            old_positions = []
-            new_positions = []
-            for idx, it in enumerate(self._drag_items):
-                if not isinstance(it, BlurRegionItem):
-                    old_positions.append(self._drag_old_positions[idx])
-                    new_positions.append(it.pos())
-            if old_positions != new_positions:
-                self.view.history.push(
-                    MoveItemsCommand(normal_items, old_positions, new_positions))
-
+        old_positions = []
+        new_positions = []
         for idx, it in enumerate(self._drag_items):
-            if isinstance(it, BlurRegionItem):
-                old_rect = self._drag_old_rects[idx]
-                new_rect = it.rect()
-                if old_rect != new_rect:
-                    try:
-                        idx_blur = self.view.blur_controller.blur_region_items.index(it)
-                        self.view.history.push(MoveBlurRegionCommand(
-                            self.view.blur_controller, idx_blur, old_rect, new_rect))
-                    except ValueError:
-                        pass
+            if not isinstance(it, BlurRegionItem):
+                old_positions.append(self._drag_old_positions[idx])
+                new_positions.append(it.pos())
+
+        old_canvas = self._drag_old_background
+        old_blur_state = self._drag_old_blur_state
+        canvas_changed = self.view.expand_background_to_content()
+        new_canvas = self.view.get_background_canvas_state()
+        new_blur_state = self.view.blur_controller._get_blur_state()
+
+        blur_changed = old_blur_state != new_blur_state
+        positions_changed = old_positions != new_positions
+        if positions_changed or canvas_changed or blur_changed:
+            old_pixmap, old_pos = old_canvas if old_canvas else (None, None)
+            new_pixmap, new_pos = new_canvas if new_canvas else (None, None)
+            self.view.history.push(MoveItemsCommand(
+                normal_items, old_positions, new_positions,
+                background_item=self.view.background_item,
+                old_pixmap=old_pixmap if canvas_changed else None,
+                new_pixmap=new_pixmap if canvas_changed else None,
+                old_background_pos=old_pos if canvas_changed else None,
+                new_background_pos=new_pos if canvas_changed else None,
+                blur_controller=self.view.blur_controller,
+                old_blur_state=old_blur_state if (canvas_changed or blur_changed) else None,
+                new_blur_state=new_blur_state if (canvas_changed or blur_changed) else None
+            ))
 
         if self._drag_blur_needs_recompute:
             self.view.blur_controller._force_blur_recompute()
@@ -654,6 +664,8 @@ class ManipulationController:
         self._drag_old_rects = []
         self._drag_start_scene_pos = QPointF()
         self._drag_start_item_pos = QPointF()
+        self._drag_old_background = None
+        self._drag_old_blur_state = None
         self.view._update_pasted_image_handles()
         self.view._update_blur_region_handles()
         self.invalidate_cursor_cache()
