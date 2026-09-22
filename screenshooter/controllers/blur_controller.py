@@ -294,7 +294,7 @@ class BlurController:
             painter,
             QRectF(0, 0, width, height),
             rect,
-            Qt.KeepAspectRatioByExpanding,
+            Qt.IgnoreAspectRatio,
         )
         painter.end()
 
