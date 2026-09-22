@@ -345,23 +345,32 @@ class ImageEditController:
                 continue
             items_to_remove.append(item)
 
-        target_rect = QRectF(self.background_item.pixmap().rect())
-        rendered_image = QImage(target_rect.size().toSize(), QImage.Format_ARGB32)
+        # Рендерим именно в координатах сцены, а не от (0, 0).
+        # Подложка после расширения может иметь отрицательную позицию,
+        # поэтому QRectF(pixmap.rect()) здесь давал неверный источник
+        # и после поворота sceneRect возвращал подложку к началу координат.
+        target_rect = self.background_item.sceneBoundingRect()
+        rendered_image = QImage(
+            target_rect.size().toSize(), QImage.Format_ARGB32)
         rendered_image.fill(Qt.transparent)
         painter = QPainter(rendered_image)
         painter.setRenderHint(QPainter.Antialiasing)
         painter.setRenderHint(QPainter.SmoothPixmapTransform)
-        self.view.scene().render(painter, target_rect, target_rect)
+        self.view.scene().render(painter, QRectF(0, 0, target_rect.width(),
+                                                  target_rect.height()),
+                                  target_rect)
         painter.end()
 
         rendered_pixmap = QPixmap.fromImage(rendered_image)
         rotated_pixmap = rotate_pixmap(rendered_pixmap, angle)
 
         old_pixmap = self.background_item.pixmap()
+        old_background_pos = self.background_item.pos()
         command = RotateCommand(
             self.view.scene(), self.background_item,
             old_pixmap, rotated_pixmap, items_to_remove,
-            blur_controller=self.view.blur_controller
+            blur_controller=self.view.blur_controller,
+            background_pos=old_background_pos
         )
         self.view.history.push(command)
 
