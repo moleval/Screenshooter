@@ -111,5 +111,4 @@ class ZoomWidget(QWidget):
         percent = max(10.0, min(400.0, float(percent)))
         self.slider.setValue(round(percent * 10))
         self.slider.blockSignals(False)
-        text = f"{percent:.1f}%" if percent % 1 else f"{int(percent)}%"
-        self.percent_edit.setText(text)
+        self.percent_edit.setText(f"{int(percent + 0.5)}%")
