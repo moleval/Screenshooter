@@ -199,6 +199,11 @@ class FloatingWidgetManager:
     def update_floating_widgets_visibility(self):
         """Обновляет видимость плавающих виджетов."""
         view = self.view
+        # Во время реального drag не переключаем панели: selectionChanged
+        # может приходить несколько раз за один жест и давать заметное
+        # мигание виджетов.
+        if getattr(view, "_interaction_dragging", False):
+            return
         view.shape_mode_widget.setVisible(False)
         view.ellipse_mode_widget.setVisible(False)
         view.arrow_mode_widget.setVisible(False)
