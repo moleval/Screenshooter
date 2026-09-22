@@ -31,6 +31,7 @@ from .history import (HistoryManager, AddItemCommand, RemoveItemCommand,
                       ResizePastedImageCommand, CropPastedImageCommand,
                       RotatePastedImageCommand, RemoveSelectedItemsCommand,
                       MoveBlurRegionCommand, ResizeBlurRegionCommand)
+from .history import ChangeLayerCommand
 from .image_edit_controller import ImageEditController
 from .ui.layout_manager import LayoutManager
 from .tools import RectTool, EllipseTool, LineTool, ArrowTool, TextTool
@@ -297,6 +298,7 @@ class EditorView(QGraphicsView):
         self.widget_manager.update_floating_widgets_visibility()
         self._update_pasted_image_handles()
         self._update_blur_region_handles()
+        self.update_layer_widget()
 
     def update_resolution_from_background(self):
         if (self.image_editor.background_item and
@@ -365,6 +367,7 @@ class EditorView(QGraphicsView):
 
         self.crop_mode_changed.emit(False)
         self.blur_mode_changed.emit(False)
+        self.layer_widget.setVisible(False)
         self._update_floating_widgets_visibility()
 
         self.background_changed.emit()
@@ -383,6 +386,7 @@ class EditorView(QGraphicsView):
         self.blur_controller.reset_state()
 
         self.set_resolution_text("")
+        self.layer_widget.setVisible(False)
         self._update_floating_widgets_visibility()
 
         self.background_changed.emit()
