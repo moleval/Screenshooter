@@ -118,7 +118,7 @@ class MouseInteractionManager:
             sp = self.view.mapToScene(event.pos())
             existing = self.view._interactive_item_at(sp)
             if existing is not None and not self.view._is_background_item(existing):
-                return True
+                return self.manipulation_controller.handle_mouse_press(event)
 
             if self.view._tool is not None:
                 sp = self.view.mapToScene(event.pos())
@@ -187,7 +187,7 @@ class MouseInteractionManager:
                 if self.view.blur_controller.blur_regions:
                     self.view.blur_controller._force_blur_recompute()
                 if self.view.background_item is not None:
-                    self.view.setSceneRect(self.view.background_item.sceneBoundingRect())
+                    self.view.set_scene_rect_preserving_view(self.view.background_item.sceneBoundingRect())
             else:
                 self.view.scene().removeItem(self.view.temp_item)
             self.view.temp_item = None
