@@ -251,26 +251,22 @@ class LayoutManager:
 
 
     def update_layer_widget_position(self):
-        """Размещает виджет слоя рядом с информационным виджетом."""
+        """Размещает панель слоёв там же, где панели аннотаций."""
         lw = self.layer_widget
         if not lw or not lw.isVisible():
             return
         vp_rect = self._viewport_rect()
         if not vp_rect:
             return
-
-        iw = self.info_widget
-        if iw and iw.isVisible():
-            x = iw.x() - lw.width() - 4
-            y = iw.y()
-        else:
-            x = vp_rect.width() - lw.width() - self._scrollbar_width() - 4
-            y = 4
-
+        vw = vp_rect.width()
+        sw = self._scrollbar_width()
+        x = vw - lw.width() - sw - self.TEXT_FORMAT_RIGHT_OFFSET
+        y = self.TEXT_FORMAT_TOP_OFFSET
         x = max(0, x)
         y = max(0, y)
         lw.move(x, y)
         lw.raise_()
+
 
     def update_status_label_position(self):
         """
