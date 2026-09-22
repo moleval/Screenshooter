@@ -51,9 +51,9 @@ class CropCommand(QUndoCommand):
 
         if self.blur_controller is not None and self.crop_rect is not None:
             self.blur_controller._apply_crop_to_blur_regions(self.crop_rect)
-            self.blur_controller.view.setSceneRect(QRectF(self.new_pixmap.rect()))
+            self.blur_controller.view.set_scene_rect_preserving_view(
+                self.background_item.sceneBoundingRect())
             self.blur_controller.view.update_resolution_from_background()
-            self.blur_controller.view.fit_background_to_view()
 
     def undo(self):
         self.background_item.setPixmap(self.old_pixmap)
@@ -69,7 +69,8 @@ class CropCommand(QUndoCommand):
 
         if self.blur_controller is not None and self.blur_state is not None:
             self.blur_controller._restore_blur_state(self.blur_state)
-            self.blur_controller.view.setSceneRect(QRectF(self.old_pixmap.rect()))
+            self.blur_controller.view.set_scene_rect_preserving_view(
+                self.background_item.sceneBoundingRect())
             self.blur_controller.view.update_resolution_from_background()
             self.blur_controller.view.fit_background_to_view()
 
