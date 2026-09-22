@@ -414,6 +414,7 @@ class ManipulationController:
                 self.view.verticalScrollBar().value())
             self._drag_old_background = self.view.get_background_canvas_state()
             self._drag_old_blur_state = self.view.blur_controller._get_blur_state()
+            self.view._interaction_dragging = False
             return True
 
         return False
@@ -545,6 +546,11 @@ class ManipulationController:
         if not self._drag_scene_prepared:
             if (event.pos() - self._drag_start_view_pos).manhattanLength() < 2:
                 return True
+
+            # До фактического движения это ещё клик, поэтому плавающие
+            # виджеты не трогаем. Скрывать/показывать их начинаем только
+            # после перехода в реальный drag.
+            self.view._interaction_dragging = True
 
             if near_edge:
                 self.view.prepare_drag_scene_rect(event.pos())
@@ -689,6 +695,7 @@ class ManipulationController:
             self.view.blur_controller._force_blur_recompute()
             self._drag_blur_needs_recompute = False
 
+        self.view._interaction_dragging = False
         self._drag_items = []
         self._drag_old_positions = []
         self._drag_old_rects = []
