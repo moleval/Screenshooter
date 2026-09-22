@@ -443,10 +443,10 @@ class EditorView(QGraphicsView):
         dy = anchor_before.y() - anchor_after.y()
         if abs(dx) > 0.0001 or abs(dy) > 0.0001:
             self.horizontalScrollBar().setValue(
-                self.horizontalScrollBar().value() - int(round(dx * scale))
+                self.horizontalScrollBar().value() + int(round(dx * scale))
             )
             self.verticalScrollBar().setValue(
-                self.verticalScrollBar().value() - int(round(dy * scale))
+                self.verticalScrollBar().value() + int(round(dy * scale))
             )
 
     def expand_background_to_content(self, margin=50, threshold=1):
