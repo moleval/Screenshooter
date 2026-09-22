@@ -523,40 +523,51 @@ class ManipulationController:
         if not self._drag_items:
             return False
 
-        # Расширяем sceneRect только после фактического начала движения.
-        # Обычный клик/выделение не должен включать полосы прокрутки.
-        if not self._drag_scene_prepared:
-            if (event.pos() - self._drag_start_view_pos).manhattanLength() < 2:
-                return True
-
-            self.view.prepare_drag_scene_rect(self._drag_start_view_pos)
-            # После изменения sceneRect заново фиксируем точку старта в
-            # координатах сцены. Это исключает сдвиг из-за изменения scrollbar.
-            self._drag_start_scene_pos = self.view.mapToScene(
-                self._drag_start_view_pos)
-            self._drag_scene_prepared = True
-
-        # Автопрокрутка у края viewport позволяет вывести объект за
-        # левую/верхнюю границу подложки без упора курсора в край окна.
+        # Обычный клик и обычное перетаскивание внутри viewport не должны
+        # менять sceneRect: иначе QGraphicsView сразу показывает полосы
+        # прокрутки и визуально сдвигает изображение.
+        #
+        # Временная рабочая область нужна только когда курсор действительно
+        # подошёл к краю viewport и пользователь пытается выйти за подложку.
         edge = 24
         speed = 24
         vp = self.view.viewport().rect()
         hbar = self.view.horizontalScrollBar()
         vbar = self.view.verticalScrollBar()
 
-        if event.pos().x() <= vp.left() + edge:
-            hbar.setValue(hbar.value() - speed)
-        elif event.pos().x() >= vp.right() - edge:
-            hbar.setValue(hbar.value() + speed)
+        near_edge = (
+            event.pos().x() <= vp.left() + edge
+            or event.pos().x() >= vp.right() - edge
+            or event.pos().y() <= vp.top() + edge
+            or event.pos().y() >= vp.bottom() - edge
+        )
 
-        if event.pos().y() <= vp.top() + edge:
-            vbar.setValue(vbar.value() - speed)
-        elif event.pos().y() >= vp.bottom() - edge:
-            vbar.setValue(vbar.value() + speed)
+        if not self._drag_scene_prepared:
+            if (event.pos() - self._drag_start_view_pos).manhattanLength() < 2:
+                return True
+
+            if near_edge:
+                self.view.prepare_drag_scene_rect(event.pos())
+                # После изменения sceneRect заново фиксируем точку старта
+                # в координатах сцены. Точка под курсором не скачет.
+                self._drag_start_scene_pos = self.view.mapToScene(event.pos())
+                self._drag_scene_prepared = True
+
+        if self._drag_scene_prepared:
+            # Автопрокрутка работает только после подготовки расширенной
+            # рабочей области.
+            if event.pos().x() <= vp.left() + edge:
+                hbar.setValue(hbar.value() - speed)
+            elif event.pos().x() >= vp.right() - edge:
+                hbar.setValue(hbar.value() + speed)
+
+            if event.pos().y() <= vp.top() + edge:
+                vbar.setValue(vbar.value() - speed)
+            elif event.pos().y() >= vp.bottom() - edge:
+                vbar.setValue(vbar.value() + speed)
 
         # Берём обе точки через mapToScene. Он автоматически учитывает
-        # текущее положение scrollbar, поэтому слева/сверху не возникает
-        # ошибки со знаком или двойного учёта прокрутки.
+        # текущее положение scrollbar.
         current_scene_pos = self.view.mapToScene(event.pos())
         delta = current_scene_pos - self._drag_start_scene_pos
 
