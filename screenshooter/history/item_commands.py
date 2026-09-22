@@ -90,7 +90,8 @@ class MoveItemsCommand(QUndoCommand):
             views = self.background_item.scene().views()
             if views:
                 view = views[0]
-                view.setSceneRect(self.background_item.sceneBoundingRect())
+                view.set_scene_rect_preserving_view(
+                    self.background_item.sceneBoundingRect())
                 view.update_resolution_from_background()
 
     def redo(self):
