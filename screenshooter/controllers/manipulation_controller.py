@@ -401,9 +401,9 @@ class ManipulationController:
                 li.pos() if not isinstance(li, BlurRegionItem)
                 else li.rect().topLeft())
 
-            # Во время перетаскивания границы подложки не ограничивают элемент.
-            self.view.expand_interaction_scene_rect()
-
+            # Не расширяем sceneRect в момент захвата: это меняет диапазон
+            # прокрутки и визуально дёргает viewport. При необходимости
+            # рабочая область расширяется позже, без ложного срабатывания.
             self._drag_old_background = self.view.get_background_canvas_state()
             self._drag_old_blur_state = self.view.blur_controller._get_blur_state()
             return True
