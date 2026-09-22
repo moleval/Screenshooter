@@ -714,9 +714,10 @@ class EditorView(QGraphicsView):
             delta = e.angleDelta().y()
             if delta != 0:
                 cur_percent = self.transform().m11() * 100.0
-                # Малый multiplicative шаг сохраняет qreal-масштаб без
-                # округления каждого события до целого процента.
-                factor = 1.05 if delta > 0 else (1.0 / 1.05)
+                # Масштаб меняется пропорционально величине wheel delta,
+                # без округления до целых процентов. Один обычный "щелчок"
+                # даёт небольшой шаг, а быстрый прокрут — пропорционально больше.
+                factor = math.pow(1.0005, delta)
                 new_percent = max(10.0, min(400.0, cur_percent * factor))
                 self.auto_fit = False
                 self.zoomChangedByWheel.emit(new_percent, e.pos())
