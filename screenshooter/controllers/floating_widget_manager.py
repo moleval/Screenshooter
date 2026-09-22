@@ -397,4 +397,11 @@ class FloatingWidgetManager:
         if isinstance(item, TextItem):
             item._editable = False
             item.setTextInteractionFlags(Qt.NoTextInteraction)
+
+        # После завершения редактирования текста фиксируем новую границу,
+        # если текст оказался за пределами исходной подложки.
+        view.expand_background_to_content(margin=0)
+        if view.background_item is not None:
+            view.setSceneRect(view.background_item.sceneBoundingRect())
+
         self.update_floating_widgets_visibility()
