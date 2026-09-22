@@ -111,7 +111,7 @@ class EditorView(QGraphicsView):
 
         self.layer_widget = LayerModeWidget(self)
         self.layer_widget.setVisible(False)
-        self.layer_widget.layerChanged.connect(self._on_layer_widget_changed)
+        self.layer_widget.modeChanged.connect(self._on_layer_widget_changed)
 
         self.status_label = QLabel(self)
         self.status_label.setObjectName("statusLabel")
@@ -850,7 +850,7 @@ class EditorView(QGraphicsView):
             return
 
         self.history.push(ChangeLayerCommand(selected, old_layers, layer))
-        self.layer_widget.set_layer(layer)
+        self.layer_widget.set_current_mode(layer)
 
     def update_layer_widget(self):
         selected = [
