@@ -35,7 +35,9 @@ class PastedImageItem(QGraphicsPixmapItem):
         """Устанавливает пользовательский слой изображения (0 — верх, 2 — ниже)."""
         self.layer = 1 if int(layer) == 1 else 2
         # Аннотации имеют z=0. Изображения на слое 1/2 должны быть ниже них.
-        self.setZValue(-100 * self.layer)
+        # Внутри одного пользовательского слоя картинка должна быть выше
+        # размытия того же слоя. При этом слой 1 остаётся выше слоя 2.
+        self.setZValue(-100 * self.layer + 10)
         self.update()
 
     def set_image_scale(self, scale: float):
