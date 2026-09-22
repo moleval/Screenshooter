@@ -406,7 +406,7 @@ class ManipulationController:
             # Даём перетаскиванию большую временную рабочую область
             # один раз в начале. Она не влияет на подложку и позволяет
             # полностью вывести объект за левый/верхний край.
-            self.view.prepare_drag_scene_rect()
+            self.view.prepare_drag_scene_rect(event.pos())
             self._drag_old_background = self.view.get_background_canvas_state()
             self._drag_old_blur_state = self.view.blur_controller._get_blur_state()
             return True
