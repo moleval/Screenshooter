@@ -856,8 +856,12 @@ class EditorView(QGraphicsView):
 
         self.history.push(ChangeLayerCommand(selected, old_layers, layer))
         self.layer_widget.set_current_mode(layer)
+        # После смены z-порядка курсор и выбор должны немедленно
+        # использовать новый верхний объект.
+        self._invalidate_cursor_cache()
         if any(isinstance(item, (PastedImageItem, BlurRegionItem)) for item in selected):
             self.blur_controller._force_blur_recompute()
+            self._update_blur_region_handles()
 
     def update_layer_widget(self):
         selected = [
