@@ -784,7 +784,7 @@ class EditorView(QGraphicsView):
             bg = self.image_editor.background_item
             if (bg is not None and not sip.isdeleted(bg)
                     and bg.scene() is self.scene()):
-                self.setSceneRect(bg.sceneBoundingRect())
+                self.set_scene_rect_preserving_view(bg.sceneBoundingRect())
 
     def set_tool(self, t):
         self._deactivate_active_text()
