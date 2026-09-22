@@ -39,6 +39,7 @@ class ManipulationController:
         self._drag_start_scene_pos = QPointF()
         self._drag_start_view_pos = QPoint()
         self._drag_start_scroll = QPoint()
+        self._drag_scene_prepared = False
         self._drag_start_item_pos = QPointF()
         self._drag_blur_needs_recompute = False
         self._drag_old_background = None
@@ -522,6 +523,19 @@ class ManipulationController:
         if not self._drag_items:
             return False
 
+        # Расширяем sceneRect только после фактического начала движения.
+        # Обычный клик/выделение не должен включать полосы прокрутки.
+        if not self._drag_scene_prepared:
+            if (event.pos() - self._drag_start_view_pos).manhattanLength() < 2:
+                return True
+
+            self.view.prepare_drag_scene_rect(self._drag_start_view_pos)
+            # После изменения sceneRect заново фиксируем точку старта в
+            # координатах сцены. Это исключает сдвиг из-за изменения scrollbar.
+            self._drag_start_scene_pos = self.view.mapToScene(
+                self._drag_start_view_pos)
+            self._drag_scene_prepared = True
+
         # Автопрокрутка у края viewport позволяет вывести объект за
         # левую/верхнюю границу подложки без упора курсора в край окна.
         edge = 24
@@ -540,19 +554,11 @@ class ManipulationController:
         elif event.pos().y() >= vp.bottom() - edge:
             vbar.setValue(vbar.value() + speed)
 
-        scale = abs(self.view.transform().m11())
-        if scale < 0.0001:
-            scale = 1.0
-
-        view_delta = event.pos() - self._drag_start_view_pos
-        scroll_delta = QPoint(
-            hbar.value() - self._drag_start_scroll.x(),
-            vbar.value() - self._drag_start_scroll.y()
-        )
-        delta = QPointF(
-            view_delta.x() / scale + scroll_delta.x(),
-            view_delta.y() / scale + scroll_delta.y()
-        )
+        # Берём обе точки через mapToScene. Он автоматически учитывает
+        # текущее положение scrollbar, поэтому слева/сверху не возникает
+        # ошибки со знаком или двойного учёта прокрутки.
+        current_scene_pos = self.view.mapToScene(event.pos())
+        delta = current_scene_pos - self._drag_start_scene_pos
 
         if event.modifiers() & Qt.ShiftModifier:
             if abs(delta.x()) > abs(delta.y()):
