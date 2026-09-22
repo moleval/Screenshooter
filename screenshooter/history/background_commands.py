@@ -113,13 +113,17 @@ class RotateCommand(QUndoCommand):
 
         if self.blur_controller is not None:
             self.blur_controller._clear_blur_regions()
-            self.blur_controller.view.setSceneRect(
+            # При повороте нельзя заново центрировать/вписывать view:
+            # это визуально сдвигает подложку. Сохраняем текущую
+            # позицию просмотра относительно сцены.
+            self.blur_controller.view.set_scene_rect_preserving_view(
                 self.background_item.sceneBoundingRect())
             self.blur_controller.view.update_resolution_from_background()
-            self.blur_controller.view.fit_background_to_view()
 
     def undo(self):
         self.background_item.setPixmap(self.old_pixmap)
+        if self.background_pos is not None:
+            self.background_item.setPos(self.background_pos)
         self.background_item.update()
 
         for item in self.removed_items:
@@ -129,7 +133,7 @@ class RotateCommand(QUndoCommand):
 
         if self.blur_controller is not None and self.blur_state is not None:
             self.blur_controller._restore_blur_state(self.blur_state)
-            self.blur_controller.view.setSceneRect(
+            self.blur_controller.view.set_scene_rect_preserving_view(
                 self.background_item.sceneBoundingRect())
             self.blur_controller.view.update_resolution_from_background()
             self.blur_controller.view.fit_background_to_view()
