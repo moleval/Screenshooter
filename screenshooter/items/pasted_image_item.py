@@ -33,7 +33,7 @@ class PastedImageItem(QGraphicsPixmapItem):
 
     def set_layer(self, layer: int):
         """Устанавливает пользовательский слой изображения (0 — верх, 2 — ниже)."""
-        self.layer = max(0, min(2, int(layer)))
+        self.layer = 1 if int(layer) == 1 else 2
         # Аннотации имеют z=0. Изображения на слое 1/2 должны быть ниже них.
         self.setZValue(-100 * self.layer)
         self.update()
