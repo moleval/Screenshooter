@@ -48,7 +48,7 @@ class FloatingWidgetManager:
     # ==============================================================
 
     def _on_zoom_widget_changed(self, p):
-        self.view.zoomChangedByWheel.emit(p)
+        self.view.zoomChangedByWheel.emit(p, None)
 
     def _fit_to_view(self):
         view = self.view
