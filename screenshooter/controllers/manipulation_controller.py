@@ -47,6 +47,8 @@ class ManipulationController:
 
         # Изменение размера вставленных изображений
         self._resizing_pasted_item = None
+        self.view._interaction_dragging = False
+        self.view.widget_manager.update_floating_widgets_visibility()
         self._resize_handle = None
         self._resize_start_rect = None
         self._resize_start_scale = 1.0
@@ -221,6 +223,7 @@ class ManipulationController:
                 handle_id = p_item.handles.hit_test(event.pos())
                 if handle_id:
                     self._resizing_pasted_item = p_item
+                    self.view._interaction_dragging = True
                     self._resize_handle = handle_id
                     self._resize_start_rect = p_item.mapRectToScene(p_item.boundingRect())
                     self._resize_start_scale = p_item.scale
@@ -696,6 +699,7 @@ class ManipulationController:
             self._drag_blur_needs_recompute = False
 
         self.view._interaction_dragging = False
+        self.view.widget_manager.update_floating_widgets_visibility()
         self._drag_items = []
         self._drag_old_positions = []
         self._drag_old_rects = []
