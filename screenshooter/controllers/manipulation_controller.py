@@ -679,6 +679,7 @@ class ManipulationController:
         self._drag_start_scene_pos = QPointF()
         self._drag_start_view_pos = QPoint()
         self._drag_start_scroll = QPoint()
+        self._drag_scene_prepared = False
         self._drag_start_item_pos = QPointF()
         self._drag_old_background = None
         self._drag_old_blur_state = None
