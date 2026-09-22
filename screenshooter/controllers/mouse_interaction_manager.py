@@ -184,6 +184,8 @@ class MouseInteractionManager:
                 self.view.temp_item.setSelected(True)
                 self.view.expand_background_to_content(margin=0)
                 self.view.history.push(AddItemCommand(self.view.scene(), self.view.temp_item))
+                if self.view.blur_controller.blur_regions:
+                    self.view.blur_controller._force_blur_recompute()
                 if self.view.background_item is not None:
                     self.view.setSceneRect(self.view.background_item.sceneBoundingRect())
             else:
