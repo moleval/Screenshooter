@@ -693,9 +693,13 @@ class ManipulationController:
                 new_blur_state=new_blur_state if (canvas_changed or blur_changed) else None
             ))
 
-        if self._drag_blur_needs_recompute:
+        # Любое перемещение аннотации может временно пересекать blur.
+        # После завершения drag принудительно пересобираем результат, чтобы
+        # уход аннотации из зоны никогда не оставлял устаревший/повреждённый
+        # пиксмап размытия.
+        if self.view.blur_controller.blur_regions:
             self.view.blur_controller._force_blur_recompute()
-            self._drag_blur_needs_recompute = False
+        self._drag_blur_needs_recompute = False
 
         self.view._interaction_dragging = False
         self.view.widget_manager.update_floating_widgets_visibility()
