@@ -408,6 +408,51 @@ class EditorView(QGraphicsView):
         work_rect = bg_rect.adjusted(-pad_x, -pad_y, pad_x, pad_y)
         self.set_scene_rect_preserving_view(self.sceneRect().united(work_rect))
 
+    def ensure_drag_scene_rect(self):
+        """Расширяет только рабочую sceneRect, когда drag доходит до края.
+
+        Это не меняет подложку и не добавляет белые поля. Рабочая область
+        расширяется только по факту выхода габаритов перетаскиваемого объекта
+        за текущую sceneRect, поэтому перемещение влево/вверх не упирается
+        в границу сцены.
+        """
+        if not self.manipulation_controller._drag_items:
+            return False
+
+        scene_rect = QRectF(self.sceneRect())
+        required = QRectF(scene_rect)
+
+        for item in self.manipulation_controller._drag_items:
+            try:
+                required = required.united(item.sceneBoundingRect())
+            except RuntimeError:
+                continue
+
+        if scene_rect.contains(required):
+            return False
+
+        scale = abs(self.transform().m11())
+        if scale < 0.001:
+            scale = 1.0
+        visible_w = max(1.0, self.viewport().width() / scale)
+        visible_h = max(1.0, self.viewport().height() / scale)
+
+        pad_x = max(200.0, visible_w * 1.5)
+        pad_y = max(200.0, visible_h * 1.5)
+        expanded = required.adjusted(-pad_x, -pad_y, pad_x, pad_y)
+
+        try:
+            center = self.mapToScene(self.viewport().rect().center())
+            self.setSceneRect(scene_rect.united(expanded))
+            # В отличие от общего helper'а здесь не откладываем centerOn()
+            # на следующий event-loop: при непрерывном drag это даёт плавное
+            # расширение рабочей области без кадра с "прыжком".
+            self.centerOn(center)
+        except (RuntimeError, AttributeError):
+            return False
+
+        return True
+
     def expand_background_to_content(self, margin=50, threshold=1):
         """Расширяет подложку белыми полями под вышедшие за неё объекты."""
         bg = self.image_editor.background_item
