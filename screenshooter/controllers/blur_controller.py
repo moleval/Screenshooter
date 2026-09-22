@@ -11,6 +11,7 @@ from PyQt5.QtGui import QPixmap, QImage, QPainter
 
 from ..constants import MIN_RECT_SIZE
 from ..items.blur_region_item import BlurRegionItem
+from ..items.pasted_image_item import PastedImageItem
 from ..image_processing import blur_region
 
 
@@ -265,12 +266,12 @@ class BlurController:
         self._do_blur_recompute(radius=radius, preview=True, preview_scale=scale)
 
     def _render_blur_source(self, item):
-        """Рендерит состав слоёв, которые находятся НИЖЕ данного blur.
+        """Строит снимок только слоёв ниже данного blur.
 
-        Не полагаемся только на zValue при построении источника размытия:
-        пользовательский слой является семантическим уровнем, поэтому
-        изображение с layer=2 обязано попасть в источник blur layer=1.
-        Одновременно объекты layer=1 и все аннотации layer=0 исключаются.
+        Здесь не используется QGraphicsScene.render(): при смешанном
+        z-order он может дать некорректный результат для прозрачного
+        временного изображения. Источник собирается явно: подложка +
+        изображения/blur более низкого пользовательского слоя.
         """
         rect = item.sceneBoundingRect().normalized()
         width = max(1, int(round(rect.width())))
@@ -279,54 +280,61 @@ class BlurController:
         image = QImage(width, height, QImage.Format_ARGB32_Premultiplied)
         image.fill(Qt.transparent)
 
-        current_layer = int(getattr(item, 'layer', 1))
-        scene_items = list(self.view.scene().items())
-        hidden = []
+        painter = QPainter(image)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
 
-        for scene_item in scene_items:
-            if scene_item is item:
-                if scene_item.isVisible():
-                    scene_item.setVisible(False)
-                    hidden.append(scene_item)
-                continue
-
-            # Подложка всегда является источником.
-            if scene_item is self.view.image_editor.background_item:
-                continue
-
-            if isinstance(scene_item, (BlurRegionItem,)):
-                item_layer = int(getattr(scene_item, 'layer', 1))
-                include = item_layer > current_layer
-            else:
-                # Для вставленных картинок layer=1/2. Все остальные
-                # аннотации считаются верхним слоем 0 и не попадают в blur.
-                item_layer = getattr(scene_item, 'layer', None)
-                if item_layer is not None:
-                    include = int(item_layer) > current_layer
-                else:
-                    include = False
-
-            if not include:
-                if scene_item.isVisible():
-                    scene_item.setVisible(False)
-                    hidden.append(scene_item)
-
-        try:
-            painter = QPainter(image)
-            painter.setRenderHint(QPainter.Antialiasing, True)
-            painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
-            self.view.scene().render(
-                painter,
-                QRectF(0, 0, width, height),
-                rect,
-                Qt.IgnoreAspectRatio,
+        def draw_pixmap_in_scene_rect(pixmap, scene_rect):
+            if pixmap is None or pixmap.isNull() or scene_rect.isEmpty():
+                return
+            target = QRectF(
+                scene_rect.left() - rect.left(),
+                scene_rect.top() - rect.top(),
+                scene_rect.width(),
+                scene_rect.height(),
             )
-            painter.end()
-        finally:
-            for scene_item in hidden:
-                if not self._is_deleted(scene_item):
-                    scene_item.setVisible(True)
+            painter.drawPixmap(target, pixmap, QRectF(pixmap.rect()))
 
+        background = self.view.image_editor.background_item
+        if background is not None and not self._is_deleted(background):
+            bg_scene_rect = background.sceneBoundingRect().normalized()
+            draw_pixmap_in_scene_rect(background.pixmap(), bg_scene_rect)
+
+        current_layer = int(getattr(item, 'layer', 1))
+
+        lower_items = []
+        for scene_item in self.view.scene().items():
+            if scene_item is item or not scene_item.isVisible():
+                continue
+            if scene_item is background:
+                continue
+
+            layer = getattr(scene_item, 'layer', None)
+            if layer is None or int(layer) <= current_layer:
+                continue
+
+            if isinstance(scene_item, PastedImageItem):
+                lower_items.append(scene_item)
+            elif isinstance(scene_item, BlurRegionItem):
+                lower_items.append(scene_item)
+
+        # Сначала нижние пользовательские слои, затем объекты выше них
+        # внутри источника. Для одинакового слоя сохраняем Qt-порядок.
+        lower_items.sort(key=lambda it: it.zValue())
+
+        for scene_item in lower_items:
+            if isinstance(scene_item, PastedImageItem):
+                draw_pixmap_in_scene_rect(
+                    scene_item.pixmap(),
+                    scene_item.sceneBoundingRect().normalized(),
+                )
+            elif isinstance(scene_item, BlurRegionItem):
+                draw_pixmap_in_scene_rect(
+                    scene_item.blurred_pixmap,
+                    scene_item.sceneBoundingRect().normalized(),
+                )
+
+        painter.end()
         return QPixmap.fromImage(image)
 
     def _do_blur_recompute(self, radius=10.0, moving_index=None,
