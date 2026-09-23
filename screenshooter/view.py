@@ -37,7 +37,8 @@ from .ui.layout_manager import LayoutManager
 from .tools import RectTool, EllipseTool, LineTool, ArrowTool, TextTool
 from .controllers import (ClipboardController, ManipulationController,
                           KeyboardManager, FloatingWidgetManager,
-                          PastedImageController, BlurController)
+                          PastedImageController, BlurController,
+                          AnnotationResizeController)
 from .controllers.mouse_interaction_manager import MouseInteractionManager
 from .theme import theme_manager
 
@@ -135,6 +136,7 @@ class EditorView(QGraphicsView):
         self.blur_controller = BlurController(self)
         self.clipboard_controller = ClipboardController(self)
         self.manipulation_controller = ManipulationController(self)
+        self.annotation_resize_controller = AnnotationResizeController(self)
         self.keyboard_manager = KeyboardManager(self)
         self.widget_manager = FloatingWidgetManager(self)
 
@@ -144,6 +146,7 @@ class EditorView(QGraphicsView):
             self.blur_controller,
             self.image_editor,
             self.manipulation_controller,
+            self.annotation_resize_controller,
         )
 
         self.widget_manager.update_info_widget_content(
