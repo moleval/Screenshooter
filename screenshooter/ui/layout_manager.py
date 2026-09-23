@@ -34,6 +34,7 @@ class LayoutManager:
         self.line_mode_widget = view.line_mode_widget
         self.info_widget = view.info_widget
         self.layer_widget = view.layer_widget
+        self.image_opacity_widget = view.image_opacity_widget
         self.status_label = view.status_label
 
         # ЭТАП 3: таймер дебаунса для update_all()
@@ -65,6 +66,7 @@ class LayoutManager:
         self.update_line_mode_widget_position()
         self.update_info_widget_position()
         self.update_layer_widget_position()
+        self.update_image_opacity_widget_position()
         self.update_status_label_position()
 
     # ---- Вспомогательные методы для получения размеров viewport и полос прокрутки ----
@@ -244,6 +246,28 @@ class LayoutManager:
             x = vw - iw.width() - sw - 4
             y = 4
 
+        x = max(0, x)
+        y = max(0, y)
+        iw.move(x, y)
+        iw.raise_()
+
+
+    def update_image_opacity_widget_position(self):
+        """Размещает ползунок прозрачности над панелью слоёв."""
+        iw = self.image_opacity_widget
+        if not iw or not iw.isVisible():
+            return
+        vp_rect = self._viewport_rect()
+        if not vp_rect:
+            return
+        vw = vp_rect.width()
+        sw = self._scrollbar_width()
+        x = vw - iw.width() - sw - self.TEXT_FORMAT_RIGHT_OFFSET
+        lw = self.layer_widget
+        if lw and lw.isVisible():
+            y = lw.y() - iw.height() - 4
+        else:
+            y = self.TEXT_FORMAT_TOP_OFFSET
         x = max(0, x)
         y = max(0, y)
         iw.move(x, y)
