@@ -229,6 +229,7 @@ class EditorView(QGraphicsView):
             self.widget_manager.update_floating_widgets_visibility()
             self.widget_manager.update_resolution_for_selection()
             self._update_blur_region_handles()
+            self.annotation_resize_controller.sync_handles()
         except RuntimeError:
             pass
 
@@ -304,6 +305,7 @@ class EditorView(QGraphicsView):
         self.widget_manager.update_floating_widgets_visibility()
         self._update_pasted_image_handles()
         self._update_blur_region_handles()
+        self.annotation_resize_controller.sync_handles()
         self.update_layer_widget()
 
     def update_resolution_from_background(self):
