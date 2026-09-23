@@ -1,11 +1,12 @@
 """
 Модуль: crop_handles.py
-Описание: Класс CropHandles для создания и управления 8 маркерами изменения размера.
+Описание: Универсальный класс маркеров изменения размера.
+          Поддерживает произвольные точки и совместимый API для QRectF.
 """
 
 from PyQt5 import sip
 from PyQt5.QtCore import Qt, QPointF, QRectF
-from PyQt5.QtGui import QPen, QColor, QBrush
+from PyQt5.QtGui import QPen
 from PyQt5.QtWidgets import QGraphicsEllipseItem, QGraphicsItem
 
 from ..theme import theme_manager
@@ -22,12 +23,23 @@ class CropHandles:
         self.handle_items = {}
         self.positions = {}
 
-    def create_handles(self, rect: QRectF):
+    def create_handles(self, points):
+        """Создаёт маркеры по словарю {handle_id: QPointF}.
+
+        Для обратной совместимости старый вызов create_handles(QRectF)
+        по-прежнему создаёт стандартные 4/8 прямоугольных маркеров.
+        """
+        if isinstance(points, QRectF):
+            points = self._ids_positions(points)
+        else:
+            points = self._normalize_points(points)
+
         self.remove_handles()
-        ids_positions = self._ids_positions(rect)
-        for handle_id, pos in ids_positions.items():
-            handle = QGraphicsEllipseItem(-self.HANDLE_RADIUS, -self.HANDLE_RADIUS,
-                                          2 * self.HANDLE_RADIUS, 2 * self.HANDLE_RADIUS)
+        for handle_id, pos in points.items():
+            handle = QGraphicsEllipseItem(
+                -self.HANDLE_RADIUS, -self.HANDLE_RADIUS,
+                2 * self.HANDLE_RADIUS, 2 * self.HANDLE_RADIUS
+            )
             pen = QPen(Qt.white, 2)
             pen.setCosmetic(True)
             handle.setPen(pen)
@@ -40,12 +52,28 @@ class CropHandles:
             self.handle_items[handle_id] = handle
             self.positions[handle_id] = pos
 
-    def update_handles(self, rect: QRectF):
-        ids_positions = self._ids_positions(rect)
-        for handle_id, pos in ids_positions.items():
+    def create_rect_handles(self, rect: QRectF):
+        """Явная обёртка для стандартных прямоугольных маркеров."""
+        self.create_handles(rect)
+
+    def update_handles(self, points):
+        """Обновляет произвольный набор маркеров.
+
+        Если передан QRectF, используется старый прямоугольный API.
+        """
+        if isinstance(points, QRectF):
+            points = self._ids_positions(points)
+        else:
+            points = self._normalize_points(points)
+
+        for handle_id, pos in points.items():
             if handle_id in self.handle_items:
                 self.handle_items[handle_id].setPos(pos)
                 self.positions[handle_id] = pos
+
+    def update_rect_handles(self, rect: QRectF):
+        """Явная обёртка для стандартных прямоугольных маркеров."""
+        self.update_handles(rect)
 
     def remove_handles(self):
         for handle in self.handle_items.values():
@@ -78,6 +106,15 @@ class CropHandles:
         elif handle_id in ('lm', 'rm'):
             return Qt.SizeHorCursor
         return Qt.ArrowCursor
+
+    def _normalize_points(self, points):
+        if not hasattr(points, 'items'):
+            raise TypeError("points must be a dict-like object of handle_id -> QPointF")
+
+        normalized = {}
+        for handle_id, pos in points.items():
+            normalized[handle_id] = QPointF(pos)
+        return normalized
 
     def _ids_positions(self, rect: QRectF):
         positions = {
