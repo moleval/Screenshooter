@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import QUndoStack
 from .item_commands import (AddItemCommand, RemoveItemCommand,
                             MoveItemCommand, MoveItemsCommand,
                             ResizeItemCommand, ChangePenCommand,
-                            ChangeTextCommand)
+                            ChangeBrushCommand, ChangeTextCommand)
 from .background_commands import CropCommand, RotateCommand, BlurCommand
 from .blur_commands import (AddBlurRegionCommand, RemoveBlurRegionCommand,
                             MoveBlurRegionCommand, ResizeBlurRegionCommand)
@@ -26,7 +26,7 @@ __all__ = [
     # Команды элементов
     'AddItemCommand', 'RemoveItemCommand',
     'MoveItemCommand', 'MoveItemsCommand',
-    'ResizeItemCommand', 'ChangePenCommand', 'ChangeTextCommand',
+    'ResizeItemCommand', 'ChangePenCommand', 'ChangeBrushCommand', 'ChangeTextCommand',
     # Команды фона
     'CropCommand', 'RotateCommand', 'BlurCommand',
     # Команды зон размытия
