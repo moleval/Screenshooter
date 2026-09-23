@@ -37,10 +37,11 @@ class FakeView(QGraphicsView):
         pass
 
 
-def event_for(view, scene_pos):
+def event_for(view, scene_pos, modifiers=Qt.NoModifier):
     return SimpleNamespace(
         button=lambda: Qt.LeftButton,
         pos=lambda: view.mapFromScene(scene_pos),
+        modifiers=lambda: modifiers,
     )
 
 
@@ -199,6 +200,40 @@ def test_line_resize_is_blocked_in_blur_and_crop_modes(qapp):
 
     view.image_editor.crop_mode = True
     assert not controller.handle_mouse_press(event_for(view, endpoint))
+
+    controller.remove_handles()
+    view.close()
+
+@pytest.mark.parametrize(
+    "factory",
+    [
+        lambda: LineItem(30, 40, 100, 70, QPen(Qt.red, 2)),
+        lambda: WavyLineItem(30, 40, 100, 70, QPen(Qt.red, 2)),
+        lambda: ArrowItem(QPointF(30, 40), QPointF(100, 70), QPen(Qt.red, 2)),
+        lambda: DimensionItem(QPointF(30, 40), QPointF(100, 70), QPen(Qt.red, 2)),
+    ],
+)
+def test_shift_resize_makes_line_like_annotation_orthogonal(qapp, factory):
+    view, _ = make_fixture(qapp)
+    item = factory()
+    view.scene().addItem(item)
+    controller = select_item(view, item)
+
+    start, end = scene_endpoints(item)
+    target = QPointF(140, 95)
+
+    assert controller.handle_mouse_press(event_for(view, end))
+    assert controller.handle_mouse_move(
+        event_for(view, target, Qt.ShiftModifier)
+    )
+    controller.handle_mouse_release(
+        event_for(view, target, Qt.ShiftModifier)
+    )
+
+    new_start, new_end = scene_endpoints(item)
+    assert new_start == start
+    assert new_end.x() == target.x()
+    assert new_end.y() == start.y()
 
     controller.remove_handles()
     view.close()
