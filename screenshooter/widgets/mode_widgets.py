@@ -214,7 +214,7 @@ class ImageOpacityWidget(QFrame):
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(3, 3, 3, 3)
-        layout.setSpacing(4)
+        layout.setSpacing(8)
 
         self.slider = QSlider(Qt.Horizontal)
         self.slider.setRange(0, 100)
@@ -230,9 +230,7 @@ class ImageOpacityWidget(QFrame):
         )
 
         layout.addWidget(self.slider, 1)
-        layout.setStretch(0, 1)
-        layout.setStretch(1, 0)
-        layout.addWidget(self.value_label)
+        layout.addWidget(self.value_label, 0)
 
         self.slider.valueChanged.connect(self._on_value_changed)
         self.slider.sliderReleased.connect(self.editingFinished.emit)
