@@ -4,10 +4,13 @@
 """
 
 from PyQt5.QtCore import QObject
+import os
 from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QSystemTrayIcon, QMenu, QAction, QApplication
+from PyQt5.QtWidgets import QSystemTrayIcon, QMenu, QAction, QApplication, QFileDialog
 
 from .utils import load_app_icon
+from .settings import AppSettings
+from .theme import theme_manager
 
 
 class TrayManager(QObject):
@@ -15,6 +18,9 @@ class TrayManager(QObject):
         super().__init__(window_manager)
         self.window_manager = window_manager
         self.window_manager.tray_manager = self
+        # Настройки принадлежат приложению, а не конкретному окну.
+        # Это позволяет управлять ими даже когда все редакторы закрыты.
+        self.settings = AppSettings()
 
         current_window = self._current_window()
         icon = current_window.windowIcon() if current_window is not None else load_app_icon()
@@ -85,17 +91,21 @@ class TrayManager(QObject):
         self.autostart_action = QAction("Автозагрузка", self)
         self.autostart_action.setCheckable(True)
         current_window = self._current_window()
-        self.autostart_action.setEnabled(current_window is not None)
-        self.autostart_action.setChecked(current_window.settings.is_autostart_enabled() if current_window is not None else False)
+        self.autostart_action.setEnabled(True)
+        self.autostart_action.setChecked(
+            current_window.settings.is_autostart_enabled()
+            if current_window is not None
+            else self.settings.is_autostart_enabled()
+        )
         self.autostart_action.toggled.connect(self._on_autostart_toggled)
         self.menu.addAction(self.autostart_action)
 
         self.theme_menu = self.menu.addMenu("Тема")
-        self.theme_menu.setEnabled(current_window is not None)
+        self.theme_menu.setEnabled(True)
         self._build_theme_menu()
 
         self.save_dir_action = QAction("Выбрать папку сохранения...", self)
-        self.save_dir_action.setEnabled(current_window is not None)
+        self.save_dir_action.setEnabled(True)
         self.save_dir_action.triggered.connect(self._choose_save_directory)
         self.menu.addAction(self.save_dir_action)
 
@@ -143,7 +153,11 @@ class TrayManager(QObject):
     def _build_theme_menu(self):
         self.theme_actions = {}
         current_window = self._current_window()
-        current_theme = current_window.settings.theme if current_window is not None else "system"
+        current_theme = (
+            current_window.settings.theme
+            if current_window is not None
+            else self.settings.theme
+        )
         themes = [("light", "Светлая"), ("dark", "Тёмная"), ("system", "Системная")]
         for key, label in themes:
             action = QAction(label, self)
@@ -164,30 +178,50 @@ class TrayManager(QObject):
 
     def _on_autostart_toggled(self, enabled: bool):
         target = self._current_window()
-        if target is None:
-            return
-        if enabled:
-            success = target.settings.create_autostart_shortcut()
-        else:
-            success = target.settings.remove_autostart_shortcut()
+        settings = target.settings if target is not None else self.settings
 
-        self.autostart_action.setChecked(target.settings.is_autostart_enabled())
+        if enabled:
+            success = settings.create_autostart_shortcut()
+        else:
+            success = settings.remove_autostart_shortcut()
+
+        self.autostart_action.setChecked(settings.is_autostart_enabled())
 
         if success:
             msg = "Автозагрузка включена" if enabled else "Автозагрузка выключена"
-            self.tray_icon.showMessage("Скриншотер", msg, QSystemTrayIcon.Information, 2000)
-            target.view.show_status_message(msg, 3000)
+            self.tray_icon.showMessage(
+                "Скриншотер", msg, QSystemTrayIcon.Information, 2000
+            )
+            if target is not None:
+                target.view.show_status_message(msg, 3000)
         else:
             err = "Не удалось изменить автозагрузку"
-            self.tray_icon.showMessage("Скриншотер", err, QSystemTrayIcon.Warning, 2000)
-            target.view.show_status_message(err, 5000)
+            self.tray_icon.showMessage(
+                "Скриншотер", err, QSystemTrayIcon.Warning, 2000
+            )
+            if target is not None:
+                target.view.show_status_message(err, 5000)
 
     def _on_theme_selected(self, theme_key: str):
         target = self._current_window()
-        if target is None:
-            return
-        target.apply_theme(theme_key)
+
+        if target is not None:
+            target.apply_theme(theme_key)
+        else:
+            self.settings.set_theme(theme_key)
+            theme_manager.set_theme(theme_key)
+            theme_manager.apply(QApplication.instance())
+
         self._update_theme_checks(theme_key)
+
+        if target is None:
+            theme_names = {"light": "Светлая", "dark": "Тёмная", "system": "Системная"}
+            self.tray_icon.showMessage(
+                "Скриншотер",
+                f"Тема: {theme_names.get(theme_key, theme_key)}",
+                QSystemTrayIcon.Information,
+                2000,
+            )
 
     def _update_theme_checks(self, selected_key: str):
         for key, action in self.theme_actions.items():
@@ -197,6 +231,21 @@ class TrayManager(QObject):
         target = self._current_window()
         if target is not None:
             target.choose_save_directory()
+            return
+
+        directory = QFileDialog.getExistingDirectory(
+            None,
+            "Выберите папку для сохранения скриншотов",
+            self.settings.save_directory or os.path.expanduser("~"),
+        )
+        if directory:
+            self.settings.set_save_directory(directory)
+            self.tray_icon.showMessage(
+                "Скриншотер",
+                f"Папка сохранения: {directory}",
+                QSystemTrayIcon.Information,
+                2000,
+            )
 
     def _quit_app(self):
         target = self._current_window()
