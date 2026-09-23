@@ -8,7 +8,7 @@ from PyQt5.QtCore import Qt, QPointF, QRectF
 
 from ..constants import MIN_RECT_SIZE
 from ..history import ResizeAnnotationCommand
-from ..items import RectangleItem
+from ..items import EllipseItem, FilledRectItem, RectangleItem, CloudItem
 from ..items.crop_handles import CropHandles
 from ..theme import theme_manager
 
@@ -17,6 +17,8 @@ class AnnotationResizeController:
     """Единственная точка входа для resize аннотаций."""
 
     RECT_HANDLES = ('tl', 'tm', 'tr', 'lm', 'rm', 'bl', 'bm', 'br')
+    ELLIPSE_HANDLES = ('right', 'top')
+    RECT_ITEMS = (RectangleItem, FilledRectItem, CloudItem)
 
     def __init__(self, view):
         self.view = view
@@ -27,6 +29,7 @@ class AnnotationResizeController:
         self._start_local_rect = None
         self._start_anchor = None
         self._old_rect = None
+        self._old_pos = None
 
     def _blocked_by_mode(self) -> bool:
         return bool(
@@ -34,18 +37,24 @@ class AnnotationResizeController:
             or self.view.image_editor.crop_mode
         )
 
-    def _selected_rectangle(self):
+    def _selected_annotation(self):
         selected = self.view.scene().selectedItems()
-        rectangles = [
+        annotations = [
             item for item in selected
-            if isinstance(item, RectangleItem)
+            if isinstance(item, (RectangleItem, FilledRectItem, CloudItem, EllipseItem))
             and not sip.isdeleted(item)
             and item.scene() is self.view.scene()
         ]
-        return rectangles[0] if len(rectangles) == 1 else None
+        return annotations[0] if len(annotations) == 1 else None
 
     @staticmethod
-    def _handle_points(scene_rect):
+    def _handle_points(scene_rect, item):
+        if isinstance(item, EllipseItem):
+            center = scene_rect.center()
+            return {
+                'right': QPointF(scene_rect.right(), center.y()),
+                'top': QPointF(center.x(), scene_rect.top()),
+            }
         return {
             'tl': scene_rect.topLeft(),
             'tm': QPointF(scene_rect.center().x(), scene_rect.top()),
@@ -58,18 +67,18 @@ class AnnotationResizeController:
         }
 
     def sync_handles(self):
-        """Показывает ручки только для единственного выбранного RectangleItem."""
+        """Показывает ручки для единственной выбранной поддерживаемой аннотации."""
         if self._blocked_by_mode():
             self.remove_handles()
             return
 
-        item = self._selected_rectangle()
+        item = self._selected_annotation()
         if item is None:
             self.remove_handles()
             return
 
         scene_rect = item.mapRectToScene(item.rect()).normalized()
-        points = self._handle_points(scene_rect)
+        points = self._handle_points(scene_rect, item)
 
         if self.handles is None or self._item is not item:
             self.remove_handles()
@@ -98,25 +107,20 @@ class AnnotationResizeController:
 
     @staticmethod
     def _anchor_for_handle(rect, handle_id):
-        if handle_id == 'tl':
-            return rect.bottomRight()
-        if handle_id == 'tm':
-            return QPointF(rect.center().x(), rect.bottom())
-        if handle_id == 'tr':
-            return rect.bottomLeft()
-        if handle_id == 'lm':
-            return QPointF(rect.right(), rect.center().y())
-        if handle_id == 'rm':
-            return QPointF(rect.left(), rect.center().y())
-        if handle_id == 'bl':
-            return rect.topRight()
-        if handle_id == 'bm':
-            return QPointF(rect.center().x(), rect.top())
-        if handle_id == 'br':
-            return rect.topLeft()
-        return None
+        anchors = {
+            'tl': rect.bottomRight(),
+            'tm': QPointF(rect.center().x(), rect.bottom()),
+            'tr': rect.bottomLeft(),
+            'lm': QPointF(rect.right(), rect.center().y()),
+            'rm': QPointF(rect.left(), rect.center().y()),
+            'bl': rect.topRight(),
+            'bm': QPointF(rect.center().x(), rect.top()),
+            'br': rect.topLeft(),
+        }
+        return anchors.get(handle_id)
 
-    def _resize_scene_rect(self, old_rect, handle_id, cursor_pos):
+    @staticmethod
+    def _resize_scene_rect(old_rect, handle_id, cursor_pos):
         left, right = old_rect.left(), old_rect.right()
         top, bottom = old_rect.top(), old_rect.bottom()
 
@@ -130,13 +134,63 @@ class AnnotationResizeController:
         elif 'b' in handle_id:
             bottom = max(cursor_pos.y(), top + MIN_RECT_SIZE)
 
-        # Средние ручки изменяют только одну сторону.
         if handle_id in ('tm', 'bm'):
             left, right = old_rect.left(), old_rect.right()
         if handle_id in ('lm', 'rm'):
             top, bottom = old_rect.top(), old_rect.bottom()
 
         return QRectF(QPointF(left, top), QPointF(right, bottom)).normalized()
+
+    def _resize_ellipse(self, old_rect, handle_id, cursor_pos):
+        center = old_rect.center()
+        half_w = max(MIN_RECT_SIZE / 2.0, abs(cursor_pos.x() - center.x()))
+        half_h = max(MIN_RECT_SIZE / 2.0, abs(cursor_pos.y() - center.y()))
+
+        if handle_id == 'right':
+            return QRectF(
+                center.x() - half_w, old_rect.top(),
+                2 * half_w, old_rect.height(),
+            )
+        if handle_id == 'top':
+            return QRectF(
+                old_rect.left(), center.y() - half_h,
+                old_rect.width(), 2 * half_h,
+            )
+        return old_rect
+
+    def _clamp_ellipse_to_background(self, rect, old_rect, handle_id):
+        bg = self.view.image_editor.background_item
+        if bg is None or sip.isdeleted(bg):
+            return rect
+
+        bg_rect = bg.mapRectToScene(QRectF(bg.pixmap().rect())).normalized()
+        center = old_rect.center()
+
+        if handle_id == 'right':
+            radius = min(
+                rect.width() / 2.0,
+                max(0.0, bg_rect.right() - center.x()),
+                max(0.0, center.x() - bg_rect.left()),
+            )
+            radius = max(MIN_RECT_SIZE / 2.0, radius)
+            return QRectF(
+                center.x() - radius, rect.top(),
+                2 * radius, rect.height(),
+            )
+
+        if handle_id == 'top':
+            radius = min(
+                rect.height() / 2.0,
+                max(0.0, bg_rect.bottom() - center.y()),
+                max(0.0, center.y() - bg_rect.top()),
+            )
+            radius = max(MIN_RECT_SIZE / 2.0, radius)
+            return QRectF(
+                rect.left(), center.y() - radius,
+                rect.width(), 2 * radius,
+            )
+
+        return rect
 
     def _clamp_to_background(self, rect, anchor, handle_id):
         """Ограничивает только перемещаемую сторону, сохраняя anchor."""
@@ -157,14 +211,11 @@ class AnnotationResizeController:
         if handle_id in ('bl', 'bm', 'br'):
             bottom = min(bg_rect.bottom(), bottom)
 
-        # Для центральных ручек противоположная координата фиксирована.
         if handle_id in ('lm', 'rm'):
             top, bottom = self._start_scene_rect.top(), self._start_scene_rect.bottom()
         if handle_id in ('tm', 'bm'):
             left, right = self._start_scene_rect.left(), self._start_scene_rect.right()
 
-        # Anchor является окончательной гарантией: при упоре в границу
-        # неподвижная противоположная точка не должна смещаться.
         if anchor is not None:
             if handle_id in ('tl', 'tr', 'bl', 'br'):
                 if anchor.x() <= left:
@@ -192,13 +243,14 @@ class AnnotationResizeController:
         local_rect = item.mapRectFromScene(scene_rect).normalized()
         item.setRect(local_rect)
 
-        # setRect меняет положение геометрии относительно item.pos().
-        # Используем anchor из исходной локальной геометрии и возвращаем
-        # его в исходную сценическую координату.
         current_anchor = item.mapToScene(local_anchor)
         delta = anchor - current_anchor
         item.setPos(item.pos() + delta)
+        self.sync_handles()
 
+    def _apply_ellipse_rect(self, item, scene_rect):
+        local_rect = item.mapRectFromScene(scene_rect).normalized()
+        item.setRect(local_rect)
         self.sync_handles()
 
     def handle_mouse_press(self, event) -> bool:
@@ -222,8 +274,11 @@ class AnnotationResizeController:
         self._handle_id = handle_id
         self._start_scene_rect = item.mapRectToScene(item.rect()).normalized()
         self._start_local_rect = QRectF(item.rect())
-        self._start_anchor = self._anchor_for_handle(
-            self._start_scene_rect, handle_id)
+        self._start_anchor = (
+            self._start_scene_rect.center()
+            if isinstance(item, EllipseItem)
+            else self._anchor_for_handle(self._start_scene_rect, handle_id)
+        )
         self._old_rect = QRectF(item.rect())
         self._old_pos = QPointF(item.pos())
         self.view._interaction_dragging = True
@@ -236,10 +291,22 @@ class AnnotationResizeController:
             return True
 
         cursor_scene = self.view.mapToScene(event.pos())
-        new_scene_rect = self._resize_scene_rect(
-            self._start_scene_rect, self._handle_id, cursor_scene)
+        item = self._item
 
-        # Противоположный anchor должен оставаться неподвижным.
+        if isinstance(item, EllipseItem):
+            new_scene_rect = self._resize_ellipse(
+                self._start_scene_rect, self._handle_id, cursor_scene
+            )
+            new_scene_rect = self._clamp_ellipse_to_background(
+                new_scene_rect, self._start_scene_rect, self._handle_id
+            )
+            self._apply_ellipse_rect(item, new_scene_rect)
+            return True
+
+        new_scene_rect = self._resize_scene_rect(
+            self._start_scene_rect, self._handle_id, cursor_scene
+        )
+
         anchor = self._start_anchor
         if anchor is not None:
             if self._handle_id in ('tl', 'tr', 'bl', 'br'):
@@ -273,8 +340,8 @@ class AnnotationResizeController:
         item = self._item
         old_rect = self._old_rect
         new_rect = QRectF(item.rect()) if item is not None else None
-
         new_pos = QPointF(item.pos()) if item is not None else None
+
         if item is not None and (old_rect != new_rect or self._old_pos != new_pos):
             self.view.history.push(
                 ResizeAnnotationCommand(

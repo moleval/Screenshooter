@@ -101,9 +101,9 @@ class CropHandles:
             return Qt.SizeFDiagCursor
         elif handle_id in ('tr', 'bl'):
             return Qt.SizeBDiagCursor
-        elif handle_id in ('tm', 'bm'):
+        elif handle_id in ('tm', 'bm', 'top'):
             return Qt.SizeVerCursor
-        elif handle_id in ('lm', 'rm'):
+        elif handle_id in ('lm', 'rm', 'right'):
             return Qt.SizeHorCursor
         return Qt.ArrowCursor
 
