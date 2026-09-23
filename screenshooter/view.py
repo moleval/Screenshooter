@@ -1014,13 +1014,25 @@ class EditorView(QGraphicsView):
                 continue
             items.append(self._item_for_manipulation(item))
 
-        # Уже выбранный blur имеет приоритет над перекрывающей его
-        # аннотацией. Это устраняет потерю выделения и рывки при drag.
-        for item in items:
-            if isinstance(item, BlurRegionItem) and item.isSelected():
-                return item
+        # Выбранный blur не должен блокировать выбор объекта, который
+        # находится визуально выше него. Раньше выбранный blur получал
+        # безусловный приоритет, из-за чего аннотацию, полностью лежащую
+        # внутри blur, было невозможно снова выбрать.
+        #
+        # Сохраняем обычный z-order: если верхний selectable-объект —
+        # аннотация или картинка, выбираем именно его. Выбранный blur
+        # получает приоритет только когда сам является верхним объектом
+        # в точке клика (либо когда выше него ничего selectable нет).
+        if items:
+            top_item = items[0]
+            if not isinstance(top_item, BlurRegionItem):
+                return top_item
 
-        return items[0] if items else None
+            for item in items:
+                if isinstance(item, BlurRegionItem):
+                    return item
+
+        return None
 
     def _item_for_manipulation(self, item):
         d = self._dimension_parent(item)
