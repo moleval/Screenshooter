@@ -3,7 +3,7 @@
 Описание: Управление иконкой в системном трее и контекстным меню.
 """
 
-from PyQt5.QtCore import QObject
+from PyQt5.QtCore import QObject, QTimer
 import os
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QSystemTrayIcon, QMenu, QAction, QApplication, QFileDialog
@@ -36,6 +36,13 @@ class TrayManager(QObject):
         self.tray_icon.setContextMenu(self.menu)
         self.tray_icon.activated.connect(self._on_activated)
         self.tray_icon.show()
+
+        # Мониторинг Windows нужен даже при отсутствии окон редактора.
+        self._last_system_theme = theme_manager.detect_system_theme()
+        self._system_theme_timer = QTimer(self)
+        self._system_theme_timer.setInterval(1000)
+        self._system_theme_timer.timeout.connect(self._sync_system_theme)
+        self._system_theme_timer.start()
 
     def _current_window(self):
         if self.window_manager is None:
@@ -207,11 +214,14 @@ class TrayManager(QObject):
 
         if target is not None:
             target.apply_theme(theme_key)
+            self.settings.set_theme(theme_key)
         else:
             self.settings.set_theme(theme_key)
             theme_manager.set_theme(theme_key)
             theme_manager.apply(QApplication.instance())
 
+        self._apply_theme_to_all_windows()
+        self._last_system_theme = theme_manager.detect_system_theme()
         self._update_theme_checks(theme_key)
 
         if target is None:
@@ -222,6 +232,38 @@ class TrayManager(QObject):
                 QSystemTrayIcon.Information,
                 2000,
             )
+
+    def _apply_theme_to_all_windows(self):
+        """Применяет текущую тему ко всем открытым редакторам."""
+        app = QApplication.instance()
+        if app is None:
+            return
+        theme_manager.apply(app)
+        for window in list(self.window_manager.windows if self.window_manager else []):
+            try:
+                window.view.update_theme_colors()
+                window.view.image_editor.status_bar_manager.reset_to_normal()
+                window._update_window_minimum_width()
+            except (RuntimeError, AttributeError):
+                continue
+
+    def _sync_system_theme(self):
+        """Автоматически обновляет интерфейс при смене темы Windows."""
+        selected_theme = self.settings.theme
+        target = self._current_window()
+        if target is not None:
+            selected_theme = target.settings.theme
+
+        if selected_theme != "system":
+            return
+
+        system_theme = theme_manager.detect_system_theme()
+        if system_theme == self._last_system_theme:
+            return
+
+        self._last_system_theme = system_theme
+        theme_manager.set_theme("system")
+        self._apply_theme_to_all_windows()
 
     def _update_theme_checks(self, selected_key: str):
         for key, action in self.theme_actions.items():
