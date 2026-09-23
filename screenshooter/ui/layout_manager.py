@@ -258,7 +258,7 @@ class LayoutManager:
         lw = self.layer_widget
         if not iw or not iw.isVisible() or not lw or not lw.isVisible():
             return
-        iw.setFixedWidth(int(round(lw.width() * 1.8)))
+        iw.setFixedWidth(int(round(lw.width() * 2.0)))
         x = lw.x() - iw.width() - 4
         y = lw.y() + (lw.height() - iw.height()) // 2
         x = max(0, x)
