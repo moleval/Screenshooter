@@ -2,7 +2,7 @@
 
 from PyQt5.QtWidgets import QUndoCommand
 
-from ..items import LineItem, WavyLineItem, ArrowItem, DimensionItem
+from ..items import LineItem, WavyLineItem, ArrowItem, CurvedArrowItem, DimensionItem
 
 
 class ResizeAnnotationCommand(QUndoCommand):
@@ -21,7 +21,11 @@ class ResizeAnnotationCommand(QUndoCommand):
 
     def _apply(self, rect, pos, geometry):
         if geometry is not None:
-            start, end = geometry
+            if len(geometry) == 3 and hasattr(self.item, "set_curve"):
+                start, end, ctrl = geometry
+                self.item.set_curve(start, end, ctrl)
+            else:
+                start, end = geometry
             # Используем нативный API конкретного line-like item.
             # Проверка по API надёжнее isinstance для QGraphicsItem/SIP-обёрток:
             # LineItem наследуется от QGraphicsLineItem, остальные типы имеют
