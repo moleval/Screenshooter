@@ -41,6 +41,10 @@ class AnnotationResizeController:
         self._old_pos = None
         self._start_geometry = None
         self._start_scale = None
+        self._text_anchor_local = None
+        self._text_moving_local = None
+        self._text_anchor_scene = None
+        self._text_original_vector = None
 
     def _blocked_by_mode(self) -> bool:
         return bool(
@@ -318,19 +322,22 @@ class AnnotationResizeController:
         }.get(handle_id)
 
     def _resize_text(self, item, handle_id, cursor_scene):
-        rect = item.rect()
-        corners = {
-            'tl': rect.topLeft(),
-            'tr': rect.topRight(),
-            'bl': rect.bottomLeft(),
-            'br': rect.bottomRight(),
-        }
-        opposite_id = self._text_opposite_handle(handle_id)
-        moving_local = corners[handle_id]
-        anchor_local = corners[opposite_id]
-        anchor_scene = item.mapToScene(anchor_local)
-        original_vector = item.mapToScene(moving_local) - anchor_scene
-        cursor_vector = QPointF(cursor_scene) - anchor_scene
+        # Геометрия resize фиксируется в момент press. Нельзя каждый move
+        # заново брать rect()/anchor из уже масштабированного
+        # QGraphicsTextItem: небольшие изменения boundingRect/document layout
+        # иначе превращаются в визуальную рябь и дрожание точки привязки.
+        anchor_local = self._text_anchor_local
+        moving_local = self._text_moving_local
+        anchor_scene = self._text_anchor_scene
+        original_vector = self._text_original_vector
+
+        if (
+            anchor_local is None
+            or moving_local is None
+            or anchor_scene is None
+            or original_vector is None
+        ):
+            return
 
         denominator = (
             original_vector.x() ** 2 + original_vector.y() ** 2
@@ -338,6 +345,7 @@ class AnnotationResizeController:
         if denominator < 1e-9:
             return
 
+        cursor_vector = QPointF(cursor_scene) - anchor_scene
         scale_factor = (
             cursor_vector.x() * original_vector.x()
             + cursor_vector.y() * original_vector.y()
@@ -345,6 +353,10 @@ class AnnotationResizeController:
         new_scale = max(MIN_SCALE, self._start_scale * scale_factor)
 
         item.setScale(new_scale)
+
+        # После setScale вычисляем только фактический сдвиг позиции,
+        # необходимый для возврата исходной scene-точки якоря. Сам якорь
+        # и исходный вектор при этом не меняются от кадра к кадру.
         current_anchor = item.mapToScene(anchor_local)
         item.setPos(item.pos() + (anchor_scene - current_anchor))
 
@@ -421,6 +433,20 @@ class AnnotationResizeController:
             self._start_geometry = None
             self._start_scene_rect = None
             self._start_local_rect = QRectF(item.rect())
+            corners = {
+                'tl': self._start_local_rect.topLeft(),
+                'tr': self._start_local_rect.topRight(),
+                'bl': self._start_local_rect.bottomLeft(),
+                'br': self._start_local_rect.bottomRight(),
+            }
+            opposite_id = self._text_opposite_handle(handle_id)
+            self._text_moving_local = QPointF(corners[handle_id])
+            self._text_anchor_local = QPointF(corners[opposite_id])
+            self._text_anchor_scene = item.mapToScene(self._text_anchor_local)
+            self._text_original_vector = (
+                item.mapToScene(self._text_moving_local)
+                - self._text_anchor_scene
+            )
         elif isinstance(item, CurvedArrowItem):
             self._start_geometry = self._scene_curve_geometry(item)
             self._start_scene_rect = None
@@ -598,6 +624,10 @@ class AnnotationResizeController:
         self._old_pos = None
         self._start_geometry = None
         self._start_scale = None
+        self._text_anchor_local = None
+        self._text_moving_local = None
+        self._text_anchor_scene = None
+        self._text_original_vector = None
         self.view._interaction_dragging = False
         self.sync_handles()
         self.view._update_floating_widgets_visibility()
