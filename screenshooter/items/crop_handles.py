@@ -66,10 +66,23 @@ class CropHandles:
         else:
             points = self._normalize_points(points)
 
+        changed = False
         for handle_id, pos in points.items():
             if handle_id in self.handle_items:
-                self.handle_items[handle_id].setPos(pos)
+                handle = self.handle_items[handle_id]
+                if handle.pos() != pos:
+                    handle.setPos(pos)
+                    changed = True
                 self.positions[handle_id] = pos
+                handle.update()
+
+        # Ручки — отдельные QGraphicsItem с ItemIgnoresTransformations.
+        # При быстром перемещении/прокрутке QGraphicsView старый кадр может
+        # оставаться до следующего обновления viewport. Явно планируем
+        # перерисовку сцены после смены позиций, чтобы старые маркеры не
+        # оставались визуальными фантомами.
+        if changed:
+            self.view.scene().update()
 
     def update_rect_handles(self, rect: QRectF):
         """Явная обёртка для стандартных прямоугольных маркеров."""
@@ -84,8 +97,11 @@ class CropHandles:
                     self.view.scene().removeItem(handle)
             except RuntimeError:
                 continue
+        had_handles = bool(self.handle_items)
         self.handle_items.clear()
         self.positions.clear()
+        if had_handles:
+            self.view.scene().update()
 
     def hit_test(self, device_pos: QPointF):
         device_pos = QPointF(device_pos)
