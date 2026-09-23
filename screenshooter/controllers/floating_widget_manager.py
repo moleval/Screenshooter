@@ -14,7 +14,8 @@ from PyQt5.QtWidgets import QGraphicsTextItem
 from ..items import (RectangleItem, EllipseItem, FilledRectItem, CloudItem,
                      LineItem, WavyLineItem, ArrowItem, CurvedArrowItem,
                      DimensionItem, TextItem)
-from ..history import ChangePenCommand
+from ..items.pasted_image_item import PastedImageItem
+from ..history import ChangePenCommand, ChangeImageOpacityCommand
 from ..theme import theme_manager
 
 
@@ -42,6 +43,9 @@ class FloatingWidgetManager:
         view.ellipse_mode_widget.modeChanged.connect(self._on_ellipse_mode_changed)
         view.arrow_mode_widget.modeChanged.connect(self._on_arrow_mode_changed)
         view.line_mode_widget.modeChanged.connect(self._on_line_mode_changed)
+        view.image_opacity_widget.opacityChanged.connect(self._on_image_opacity_changed)
+        view.image_opacity_widget.editingFinished.connect(self._finish_image_opacity_change)
+        self._image_opacity_old_values = None
 
     # ==============================================================
     # Обработчики сигналов виджетов
@@ -88,6 +92,30 @@ class FloatingWidgetManager:
 
     def _on_line_mode_changed(self, m):
         self.view.line_mode = m
+
+    def _selected_images(self):
+        return [item for item in self.view.scene().selectedItems()
+                if isinstance(item, PastedImageItem)]
+
+    def _on_image_opacity_changed(self, value):
+        images = self._selected_images()
+        if not images:
+            return
+        if self._image_opacity_old_values is None:
+            self._image_opacity_old_values = [item.get_image_opacity() for item in images]
+        for item in images:
+            item.set_image_opacity(value)
+
+    def _finish_image_opacity_change(self):
+        images = self._selected_images()
+        old_values = self._image_opacity_old_values
+        self._image_opacity_old_values = None
+        if not images or old_values is None:
+            return
+        new_value = images[0].get_image_opacity()
+        if all(old == new_value for old in old_values):
+            return
+        self.view.history.push(ChangeImageOpacityCommand(images, old_values, new_value))
 
     # ==============================================================
     # Статусный виджет
@@ -205,6 +233,7 @@ class FloatingWidgetManager:
         if getattr(view, "_interaction_dragging", False):
             return
         view.shape_mode_widget.setVisible(False)
+        view.image_opacity_widget.setVisible(False)
         view.ellipse_mode_widget.setVisible(False)
         view.arrow_mode_widget.setVisible(False)
         view.line_mode_widget.setVisible(False)
@@ -217,6 +246,8 @@ class FloatingWidgetManager:
             return
 
         selected = view.scene().selectedItems()
+        if any(isinstance(item, PastedImageItem) for item in selected):
+            self.update_image_opacity_widget()
         if selected:
             all_text = all(isinstance(item, TextItem) for item in selected)
             if all_text:
