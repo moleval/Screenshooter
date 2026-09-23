@@ -610,6 +610,7 @@ class BlurController:
         sp = self.view.mapToScene(event.pos())
 
         if self.blur_interaction == 'resizing':
+            self._auto_scroll_during_drag(event)
             if self.active_blur_index is not None:
                 new_rect = self._apply_blur_resize(
                     self.active_blur_index, self.blur_resize_handle, sp)
@@ -620,6 +621,7 @@ class BlurController:
             return True
 
         if self.blur_interaction == 'moving':
+            self._auto_scroll_during_drag(event)
             if self.active_blur_index is not None:
                 item = self.blur_region_items[self.active_blur_index]
                 delta = sp - self.blur_move_start
@@ -798,6 +800,7 @@ class BlurController:
 
         sp = self.view.mapToScene(event.pos())
         if self.blur_outside_interaction == 'resizing':
+            self._auto_scroll_during_drag(event)
             if self.active_blur_index is not None:
                 new_rect = self._apply_blur_resize(
                     self.active_blur_index, self.blur_resize_handle, sp)
@@ -807,6 +810,7 @@ class BlurController:
                 self._schedule_blur_recompute(moving_index=self.active_blur_index)
             return True
         elif self.blur_outside_interaction == 'moving':
+            self._auto_scroll_during_drag(event)
             if self.active_blur_index is not None:
                 item = self.blur_region_items[self.active_blur_index]
                 delta = sp - self.blur_move_start
@@ -862,6 +866,37 @@ class BlurController:
     # ==============================================================
     # Вспомогательные
     # ==============================================================
+
+    def _auto_scroll_during_drag(self, event):
+        """Автопрокрутка расширенной sceneRect при перемещении blur."""
+        edge = 24
+        speed = 24
+        viewport = self.view.viewport().rect()
+
+        near_edge = (
+            event.pos().x() <= viewport.left() + edge
+            or event.pos().x() >= viewport.right() - edge
+            or event.pos().y() <= viewport.top() + edge
+            or event.pos().y() >= viewport.bottom() - edge
+        )
+        if not near_edge:
+            return
+
+        # Рабочее поле должно существовать до изменения scrollbar.
+        self.view.prepare_drag_scene_rect(event.pos())
+
+        hbar = self.view.horizontalScrollBar()
+        vbar = self.view.verticalScrollBar()
+
+        if event.pos().x() <= viewport.left() + edge:
+            hbar.setValue(hbar.value() - speed)
+        elif event.pos().x() >= viewport.right() - edge:
+            hbar.setValue(hbar.value() + speed)
+
+        if event.pos().y() <= viewport.top() + edge:
+            vbar.setValue(vbar.value() - speed)
+        elif event.pos().y() >= viewport.bottom() - edge:
+            vbar.setValue(vbar.value() + speed)
 
     def _apply_blur_resize(self, index, handle_id, new_scene_pos):
         item = self.blur_region_items[index]
