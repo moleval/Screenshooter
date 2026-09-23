@@ -18,7 +18,7 @@ class CropCommand(QUndoCommand):
     def __init__(self, scene, background_item, old_pixmap, new_pixmap, items_to_remove,
                  blur_controller=None, crop_rect=None,
                  items_to_shift=None, old_positions=None, new_positions=None,
-                 background_pos=None):
+                 background_pos=None, new_background_pos=None):
         super().__init__("Обрезка")
         self.scene = scene
         self.background_item = background_item
@@ -33,6 +33,7 @@ class CropCommand(QUndoCommand):
         self.old_positions = old_positions or []
         self.new_positions = new_positions or []
         self.background_pos = background_pos
+        self.new_background_pos = (new_background_pos if new_background_pos is not None else background_pos)
 
         if self.blur_controller is not None:
             self.blur_state = self.blur_controller._get_blur_state()
@@ -49,8 +50,8 @@ class CropCommand(QUndoCommand):
             item.setPos(new_pos)
 
         self.background_item.setPixmap(self.new_pixmap)
-        if self.background_pos is not None:
-            self.background_item.setPos(self.background_pos)
+        if self.new_background_pos is not None:
+            self.background_item.setPos(self.new_background_pos)
         self.background_item.update()
 
         if self.blur_controller is not None and self.crop_rect is not None:
