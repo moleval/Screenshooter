@@ -168,6 +168,8 @@ def press_and_resize(view, controller, item, kind):
         target = anchor + (handle - anchor) * 1.3
 
     assert controller.handle_mouse_press(event_for(view, handle))
+    first_target = handle + (target - handle) * 0.5
+    assert controller.handle_mouse_move(event_for(view, first_target))
     assert controller.handle_mouse_move(event_for(view, target))
     assert controller.handle_mouse_release(event_for(view, target))
 
