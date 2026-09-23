@@ -152,14 +152,19 @@ class AnnotationResizeController:
 
         return QRectF(left, top, width, height)
 
+    def _local_anchor_for_handle(self, rect, handle_id):
+        return self._anchor_for_handle(rect, handle_id)
+
     def _apply_scene_rect(self, item, scene_rect, anchor):
+        local_anchor = self._local_anchor_for_handle(
+            self._start_local_rect, self._handle_id
+        )
         local_rect = item.mapRectFromScene(scene_rect).normalized()
         item.setRect(local_rect)
 
         # setRect меняет положение геометрии относительно item.pos().
-        # Возвращаем неподвижный противоположный anchor в исходную сценическую
-        # координату.
-        local_anchor = item.mapFromScene(anchor)
+        # Используем anchor из исходной локальной геометрии и возвращаем
+        # его в исходную сценическую координату.
         current_anchor = item.mapToScene(local_anchor)
         delta = anchor - current_anchor
         item.setPos(item.pos() + delta)
