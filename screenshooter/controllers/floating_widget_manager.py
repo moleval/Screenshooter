@@ -257,7 +257,7 @@ class FloatingWidgetManager:
             return
 
         selected = view.scene().selectedItems()
-        if any(isinstance(item, PastedImageItem) for item in selected):
+        if selected and all(isinstance(item, PastedImageItem) for item in selected):
             self.update_image_opacity_widget()
         if selected:
             all_text = all(isinstance(item, TextItem) for item in selected)
