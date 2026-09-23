@@ -224,8 +224,12 @@ class ImageEditController:
             old_positions=old_positions,
             new_positions=new_positions,
             background_pos=old_background_pos,
-            new_background_pos=old_background_pos - crop.topLeft()
+            # Новый pixmap начинается именно в левом верхнем углу
+            # сформированной пользователем scene-рамки.
+            new_background_pos=crop.topLeft()
         )
+
+        command._local_crop_rect = local_crop
         self.view.history.push(command)
 
         self._finish_crop_operation()
