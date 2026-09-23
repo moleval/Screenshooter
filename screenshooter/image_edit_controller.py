@@ -208,7 +208,9 @@ class ImageEditController:
             self._collect_items_for_crop(crop)
 
         old_pixmap = self.background_item.pixmap()
-        new_pixmap = crop_pixmap_with_padding(old_pixmap, crop)
+        old_background_pos = self.background_item.pos()
+        local_crop = self.background_item.mapRectFromScene(crop)
+        new_pixmap = crop_pixmap_with_padding(old_pixmap, local_crop)
         if new_pixmap.isNull():
             self.overlay.clear()
             return
@@ -220,7 +222,9 @@ class ImageEditController:
             crop_rect=crop,
             items_to_shift=items_to_shift,
             old_positions=old_positions,
-            new_positions=new_positions
+            new_positions=new_positions,
+            background_pos=old_background_pos,
+            new_background_pos=old_background_pos - crop.topLeft()
         )
         self.view.history.push(command)
 
