@@ -12,9 +12,10 @@ from .blur_controller import BlurController
 from .crop_cursor_factory import CropCursorFactory
 from .crop_overlay_controller import CropOverlayController
 from .status_bar_manager import StatusBarManager
+from .annotation_resize_controller import AnnotationResizeController
 
 __all__ = ['ClipboardController', 'ManipulationController',
            'KeyboardManager', 'FloatingWidgetManager',
            'PastedImageController', 'BlurController',
            'CropCursorFactory', 'CropOverlayController',
-           'StatusBarManager']
+           'StatusBarManager', 'AnnotationResizeController']
