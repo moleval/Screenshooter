@@ -12,7 +12,7 @@ from ..constants import MIN_RECT_SIZE, MIN_ARROW_LENGTH, MIN_SCALE
 from ..history import ResizeAnnotationCommand
 from ..items import (
     EllipseItem, FilledRectItem, RectangleItem, CloudItem,
-    LineItem, WavyLineItem, ArrowItem, CurvedArrowItem, DimensionItem,
+    LineItem, WavyLineItem, ArrowItem, CurvedArrowItem, DimensionItem, TextItem,
 )
 from ..items.crop_handles import CropHandles
 from ..theme import theme_manager
