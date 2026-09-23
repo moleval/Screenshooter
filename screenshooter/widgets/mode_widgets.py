@@ -8,7 +8,7 @@
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import (QFrame, QHBoxLayout, QPushButton, QButtonGroup,
-                             QSizePolicy)
+                             QSizePolicy, QLabel, QSlider)
 from .tool_icons import (create_shape_mode_icon, create_ellipse_mode_icon,
                          create_arrow_mode_icon, create_line_mode_icon)
 
@@ -188,3 +188,55 @@ class LayerModeWidget(BaseModeWidget):
 
     def get_mode(self):
         return self._current_mode
+
+
+class ImageOpacityWidget(QFrame):
+    """Ползунок прозрачности только для выбранных вставленных изображений."""
+
+    opacityChanged = pyqtSignal(int)
+    editingFinished = pyqtSignal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFrameShape(QFrame.StyledPanel)
+        self.setStyleSheet(
+            "QFrame { background-color: rgba(200,200,200,100); "
+            "border-radius: 12px; border: 2px solid rgba(80,80,80,180); padding: 3px; }"
+        )
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(7, 3, 7, 3)
+        layout.setSpacing(5)
+
+        self.label = QLabel("Прозрачность")
+        self.label.setStyleSheet("QLabel { background: transparent; border: none; }")
+        self.slider = QSlider(Qt.Horizontal)
+        self.slider.setRange(0, 100)
+        self.slider.setSingleStep(1)
+        self.slider.setPageStep(10)
+        self.slider.setFixedWidth(110)
+        self.value_label = QLabel("100%")
+        self.value_label.setFixedWidth(38)
+        self.value_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.value_label.setStyleSheet("QLabel { background: transparent; border: none; }")
+
+        layout.addWidget(self.label)
+        layout.addWidget(self.slider)
+        layout.addWidget(self.value_label)
+        self.slider.valueChanged.connect(self._on_value_changed)
+        self.slider.sliderReleased.connect(self.editingFinished.emit)
+        self.set_opacity(100)
+        self.setFixedSize(self.sizeHint().width() + 8, 38)
+
+    def _on_value_changed(self, value):
+        self.value_label.setText(f"{value}%")
+        self.opacityChanged.emit(int(value))
+
+    def set_opacity(self, value):
+        value = max(0, min(100, int(value)))
+        self.slider.blockSignals(True)
+        self.slider.setValue(value)
+        self.slider.blockSignals(False)
+        self.value_label.setText(f"{value}%")
+
+    def get_opacity(self):
+        return self.slider.value()
