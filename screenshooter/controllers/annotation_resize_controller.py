@@ -8,7 +8,7 @@ import math
 from PyQt5 import sip
 from PyQt5.QtCore import Qt, QPointF, QRectF
 
-from ..constants import MIN_RECT_SIZE, MIN_ARROW_LENGTH
+from ..constants import MIN_RECT_SIZE, MIN_ARROW_LENGTH, MIN_SCALE
 from ..history import ResizeAnnotationCommand
 from ..items import (
     EllipseItem, FilledRectItem, RectangleItem, CloudItem,
@@ -25,6 +25,7 @@ class AnnotationResizeController:
     ELLIPSE_HANDLES = RECT_HANDLES
     LINE_HANDLES = ('start', 'end')
     CURVED_HANDLES = ('start', 'end', 'ctrl')
+    TEXT_HANDLES = ('tl', 'tr', 'bl', 'br')
     RECT_ITEMS = (RectangleItem, FilledRectItem, CloudItem)
     LINE_ITEMS = (LineItem, WavyLineItem, ArrowItem, DimensionItem)
 
@@ -39,6 +40,7 @@ class AnnotationResizeController:
         self._old_rect = None
         self._old_pos = None
         self._start_geometry = None
+        self._start_scale = None
 
     def _blocked_by_mode(self) -> bool:
         return bool(
@@ -54,7 +56,7 @@ class AnnotationResizeController:
                 item,
                 (
                     RectangleItem, FilledRectItem, CloudItem, EllipseItem,
-                    LineItem, WavyLineItem, ArrowItem, CurvedArrowItem, DimensionItem,
+                    LineItem, WavyLineItem, ArrowItem, CurvedArrowItem, DimensionItem, TextItem,
                 ),
             )
             and not sip.isdeleted(item)
@@ -106,6 +108,17 @@ class AnnotationResizeController:
         start, end, ctrl = self._scene_curve_geometry(item)
         return {'start': start, 'end': end, 'ctrl': ctrl}
 
+    @staticmethod
+    def _text_handle_points(item):
+        rect = item.rect()
+        corners = {
+            'tl': rect.topLeft(),
+            'tr': rect.topRight(),
+            'bl': rect.bottomLeft(),
+            'br': rect.bottomRight(),
+        }
+        return {key: item.mapToScene(point) for key, point in corners.items()}
+
     def _line_handle_points(self, item):
         start, end = self._scene_line_geometry(item)
         return {'start': start, 'end': end}
@@ -121,7 +134,13 @@ class AnnotationResizeController:
             self.remove_handles()
             return
 
-        if isinstance(item, CurvedArrowItem):
+        if isinstance(item, TextItem):
+            if item._editable:
+                self.remove_handles()
+                return
+            points = self._text_handle_points(item)
+            show_midpoints = False
+        elif isinstance(item, CurvedArrowItem):
             points = self._curve_handle_points(item)
             show_midpoints = False
         elif isinstance(item, self.LINE_ITEMS):
@@ -289,6 +308,46 @@ class AnnotationResizeController:
                     moving = self._clamp_point_to_rect(moving, bg_rect)
         return (moving, anchor) if handle_id == 'start' else (anchor, moving)
 
+    @staticmethod
+    def _text_opposite_handle(handle_id):
+        return {
+            'tl': 'br',
+            'tr': 'bl',
+            'bl': 'tr',
+            'br': 'tl',
+        }.get(handle_id)
+
+    def _resize_text(self, item, handle_id, cursor_scene):
+        rect = item.rect()
+        corners = {
+            'tl': rect.topLeft(),
+            'tr': rect.topRight(),
+            'bl': rect.bottomLeft(),
+            'br': rect.bottomRight(),
+        }
+        opposite_id = self._text_opposite_handle(handle_id)
+        moving_local = corners[handle_id]
+        anchor_local = corners[opposite_id]
+        anchor_scene = item.mapToScene(anchor_local)
+        original_vector = item.mapToScene(moving_local) - anchor_scene
+        cursor_vector = QPointF(cursor_scene) - anchor_scene
+
+        denominator = (
+            original_vector.x() ** 2 + original_vector.y() ** 2
+        )
+        if denominator < 1e-9:
+            return
+
+        scale_factor = (
+            cursor_vector.x() * original_vector.x()
+            + cursor_vector.y() * original_vector.y()
+        ) / denominator
+        new_scale = max(MIN_SCALE, self._start_scale * scale_factor)
+
+        item.setScale(new_scale)
+        current_anchor = item.mapToScene(anchor_local)
+        item.setPos(item.pos() + (anchor_scene - current_anchor))
+
     def _resize_curve_geometry(self, start, end, ctrl, handle_id, cursor_scene):
         bg_rect = self._background_scene_rect()
         moving = self._clamp_point_to_rect(cursor_scene, bg_rect) if bg_rect is not None else QPointF(cursor_scene)
@@ -353,7 +412,16 @@ class AnnotationResizeController:
         self._handle_id = handle_id
         self._old_rect = None
         self._old_pos = QPointF(item.pos())
-        if isinstance(item, CurvedArrowItem):
+        self._start_scale = None
+        if isinstance(item, TextItem):
+            if item._editable:
+                self._handle_id = None
+                return False
+            self._start_scale = item.scale()
+            self._start_geometry = None
+            self._start_scene_rect = None
+            self._start_local_rect = QRectF(item.rect())
+        elif isinstance(item, CurvedArrowItem):
             self._start_geometry = self._scene_curve_geometry(item)
             self._start_scene_rect = None
             self._start_local_rect = None
@@ -384,6 +452,11 @@ class AnnotationResizeController:
 
         cursor_scene = self.view.mapToScene(event.pos())
         item = self._item
+
+        if isinstance(item, TextItem):
+            self._resize_text(item, self._handle_id, cursor_scene)
+            self.sync_handles()
+            return True
 
         if isinstance(item, CurvedArrowItem):
             old_start, old_end, old_ctrl = self._start_geometry
@@ -454,7 +527,20 @@ class AnnotationResizeController:
             return False
 
         item = self._item
-        if isinstance(item, CurvedArrowItem):
+        if isinstance(item, TextItem):
+            old_scale = self._start_scale
+            new_scale = item.scale()
+            if old_scale is not None and old_scale != new_scale:
+                self.view.history.push(
+                    ResizeAnnotationCommand(
+                        item,
+                        old_pos=self._old_pos,
+                        new_pos=QPointF(item.pos()),
+                        old_scale=old_scale,
+                        new_scale=new_scale,
+                    )
+                )
+        elif isinstance(item, CurvedArrowItem):
             old_geometry = self._start_geometry
             new_geometry = self._scene_curve_geometry(item)
             if old_geometry != new_geometry:
@@ -511,6 +597,7 @@ class AnnotationResizeController:
         self._old_rect = None
         self._old_pos = None
         self._start_geometry = None
+        self._start_scale = None
         self.view._interaction_dragging = False
         self.sync_handles()
         self.view._update_floating_widgets_visibility()
