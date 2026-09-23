@@ -13,6 +13,18 @@ from PyQt5.QtWidgets import QApplication
 class ThemeManager:
     """Управляет темами оформления приложения."""
 
+    @staticmethod
+    def detect_system_theme() -> str:
+        """Возвращает фактическую системную тему Windows."""
+        try:
+            import winreg
+            key_path = r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path) as key:
+                value, _ = winreg.QueryValueEx(key, "AppsUseLightTheme")
+            return "light" if int(value) != 0 else "dark"
+        except (ImportError, OSError, TypeError, ValueError):
+            return "light"
+
     COLORS_LIGHT = {
         'window_bg': QColor(240, 240, 240),
         'panel_bg': QColor(240, 240, 240),
@@ -109,10 +121,10 @@ class ThemeManager:
         self._theme_key = theme_key
         self._effective_theme = self._resolve_theme(theme_key)
 
-    @staticmethod
-    def _resolve_theme(theme_key: str) -> str:
+    @classmethod
+    def _resolve_theme(cls, theme_key: str) -> str:
         if theme_key == 'system':
-            return 'light'
+            return cls.detect_system_theme()
         return theme_key if theme_key in ('light', 'dark') else 'light'
 
     @property
