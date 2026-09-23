@@ -145,11 +145,17 @@ class BlurController:
             if isinstance(it, BlurRegionItem) and it not in self.blur_region_items:
                 it.remove()
 
-    def _apply_crop_to_blur_regions(self, crop_rect: QRectF):
-        """Обновляет зоны размытия после обрезки фона."""
+    def _apply_crop_to_blur_regions(self, crop_rect: QRectF, local_crop_rect=None):
+        """Обновляет зоны размытия после обрезки фона.
+
+        local_crop_rect должен быть рассчитан относительно старого pixmap
+        ДО смены pixmap/позиции background_item. Иначе после crop mapping
+        сцена -> pixmap уже относится к новому изображению и рамка смещается.
+        """
         if self.blur_base_pixmap is not None:
             from ..image_processing import crop_pixmap_with_padding
-            local_crop_rect = self._scene_rect_to_pixmap_rect(crop_rect)
+            if local_crop_rect is None:
+                local_crop_rect = self._scene_rect_to_pixmap_rect(crop_rect)
             self.blur_base_pixmap = crop_pixmap_with_padding(
                 self.blur_base_pixmap, local_crop_rect)
 
