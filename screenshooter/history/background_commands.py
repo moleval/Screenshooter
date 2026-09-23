@@ -33,7 +33,6 @@ class CropCommand(QUndoCommand):
         self.old_positions = old_positions or []
         self.new_positions = new_positions or []
         self.background_pos = background_pos
-        self.new_background_pos = new_background_pos
 
         if self.blur_controller is not None:
             self.blur_state = self.blur_controller._get_blur_state()
@@ -100,6 +99,7 @@ class RotateCommand(QUndoCommand):
         self.removed_items = []
         self.blur_controller = blur_controller
         self.background_pos = background_pos
+        self.new_background_pos = new_background_pos
 
         if self.blur_controller is not None:
             self.blur_state = self.blur_controller._get_blur_state()
