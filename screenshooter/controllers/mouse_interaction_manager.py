@@ -18,11 +18,31 @@ from ..history import AddItemCommand
 class MouseInteractionManager:
     """Отвечает только за маршрутизацию событий мыши между обработчиками."""
 
-    def __init__(self, view, blur_controller, image_editor, manipulation_controller):
+    def __init__(self, view, blur_controller, image_editor, manipulation_controller,
+                 annotation_resize_controller=None):
         self.view = view
         self.blur_controller = blur_controller
         self.image_editor = image_editor
         self.manipulation_controller = manipulation_controller
+        self.annotation_resize_controller = annotation_resize_controller
+
+    def _annotation_resize_press(self, event) -> bool:
+        controller = self.annotation_resize_controller
+        if controller is None:
+            return False
+        return controller.handle_mouse_press(event)
+
+    def _annotation_resize_move(self, event) -> bool:
+        controller = self.annotation_resize_controller
+        if controller is None:
+            return False
+        return controller.handle_mouse_move(event)
+
+    def _annotation_resize_release(self, event) -> bool:
+        controller = self.annotation_resize_controller
+        if controller is None:
+            return False
+        return controller.handle_mouse_release(event)
 
     def handle_press(self, event) -> bool:
         """Обрабатывает нажатие мыши. Возвращает True, если событие поглощено."""
@@ -87,6 +107,9 @@ class MouseInteractionManager:
         elif self.image_editor.crop_mode:
             if self.image_editor.handle_mouse_press(event):
                 return True
+
+        if self._annotation_resize_press(event):
+            return True
 
         if self.manipulation_controller.handle_mouse_press(event):
             return True
@@ -156,6 +179,9 @@ class MouseInteractionManager:
                 if self.blur_controller.handle_blur_region_move_outside(event):
                     return True
 
+            if self._annotation_resize_move(event):
+                return True
+
         if self.manipulation_controller.handle_mouse_move(event):
             return True
 
@@ -184,6 +210,9 @@ class MouseInteractionManager:
                     not self.blur_controller.blur_mode):
                 if self.blur_controller.handle_blur_region_release_outside(event):
                     return True
+
+            if self._annotation_resize_release(event):
+                return True
 
         if self.manipulation_controller.handle_mouse_release(event):
             return True
