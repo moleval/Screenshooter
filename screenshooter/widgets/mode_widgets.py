@@ -213,9 +213,9 @@ class ImageOpacityWidget(QFrame):
         self.slider.setRange(0, 100)
         self.slider.setSingleStep(1)
         self.slider.setPageStep(10)
-        self.slider.setFixedWidth(110)
+        self.slider.setFixedWidth(32)
         self.value_label = QLabel("100%")
-        self.value_label.setFixedWidth(38)
+        self.value_label.setFixedWidth(30)
         self.value_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.value_label.setStyleSheet("QLabel { background: transparent; border: none; }")
 
