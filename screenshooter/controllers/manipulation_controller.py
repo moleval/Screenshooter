@@ -592,10 +592,18 @@ class ManipulationController:
             self.view._interaction_dragging = True
 
             if near_edge:
+                # prepare_drag_scene_rect() расширяет sceneRect и может из-за
+                # целочисленных scrollbar дать микросдвиг точки под курсором.
+                # Сохраняем исходный drag baseline, компенсируя только этот
+                # микросдвиг. Нельзя заменять baseline текущей точкой:
+                # это добавляет весь накопленный delta повторно и даёт
+                # скачок объекта к другой части сцены.
+                cursor_scene_before = self.view.mapToScene(event.pos())
                 self.view.prepare_drag_scene_rect(event.pos())
-                # После изменения sceneRect заново фиксируем точку старта
-                # в координатах сцены. Точка под курсором не скачет.
-                self._drag_start_scene_pos = self.view.mapToScene(event.pos())
+                cursor_scene_after = self.view.mapToScene(event.pos())
+                self._drag_start_scene_pos += (
+                    cursor_scene_after - cursor_scene_before
+                )
                 self._drag_scene_prepared = True
 
         if self._drag_scene_prepared:
