@@ -3,12 +3,17 @@
 Описание: изменение размера аннотаций через универсальные ручки.
 """
 
+import math
+
 from PyQt5 import sip
 from PyQt5.QtCore import Qt, QPointF, QRectF
 
-from ..constants import MIN_RECT_SIZE
+from ..constants import MIN_RECT_SIZE, MIN_ARROW_LENGTH
 from ..history import ResizeAnnotationCommand
-from ..items import EllipseItem, FilledRectItem, RectangleItem, CloudItem
+from ..items import (
+    EllipseItem, FilledRectItem, RectangleItem, CloudItem,
+    LineItem, WavyLineItem, ArrowItem, DimensionItem,
+)
 from ..items.crop_handles import CropHandles
 from ..theme import theme_manager
 
@@ -18,7 +23,9 @@ class AnnotationResizeController:
 
     RECT_HANDLES = ('tl', 'tm', 'tr', 'lm', 'rm', 'bl', 'bm', 'br')
     ELLIPSE_HANDLES = RECT_HANDLES
+    LINE_HANDLES = ('start', 'end')
     RECT_ITEMS = (RectangleItem, FilledRectItem, CloudItem)
+    LINE_ITEMS = (LineItem, WavyLineItem, ArrowItem, DimensionItem)
 
     def __init__(self, view):
         self.view = view
@@ -30,6 +37,7 @@ class AnnotationResizeController:
         self._start_anchor = None
         self._old_rect = None
         self._old_pos = None
+        self._start_geometry = None
 
     def _blocked_by_mode(self) -> bool:
         return bool(
@@ -41,7 +49,13 @@ class AnnotationResizeController:
         selected = self.view.scene().selectedItems()
         annotations = [
             item for item in selected
-            if isinstance(item, (RectangleItem, FilledRectItem, CloudItem, EllipseItem))
+            if isinstance(
+                item,
+                (
+                    RectangleItem, FilledRectItem, CloudItem, EllipseItem,
+                    LineItem, WavyLineItem, ArrowItem, DimensionItem,
+                ),
+            )
             and not sip.isdeleted(item)
             and item.scene() is self.view.scene()
         ]
@@ -60,6 +74,27 @@ class AnnotationResizeController:
             'br': scene_rect.bottomRight(),
         }
 
+    @staticmethod
+    def _line_geometry(item):
+        if isinstance(item, LineItem):
+            line = item.line()
+            return line.p1(), line.p2()
+        if isinstance(item, WavyLineItem):
+            return QPointF(item._x1, item._y1), QPointF(item._x2, item._y2)
+        if isinstance(item, ArrowItem):
+            return QPointF(item._start), QPointF(item._end)
+        if isinstance(item, DimensionItem):
+            return QPointF(item._start), QPointF(item._end)
+        raise TypeError(f"Unsupported line annotation: {type(item).__name__}")
+
+    def _scene_line_geometry(self, item):
+        start, end = self._line_geometry(item)
+        return item.mapToScene(start), item.mapToScene(end)
+
+    def _line_handle_points(self, item):
+        start, end = self._scene_line_geometry(item)
+        return {'start': start, 'end': end}
+
     def sync_handles(self):
         """Показывает ручки для единственной выбранной поддерживаемой аннотации."""
         if self._blocked_by_mode():
@@ -71,15 +106,20 @@ class AnnotationResizeController:
             self.remove_handles()
             return
 
-        scene_rect = item.mapRectToScene(item.rect()).normalized()
-        points = self._handle_points(scene_rect, item)
+        if isinstance(item, self.LINE_ITEMS):
+            points = self._line_handle_points(item)
+            show_midpoints = False
+        else:
+            scene_rect = item.mapRectToScene(item.rect()).normalized()
+            points = self._handle_points(scene_rect, item)
+            show_midpoints = True
 
         if self.handles is None or self._item is not item:
             self.remove_handles()
             self.handles = CropHandles(
                 self.view,
                 fill_color=theme_manager.get_color('annotation_handle'),
-                show_midpoints=True,
+                show_midpoints=show_midpoints,
             )
             self._item = item
             self.handles.create_handles(points)
@@ -113,8 +153,7 @@ class AnnotationResizeController:
         }
         return anchors.get(handle_id)
 
-    @staticmethod
-    def _resize_scene_rect(old_rect, handle_id, cursor_pos):
+    def _resize_scene_rect(self, old_rect, handle_id, cursor_pos):
         left, right = old_rect.left(), old_rect.right()
         top, bottom = old_rect.top(), old_rect.bottom()
 
@@ -136,7 +175,6 @@ class AnnotationResizeController:
         return QRectF(QPointF(left, top), QPointF(right, bottom)).normalized()
 
     def _clamp_to_background(self, rect, anchor, handle_id):
-        """Ограничивает только перемещаемую сторону, сохраняя anchor."""
         bg = self.view.image_editor.background_item
         if bg is None or sip.isdeleted(bg):
             return rect
@@ -170,26 +208,69 @@ class AnnotationResizeController:
                 if anchor.y() >= bottom:
                     bottom = anchor.y()
             elif handle_id in ('lm', 'rm'):
-                top, bottom = anchor.y() - self._start_scene_rect.height() / 2, anchor.y() + self._start_scene_rect.height() / 2
+                top = anchor.y() - self._start_scene_rect.height() / 2
+                bottom = anchor.y() + self._start_scene_rect.height() / 2
             elif handle_id in ('tm', 'bm'):
-                left, right = anchor.x() - self._start_scene_rect.width() / 2, anchor.x() + self._start_scene_rect.width() / 2
+                left = anchor.x() - self._start_scene_rect.width() / 2
+                right = anchor.x() + self._start_scene_rect.width() / 2
 
         return QRectF(QPointF(left, top), QPointF(right, bottom)).normalized()
 
-    def _local_anchor_for_handle(self, rect, handle_id):
-        return self._anchor_for_handle(rect, handle_id)
-
-    def _apply_scene_rect(self, item, scene_rect, anchor):
-        local_anchor = self._local_anchor_for_handle(
-            self._start_local_rect, self._handle_id
+    @staticmethod
+    def _clamp_point_to_rect(point, rect):
+        return QPointF(
+            min(max(point.x(), rect.left()), rect.right()),
+            min(max(point.y(), rect.top()), rect.bottom()),
         )
-        local_rect = item.mapRectFromScene(scene_rect).normalized()
-        item.setRect(local_rect)
 
-        current_anchor = item.mapToScene(local_anchor)
-        delta = anchor - current_anchor
-        item.setPos(item.pos() + delta)
-        self.sync_handles()
+    def _background_scene_rect(self):
+        bg = self.view.image_editor.background_item
+        if bg is None or sip.isdeleted(bg):
+            return None
+        return bg.mapRectToScene(QRectF(bg.pixmap().rect())).normalized()
+
+    def _resize_line_geometry(self, start, end, handle_id, cursor_scene):
+        anchor = end if handle_id == 'start' else start
+        moving = self._clamp_point_to_rect(cursor_scene, self._background_scene_rect()) \
+            if self._background_scene_rect() is not None else QPointF(cursor_scene)
+
+        dx = moving.x() - anchor.x()
+        dy = moving.y() - anchor.y()
+        length = math.hypot(dx, dy)
+        if length < MIN_ARROW_LENGTH:
+            old_dx = (start.x() - end.x()) if handle_id == 'start' else (end.x() - start.x())
+            old_dy = (start.y() - end.y()) if handle_id == 'start' else (end.y() - start.y())
+            old_len = math.hypot(old_dx, old_dy)
+            if old_len < 1e-9:
+                old_dx, old_dy, old_len = (MIN_ARROW_LENGTH, 0.0, MIN_ARROW_LENGTH)
+            dx = old_dx / old_len * MIN_ARROW_LENGTH
+            dy = old_dy / old_len * MIN_ARROW_LENGTH
+            moving = QPointF(anchor.x() + dx, anchor.y() + dy)
+            bg_rect = self._background_scene_rect()
+            if bg_rect is not None:
+                moving = self._clamp_point_to_rect(moving, bg_rect)
+                dx = moving.x() - anchor.x()
+                dy = moving.y() - anchor.y()
+                length = math.hypot(dx, dy)
+                if length < MIN_ARROW_LENGTH:
+                    # У границы подложки минимальную длину физически обеспечить
+                    # невозможно; сохраняем допустимую точку внутри подложки.
+                    moving = self._clamp_point_to_rect(moving, bg_rect)
+        return (moving, anchor) if handle_id == 'start' else (anchor, moving)
+
+    def _apply_scene_line_geometry(self, item, scene_start, scene_end):
+        local_start = item.mapFromScene(scene_start)
+        local_end = item.mapFromScene(scene_end)
+        if isinstance(item, LineItem):
+            item.setLine(local_start.x(), local_start.y(), local_end.x(), local_end.y())
+        elif isinstance(item, WavyLineItem):
+            item.set_points(local_start.x(), local_start.y(), local_end.x(), local_end.y())
+        elif isinstance(item, ArrowItem):
+            item.set_line(local_start, local_end)
+        elif isinstance(item, DimensionItem):
+            item.setRect(local_start, local_end)
+        else:
+            raise TypeError(f"Unsupported line annotation: {type(item).__name__}")
 
     def handle_mouse_press(self, event) -> bool:
         if self._blocked_by_mode():
@@ -210,13 +291,24 @@ class AnnotationResizeController:
             return False
 
         self._handle_id = handle_id
-        self._start_scene_rect = item.mapRectToScene(item.rect()).normalized()
-        self._start_local_rect = QRectF(item.rect())
-        self._start_anchor = self._anchor_for_handle(
-            self._start_scene_rect, handle_id
-        )
-        self._old_rect = QRectF(item.rect())
+        self._old_rect = None
         self._old_pos = QPointF(item.pos())
+        if isinstance(item, self.LINE_ITEMS):
+            self._start_geometry = self._scene_line_geometry(item)
+            self._start_anchor = (
+                self._start_geometry[1]
+                if handle_id == 'start'
+                else self._start_geometry[0]
+            )
+            self._start_scene_rect = None
+            self._start_local_rect = None
+        else:
+            self._start_scene_rect = item.mapRectToScene(item.rect()).normalized()
+            self._start_local_rect = QRectF(item.rect())
+            self._start_anchor = self._anchor_for_handle(
+                self._start_scene_rect, handle_id
+            )
+            self._old_rect = QRectF(item.rect())
         self.view._interaction_dragging = True
         return True
 
@@ -228,6 +320,15 @@ class AnnotationResizeController:
 
         cursor_scene = self.view.mapToScene(event.pos())
         item = self._item
+
+        if isinstance(item, self.LINE_ITEMS):
+            old_start, old_end = self._start_geometry
+            new_start, new_end = self._resize_line_geometry(
+                old_start, old_end, self._handle_id, cursor_scene
+            )
+            self._apply_scene_line_geometry(item, new_start, new_end)
+            self.sync_handles()
+            return True
 
         new_scene_rect = self._resize_scene_rect(
             self._start_scene_rect, self._handle_id, cursor_scene
@@ -259,23 +360,63 @@ class AnnotationResizeController:
         self._apply_scene_rect(self._item, new_scene_rect, anchor)
         return True
 
+    def _local_anchor_for_handle(self, rect, handle_id):
+        return self._anchor_for_handle(rect, handle_id)
+
+    def _apply_scene_rect(self, item, scene_rect, anchor):
+        local_anchor = self._local_anchor_for_handle(
+            self._start_local_rect, self._handle_id
+        )
+        local_rect = item.mapRectFromScene(scene_rect).normalized()
+        item.setRect(local_rect)
+
+        current_anchor = item.mapToScene(local_anchor)
+        delta = anchor - current_anchor
+        item.setPos(item.pos() + delta)
+        self.sync_handles()
+
     def handle_mouse_release(self, event) -> bool:
         if self._handle_id is None:
             return False
 
         item = self._item
-        old_rect = self._old_rect
-        new_rect = QRectF(item.rect()) if item is not None else None
-        new_pos = QPointF(item.pos()) if item is not None else None
-
-        if item is not None and (old_rect != new_rect or self._old_pos != new_pos):
-            self.view.history.push(
-                ResizeAnnotationCommand(
-                    item, old_rect, new_rect,
-                    old_pos=self._old_pos,
-                    new_pos=new_pos,
+        if isinstance(item, self.LINE_ITEMS):
+            old_geometry = self._start_geometry
+            new_geometry = self._scene_line_geometry(item)
+            changed = old_geometry != new_geometry
+            if changed and item is not None:
+                # Команда хранит геометрию в локальной системе координат.
+                # Для line-like items позиция не меняется во время resize.
+                old_local = (
+                    item.mapFromScene(old_geometry[0]),
+                    item.mapFromScene(old_geometry[1]),
                 )
-            )
+                new_local = (
+                    item.mapFromScene(new_geometry[0]),
+                    item.mapFromScene(new_geometry[1]),
+                )
+                self.view.history.push(
+                    ResizeAnnotationCommand(
+                        item,
+                        old_geometry=old_local,
+                        new_geometry=new_local,
+                        old_pos=self._old_pos,
+                        new_pos=QPointF(item.pos()),
+                    )
+                )
+        else:
+            old_rect = self._old_rect
+            new_rect = QRectF(item.rect()) if item is not None else None
+            new_pos = QPointF(item.pos()) if item is not None else None
+
+            if item is not None and (old_rect != new_rect or self._old_pos != new_pos):
+                self.view.history.push(
+                    ResizeAnnotationCommand(
+                        item, old_rect, new_rect,
+                        old_pos=self._old_pos,
+                        new_pos=new_pos,
+                    )
+                )
 
         self._handle_id = None
         self._start_scene_rect = None
@@ -283,6 +424,7 @@ class AnnotationResizeController:
         self._start_anchor = None
         self._old_rect = None
         self._old_pos = None
+        self._start_geometry = None
         self.view._interaction_dragging = False
         self.sync_handles()
         self.view._update_floating_widgets_visibility()
