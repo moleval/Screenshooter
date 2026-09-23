@@ -12,7 +12,7 @@ from ..constants import MIN_RECT_SIZE, MIN_ARROW_LENGTH
 from ..history import ResizeAnnotationCommand
 from ..items import (
     EllipseItem, FilledRectItem, RectangleItem, CloudItem,
-    LineItem, WavyLineItem, ArrowItem, DimensionItem,
+    LineItem, WavyLineItem, ArrowItem, CurvedArrowItem, DimensionItem,
 )
 from ..items.crop_handles import CropHandles
 from ..theme import theme_manager
@@ -24,6 +24,7 @@ class AnnotationResizeController:
     RECT_HANDLES = ('tl', 'tm', 'tr', 'lm', 'rm', 'bl', 'bm', 'br')
     ELLIPSE_HANDLES = RECT_HANDLES
     LINE_HANDLES = ('start', 'end')
+    CURVED_HANDLES = ('start', 'end', 'ctrl')
     RECT_ITEMS = (RectangleItem, FilledRectItem, CloudItem)
     LINE_ITEMS = (LineItem, WavyLineItem, ArrowItem, DimensionItem)
 
@@ -53,7 +54,7 @@ class AnnotationResizeController:
                 item,
                 (
                     RectangleItem, FilledRectItem, CloudItem, EllipseItem,
-                    LineItem, WavyLineItem, ArrowItem, DimensionItem,
+                    LineItem, WavyLineItem, ArrowItem, CurvedArrowItem, DimensionItem,
                 ),
             )
             and not sip.isdeleted(item)
@@ -91,6 +92,20 @@ class AnnotationResizeController:
         start, end = self._line_geometry(item)
         return item.mapToScene(start), item.mapToScene(end)
 
+    @staticmethod
+    def _curve_geometry(item):
+        if isinstance(item, CurvedArrowItem):
+            return QPointF(item._start), QPointF(item._end), QPointF(item._ctrl)
+        raise TypeError(f"Unsupported curved annotation: {type(item).__name__}")
+
+    def _scene_curve_geometry(self, item):
+        start, end, ctrl = self._curve_geometry(item)
+        return item.mapToScene(start), item.mapToScene(end), item.mapToScene(ctrl)
+
+    def _curve_handle_points(self, item):
+        start, end, ctrl = self._scene_curve_geometry(item)
+        return {'start': start, 'end': end, 'ctrl': ctrl}
+
     def _line_handle_points(self, item):
         start, end = self._scene_line_geometry(item)
         return {'start': start, 'end': end}
@@ -106,7 +121,10 @@ class AnnotationResizeController:
             self.remove_handles()
             return
 
-        if isinstance(item, self.LINE_ITEMS):
+        if isinstance(item, CurvedArrowItem):
+            points = self._curve_handle_points(item)
+            show_midpoints = False
+        elif isinstance(item, self.LINE_ITEMS):
             points = self._line_handle_points(item)
             show_midpoints = False
         else:
@@ -271,6 +289,35 @@ class AnnotationResizeController:
                     moving = self._clamp_point_to_rect(moving, bg_rect)
         return (moving, anchor) if handle_id == 'start' else (anchor, moving)
 
+    def _resize_curve_geometry(self, start, end, ctrl, handle_id, cursor_scene):
+        bg_rect = self._background_scene_rect()
+        moving = self._clamp_point_to_rect(cursor_scene, bg_rect) if bg_rect is not None else QPointF(cursor_scene)
+        if handle_id == 'ctrl':
+            return start, end, moving
+
+        anchor = end if handle_id == 'start' else start
+        dx, dy = moving.x() - anchor.x(), moving.y() - anchor.y()
+        length = math.hypot(dx, dy)
+        if length < MIN_ARROW_LENGTH:
+            old_dx = start.x() - end.x() if handle_id == 'start' else end.x() - start.x()
+            old_dy = start.y() - end.y() if handle_id == 'start' else end.y() - start.y()
+            old_len = math.hypot(old_dx, old_dy)
+            if old_len < 1e-9:
+                old_dx, old_dy, old_len = MIN_ARROW_LENGTH, 0.0, MIN_ARROW_LENGTH
+            moving = QPointF(anchor.x() + old_dx / old_len * MIN_ARROW_LENGTH,
+                             anchor.y() + old_dy / old_len * MIN_ARROW_LENGTH)
+            if bg_rect is not None:
+                moving = self._clamp_point_to_rect(moving, bg_rect)
+
+        return (moving, end, ctrl) if handle_id == 'start' else (start, moving, ctrl)
+
+    def _apply_scene_curve_geometry(self, item, scene_start, scene_end, scene_ctrl):
+        item.set_curve(
+            item.mapFromScene(scene_start),
+            item.mapFromScene(scene_end),
+            item.mapFromScene(scene_ctrl),
+        )
+
     def _apply_scene_line_geometry(self, item, scene_start, scene_end):
         local_start = item.mapFromScene(scene_start)
         local_end = item.mapFromScene(scene_end)
@@ -306,7 +353,11 @@ class AnnotationResizeController:
         self._handle_id = handle_id
         self._old_rect = None
         self._old_pos = QPointF(item.pos())
-        if isinstance(item, self.LINE_ITEMS):
+        if isinstance(item, CurvedArrowItem):
+            self._start_geometry = self._scene_curve_geometry(item)
+            self._start_scene_rect = None
+            self._start_local_rect = None
+        elif isinstance(item, self.LINE_ITEMS):
             self._start_geometry = self._scene_line_geometry(item)
             self._start_anchor = (
                 self._start_geometry[1]
@@ -333,6 +384,15 @@ class AnnotationResizeController:
 
         cursor_scene = self.view.mapToScene(event.pos())
         item = self._item
+
+        if isinstance(item, CurvedArrowItem):
+            old_start, old_end, old_ctrl = self._start_geometry
+            new_start, new_end, new_ctrl = self._resize_curve_geometry(
+                old_start, old_end, old_ctrl, self._handle_id, cursor_scene
+            )
+            self._apply_scene_curve_geometry(item, new_start, new_end, new_ctrl)
+            self.sync_handles()
+            return True
 
         if isinstance(item, self.LINE_ITEMS):
             old_start, old_end = self._start_geometry
@@ -394,7 +454,19 @@ class AnnotationResizeController:
             return False
 
         item = self._item
-        if isinstance(item, self.LINE_ITEMS):
+        if isinstance(item, CurvedArrowItem):
+            old_geometry = self._start_geometry
+            new_geometry = self._scene_curve_geometry(item)
+            if old_geometry != new_geometry:
+                old_local = tuple(item.mapFromScene(point) for point in old_geometry)
+                new_local = tuple(item.mapFromScene(point) for point in new_geometry)
+                self.view.history.push(
+                    ResizeAnnotationCommand(
+                        item, old_geometry=old_local, new_geometry=new_local,
+                        old_pos=self._old_pos, new_pos=QPointF(item.pos()),
+                    )
+                )
+        elif isinstance(item, self.LINE_ITEMS):
             old_geometry = self._start_geometry
             new_geometry = self._scene_line_geometry(item)
             changed = old_geometry != new_geometry
