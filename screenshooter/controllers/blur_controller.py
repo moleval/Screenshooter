@@ -621,6 +621,9 @@ class BlurController:
         sp = self.view.mapToScene(event.pos())
 
         if self.blur_interaction == 'resizing':
+            if not self._blur_drag_scene_prepared:
+                self.view.prepare_drag_scene_rect(event.pos())
+                self._blur_drag_scene_prepared = True
             self._auto_scroll_during_drag(event)
             if self.active_blur_index is not None:
                 new_rect = self._apply_blur_resize(
