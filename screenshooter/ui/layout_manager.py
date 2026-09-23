@@ -253,21 +253,13 @@ class LayoutManager:
 
 
     def update_image_opacity_widget_position(self):
-        """Размещает ползунок прозрачности над панелью слоёв."""
+        """Размещает прозрачность слева от панели слоёв, в одном ряду."""
         iw = self.image_opacity_widget
-        if not iw or not iw.isVisible():
-            return
-        vp_rect = self._viewport_rect()
-        if not vp_rect:
-            return
-        vw = vp_rect.width()
-        sw = self._scrollbar_width()
-        x = vw - iw.width() - sw - self.TEXT_FORMAT_RIGHT_OFFSET
         lw = self.layer_widget
-        if lw and lw.isVisible():
-            y = lw.y() - iw.height() - 4
-        else:
-            y = self.TEXT_FORMAT_TOP_OFFSET
+        if not iw or not iw.isVisible() or not lw or not lw.isVisible():
+            return
+        x = lw.x() - iw.width() - 4
+        y = lw.y()
         x = max(0, x)
         y = max(0, y)
         iw.move(x, y)
