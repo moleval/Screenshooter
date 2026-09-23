@@ -149,7 +149,16 @@ class ManipulationController:
             self._last_cursor_pos = pos
             self._last_cursor_item = item
 
-        # 1. Маркеры вставленных изображений
+        # 1. Маркеры изменения размера аннотаций
+        annotation = getattr(view, 'annotation_resize_controller', None)
+        if annotation is not None and annotation.handles:
+            handle_id = annotation.handles.hit_test(pos)
+            if handle_id:
+                view.viewport().setCursor(
+                    annotation.handles.get_cursor_for_handle(handle_id))
+                return
+
+        # 2. Маркеры вставленных изображений
         for pasted in view.pasted_images:
             if pasted.isSelected() and pasted.handles:
                 handle_id = pasted.handles.hit_test(pos)
@@ -158,7 +167,7 @@ class ManipulationController:
                         pasted.handles.get_cursor_for_handle(handle_id))
                     return
 
-        # 2. Маркеры активной зоны размытия
+        # 3. Маркеры активной зоны размытия
         if (view.blur_controller.active_blur_index is not None and
                 view.blur_controller.active_blur_index < len(
                     view.blur_controller.blur_region_items)):
@@ -171,30 +180,30 @@ class ManipulationController:
                         active_blur.handles.get_cursor_for_handle(handle_id))
                     return
 
-        # 3. Текст в режиме редактирования
+        # 4. Текст в режиме редактирования
         if (view.active_text_item and item is view.active_text_item
                 and view.active_text_item._editable):
             view.viewport().setCursor(Qt.IBeamCursor)
             return
 
-        # 4. Зона размытия
+        # 5. Зона размытия
         if item and isinstance(item, BlurRegionItem):
             view.viewport().setCursor(Qt.SizeAllCursor)
             return
 
-        # 5. Элемент, который можно перемещать
+        # 6. Элемент, который можно перемещать
         if item and not view._is_background_item(item):
             li = view._item_for_manipulation(item)
             if li is not None and li.flags() & QGraphicsItem.ItemIsMovable:
                 view.viewport().setCursor(Qt.SizeAllCursor)
                 return
 
-        # 6. Вставленное изображение
+        # 7. Вставленное изображение
         if item and isinstance(item, PastedImageItem):
             view.viewport().setCursor(Qt.SizeAllCursor)
             return
 
-        # 7. Инструменты рисования — используем контрастный курсор
+        # 8. Инструменты рисования — используем контрастный курсор
         if view.current_tool in ('rect', 'ellipse', 'arrow', 'line', 'text'):
             from ..controllers.crop_cursor_factory import CropCursorFactory
             view.viewport().setCursor(CropCursorFactory.get_cursor())
