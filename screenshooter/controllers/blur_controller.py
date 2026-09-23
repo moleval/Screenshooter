@@ -334,10 +334,17 @@ class BlurController:
 
         for scene_item in lower_items:
             if isinstance(scene_item, PastedImageItem):
+                # QPainter.drawPixmap() не учитывает QGraphicsItem.opacity(),
+                # поэтому явно переносим прозрачность картинки в источник blur.
+                painter.save()
+                painter.setOpacity(
+                    max(0.0, min(1.0, float(scene_item.opacity())))
+                )
                 draw_pixmap_in_scene_rect(
                     scene_item.pixmap(),
                     scene_item.sceneBoundingRect().normalized(),
                 )
+                painter.restore()
             elif isinstance(scene_item, BlurRegionItem):
                 draw_pixmap_in_scene_rect(
                     scene_item.blurred_pixmap,
