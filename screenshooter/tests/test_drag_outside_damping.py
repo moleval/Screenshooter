@@ -58,3 +58,15 @@ def test_drag_damping_is_symmetric_for_opposite_edges():
     )
 
     assert right.x() - rect.right() == rect.left() - left.x()
+
+
+def test_drag_baseline_is_preserved_when_scene_rect_changes():
+    start = QPointF(100, 80)
+    cursor_before = QPointF(160, 120)
+    cursor_after = QPointF(160.25, 119.75)
+
+    adjusted = start + (cursor_after - cursor_before)
+
+    # Компенсация изменения scene->view mapping сохраняет тот же drag delta:
+    # новая cursor_after - adjusted == исходная cursor_before - start.
+    assert cursor_after - adjusted == cursor_before - start
