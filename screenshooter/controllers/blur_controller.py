@@ -905,7 +905,27 @@ class BlurController:
         if not near_edge:
             return
 
-        # Рабочее поле должно существовать до изменения scrollbar.
+        # Не расширяем sceneRect только потому, что курсор подошёл к краю.
+        # Иначе сами scrollbars меняют viewport и дают визуальный скачок.
+        # Расширение требуется только когда реальный объект уже выходит
+        # за пределы подложки.
+        bg = self.view.image_editor.background_item
+        should_expand = False
+        if bg is not None and not sip.isdeleted(bg):
+            bg_rect = bg.sceneBoundingRect().normalized()
+            if self.active_blur_index is not None:
+                item = self.blur_region_items[self.active_blur_index]
+                if not sip.isdeleted(item):
+                    sp = self.view.mapToScene(event.pos())
+                    if self.blur_interaction == 'moving':
+                        candidate = self.blur_old_rect.translated(
+                            sp - self.blur_move_start)
+                    else:
+                        candidate = item.sceneBoundingRect()
+                    should_expand = not bg_rect.contains(candidate)
+        if not should_expand:
+            return
+
         self.view.prepare_drag_scene_rect(event.pos())
 
         hbar = self.view.horizontalScrollBar()
