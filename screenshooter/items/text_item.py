@@ -31,6 +31,10 @@ class TextItem(QGraphicsTextItem):
         return rect.adjusted(self.PADDING_LEFT, self.PADDING_TOP,
                              self.PADDING_RIGHT, self.PADDING_BOTTOM)
 
+    def rect(self):
+        """Return the local geometry used by annotation resize handles."""
+        return QRectF(self.boundingRect())
+
     def paint(self, painter, option, widget):
         if self.bg_color is not None:
             # boundingRect() already contains the complete background area.
