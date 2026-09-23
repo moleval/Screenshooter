@@ -5,10 +5,11 @@ Smoke-тесты для ImageEditController: обрезка и поворот п
 
 import pytest
 from PyQt5.QtCore import QRectF
-from PyQt5.QtGui import QPixmap, QColor
+from PyQt5.QtGui import QPixmap, QColor, QPen
 from PyQt5.QtWidgets import QGraphicsScene
 
 from screenshooter.items.pasted_image_item import PastedImageItem
+from screenshooter.items.shape_items import RectangleItem
 from screenshooter.view import EditorView
 
 
@@ -64,3 +65,23 @@ def test_crop_pasted_image_keeps_scale(setup_editor):
 
     assert view.image_editor.crop_mode is False
     assert target.scene() is not None
+def test_crop_removes_partially_cut_annotation(setup_editor):
+    view = setup_editor
+    controller = view.image_editor
+
+    inside = RectangleItem(QRectF(30, 30, 10, 10), QPen(QColor("red"), 2))
+    partial = RectangleItem(QRectF(10, 30, 20, 10), QPen(QColor("red"), 2))
+    outside = RectangleItem(QRectF(85, 30, 10, 10), QPen(QColor("red"), 2))
+
+    view.scene().addItem(inside)
+    view.scene().addItem(partial)
+    view.scene().addItem(outside)
+
+    crop = QRectF(20, 20, 60, 40)
+    items_to_remove, items_to_shift, _, _ = controller._collect_items_for_crop(crop)
+
+    assert partial in items_to_remove
+    assert outside in items_to_remove
+    assert inside in items_to_shift
+    assert partial not in items_to_shift
+    assert outside not in items_to_shift
