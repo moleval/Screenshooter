@@ -97,6 +97,17 @@ class FloatingWidgetManager:
         return [item for item in self.view.scene().selectedItems()
                 if isinstance(item, PastedImageItem)]
 
+    def update_image_opacity_widget(self):
+        images = self._selected_images()
+        widget = self.view.image_opacity_widget
+        if not images:
+            widget.setVisible(False)
+            return
+        values = {item.get_image_opacity() for item in images}
+        widget.set_opacity(next(iter(values)) if len(values) == 1 else 100)
+        widget.setVisible(True)
+        widget.raise_()
+
     def _on_image_opacity_changed(self, value):
         images = self._selected_images()
         if not images:
