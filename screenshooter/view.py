@@ -265,20 +265,15 @@ class EditorView(QGraphicsView):
     # Undo / Redo
     # ==============================================================
     def undo(self):
-        old = self._get_background_pixmap_size()
+        # История не должна принудительно вписывать подложку в окно.
+        # Особенно это заметно после поворота: изменение размеров pixmap
+        # не означает, что пользователь просил менять масштаб/позицию вида.
         self.history.undo()
-        new = self._get_background_pixmap_size()
-        if old != new:
-            self.fit_background_to_view()
         self._update_after_history_change()
         self._invalidate_cursor_cache()
 
     def redo(self):
-        old = self._get_background_pixmap_size()
         self.history.redo()
-        new = self._get_background_pixmap_size()
-        if old != new:
-            self.fit_background_to_view()
         self._update_after_history_change()
         self._invalidate_cursor_cache()
 
