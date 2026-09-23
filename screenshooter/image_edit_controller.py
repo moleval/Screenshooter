@@ -282,6 +282,23 @@ class ImageEditController:
 
         self._finish_crop_operation()
 
+    @staticmethod
+    def _scene_shape_bounds(item):
+        """Возвращает фактические границы shape() в координатах сцены.
+
+        Для crop важно учитывать не только геометрию boundingRect(),
+        но и переопределённый shape() аннотации. Иначе элемент,
+        визуально/интерактивно выходящий за границу crop, может ошибочно
+        считаться полностью помещённым внутрь.
+        """
+        try:
+            path = item.mapToScene(item.shape())
+            if not path.isEmpty():
+                return path.boundingRect()
+        except (AttributeError, RuntimeError):
+            pass
+        return item.sceneBoundingRect()
+
     def _collect_items_for_crop(self, crop):
         items_to_remove = []
         items_to_shift = []
@@ -299,7 +316,7 @@ class ImageEditController:
             if isinstance(item, BlurRegionItem):
                 continue
 
-            br = item.sceneBoundingRect()
+            br = self._scene_shape_bounds(item)
             if not crop.contains(br):
                 items_to_remove.append(item)
             else:
