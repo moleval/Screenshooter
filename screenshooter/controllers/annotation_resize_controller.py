@@ -172,7 +172,9 @@ class AnnotationResizeController:
         self.sync_handles()
 
     def handle_mouse_press(self, event) -> bool:
-        if event.button() != Qt.LeftButton or self._blocked_by_mode():
+        if self._blocked_by_mode():
+            return False
+        if event.button() != Qt.LeftButton:
             return False
 
         self.sync_handles()
