@@ -569,8 +569,8 @@ class ManipulationController:
         #
         # Временная рабочая область нужна только когда курсор действительно
         # подошёл к краю viewport и пользователь пытается выйти за подложку.
-        edge = 24
-        speed = 24
+        edge = 32
+        speed = 4
         vp = self.view.viewport().rect()
         hbar = self.view.horizontalScrollBar()
         vbar = self.view.verticalScrollBar()
@@ -601,15 +601,21 @@ class ManipulationController:
         if self._drag_scene_prepared:
             # Автопрокрутка работает только после подготовки расширенной
             # рабочей области.
+            # Автопрокрутка намеренно медленная: 24 px на каждый
+            # mouseMove при 100%+ масштабе давали резкие скачки.
             if event.pos().x() <= vp.left() + edge:
-                hbar.setValue(hbar.value() - speed)
+                distance = vp.left() + edge - event.pos().x()
+                hbar.setValue(hbar.value() - min(speed, max(1, distance // 4)))
             elif event.pos().x() >= vp.right() - edge:
-                hbar.setValue(hbar.value() + speed)
+                distance = event.pos().x() - (vp.right() - edge)
+                hbar.setValue(hbar.value() + min(speed, max(1, distance // 4)))
 
             if event.pos().y() <= vp.top() + edge:
-                vbar.setValue(vbar.value() - speed)
+                distance = vp.top() + edge - event.pos().y()
+                vbar.setValue(vbar.value() - min(speed, max(1, distance // 4)))
             elif event.pos().y() >= vp.bottom() - edge:
-                vbar.setValue(vbar.value() + speed)
+                distance = event.pos().y() - (vp.bottom() - edge)
+                vbar.setValue(vbar.value() + min(speed, max(1, distance // 4)))
 
         # Берём обе точки через mapToScene. Он автоматически учитывает
         # текущее положение scrollbar.
