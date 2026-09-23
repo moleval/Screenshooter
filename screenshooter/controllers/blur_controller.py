@@ -542,14 +542,23 @@ class BlurController:
         background_item = self.view.image_editor.background_item
         if not background_item or rect.isEmpty():
             return
-        image_rect = background_item.mapRectToScene(
-            QRectF(background_item.pixmap().rect()))
-        blur_rect = rect.intersected(image_rect)
-        if blur_rect.isEmpty():
+
+        # Зона blur может быть создана полностью или частично за пределами
+        # текущей подложки. Сначала сохраняем её в координатах сцены, затем
+        # после добавления расширяем подложку белым полем до фактической зоны.
+        blur_rect = QRectF(rect).normalized()
+        if blur_rect.width() < MIN_RECT_SIZE or blur_rect.height() < MIN_RECT_SIZE:
             return
+
         from ..history import AddBlurRegionCommand
         command = AddBlurRegionCommand(self, blur_rect)
         self.view.history.push(command)
+
+        # _add_blur_region_internal уже создал BlurRegionItem, поэтому
+        # expand_background_to_content увидит и сам blur и расширит canvas
+        # влево/вправо/вверх/вниз без изменения координат объекта.
+        self.view.expand_background_to_content(margin=0, threshold=1)
+        self._force_blur_recompute()
 
     # ==============================================================
     # Обработчики мыши (в режиме blur_mode)
@@ -695,6 +704,8 @@ class BlurController:
                     command = MoveBlurRegionCommand(
                         self, self.active_blur_index, old_rect, new_rect)
                     self.view.history.push(command)
+                    self.view.expand_background_to_content(margin=0, threshold=1)
+                    self._force_blur_recompute()
             self.blur_interaction = None
             self.blur_move_start = None
             self.blur_old_rect = None
@@ -856,6 +867,8 @@ class BlurController:
                     command = MoveBlurRegionCommand(
                         self, self.active_blur_index, old_rect, new_rect)
                     self.view.history.push(command)
+                    self.view.expand_background_to_content(margin=0, threshold=1)
+                    self._force_blur_recompute()
             self.blur_move_start = None
             self.blur_old_rect = None
 
