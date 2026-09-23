@@ -229,10 +229,23 @@ class AnnotationResizeController:
             return None
         return bg.mapRectToScene(QRectF(bg.pixmap().rect())).normalized()
 
-    def _resize_line_geometry(self, start, end, handle_id, cursor_scene):
+    @staticmethod
+    def _orthogonalize_endpoint(anchor, point):
+        """Фиксирует перемещаемую точку по горизонтали или вертикали."""
+        dx = point.x() - anchor.x()
+        dy = point.y() - anchor.y()
+        if abs(dx) >= abs(dy):
+            return QPointF(point.x(), anchor.y())
+        return QPointF(anchor.x(), point.y())
+
+    def _resize_line_geometry(self, start, end, handle_id, cursor_scene,
+                              orthogonal=False):
         anchor = end if handle_id == 'start' else start
-        moving = self._clamp_point_to_rect(cursor_scene, self._background_scene_rect()) \
-            if self._background_scene_rect() is not None else QPointF(cursor_scene)
+        moving = QPointF(cursor_scene)
+        if orthogonal:
+            moving = self._orthogonalize_endpoint(anchor, moving)
+        moving = self._clamp_point_to_rect(moving, self._background_scene_rect()) \
+            if self._background_scene_rect() is not None else moving
 
         dx = moving.x() - anchor.x()
         dy = moving.y() - anchor.y()
@@ -323,8 +336,9 @@ class AnnotationResizeController:
 
         if isinstance(item, self.LINE_ITEMS):
             old_start, old_end = self._start_geometry
+            orthogonal = bool(event.modifiers() & Qt.ShiftModifier)
             new_start, new_end = self._resize_line_geometry(
-                old_start, old_end, self._handle_id, cursor_scene
+                old_start, old_end, self._handle_id, cursor_scene, orthogonal
             )
             self._apply_scene_line_geometry(item, new_start, new_end)
             self.sync_handles()
