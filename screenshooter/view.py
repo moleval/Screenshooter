@@ -113,9 +113,12 @@ class EditorView(QGraphicsView):
         self.layer_widget = LayerModeWidget(self)
         self.layer_widget.setVisible(False)
 
-        self.image_opacity_widget = ImageOpacityWidget(\n            self, width=self.layer_widget.width() * 3)
+        self.image_opacity_widget = ImageOpacityWidget(
+            self, width=self.layer_widget.width() * 3)
         self.image_opacity_widget.setVisible(False)
-        self.layer_widget.layerChanged.connect(self._on_layer_widget_changed)\n        # Прозрачность шириной в три панели слоёв.\n        self.image_opacity_widget.setFixedWidth(self.layer_widget.width() * 3)
+        self.layer_widget.layerChanged.connect(self._on_layer_widget_changed)
+        # Прозрачность шириной в три панели слоёв.
+        self.image_opacity_widget.setFixedWidth(self.layer_widget.width() * 3)
 
         self.status_label = QLabel(self)
         self.status_label.setObjectName("statusLabel")
