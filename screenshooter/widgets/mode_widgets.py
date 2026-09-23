@@ -29,7 +29,7 @@ class BaseModeWidget(QFrame):
             f"border: 2px solid {self.BORDER_COLOR}; padding: {self.PADDING}px; }}")
         self.layout = QHBoxLayout(self)
         self.layout.setContentsMargins(self.PADDING, self.PADDING, self.PADDING, self.PADDING)
-        self.layout.setSpacing(4)
+        self.layout.setSpacing(8)
         self.button_group = QButtonGroup(self)
         self.button_group.setExclusive(True)
         self._current_mode = None
@@ -223,13 +223,15 @@ class ImageOpacityWidget(QFrame):
         self.slider.setCursor(Qt.ArrowCursor)
 
         self.value_label = QLabel("100%")
-        self.value_label.setFixedWidth(30)
+        self.value_label.setFixedWidth(36)
         self.value_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.value_label.setStyleSheet(
             "QLabel { background: transparent; border: none; }"
         )
 
         layout.addWidget(self.slider, 1)
+        layout.setStretch(0, 1)
+        layout.setStretch(1, 0)
         layout.addWidget(self.value_label)
 
         self.slider.valueChanged.connect(self._on_value_changed)
