@@ -40,7 +40,6 @@ class BaseModeWidget(QFrame):
         button.setIcon(icon)
         button.setCheckable(True)
         button.setToolTip(tooltip)
-        # Локальный стиль кнопки: прозрачный фон, рамка только при выделении
         button.setStyleSheet("""
             QPushButton {
                 background-color: transparent;
@@ -138,6 +137,7 @@ class LineModeWidget(BaseModeWidget):
         self.dashed_btn.setChecked(mode == 'dashed')
         self.wavy_btn.setChecked(mode == 'wavy')
 
+
 class LayerModeWidget(BaseModeWidget):
     """Две кнопки выбора слоя для изображения/размытия."""
 
@@ -196,36 +196,52 @@ class ImageOpacityWidget(QFrame):
     opacityChanged = pyqtSignal(int)
     editingFinished = pyqtSignal()
 
-    def __init__(self, parent=None):
+    BG_COLOR = "rgba(200,200,200,100)"
+    BORDER_RADIUS = 12
+    BORDER_COLOR = "rgba(80,80,80,180)"
+    BORDER_WIDTH = 2
+    HEIGHT = 38
+
+    def __init__(self, parent=None, width=None):
         super().__init__(parent)
         self.setFrameShape(QFrame.StyledPanel)
         self.setStyleSheet(
-            "QFrame { background-color: rgba(200,200,200,100); "
-            "border-radius: 12px; border: 2px solid rgba(80,80,80,180); padding: 3px; }"
+            f"QFrame {{ background-color: {self.BG_COLOR}; "
+            f"border-radius: {self.BORDER_RADIUS}px; "
+            f"border: {self.BORDER_WIDTH}px solid {self.BORDER_COLOR}; "
+            f"padding: 3px; }}"
         )
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(7, 3, 7, 3)
-        layout.setSpacing(5)
 
-        self.label = QLabel("Прозрачность")
-        self.label.setStyleSheet("QLabel { background: transparent; border: none; }")
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(3, 3, 3, 3)
+        layout.setSpacing(4)
+
         self.slider = QSlider(Qt.Horizontal)
         self.slider.setRange(0, 100)
         self.slider.setSingleStep(1)
         self.slider.setPageStep(10)
-        self.slider.setFixedWidth(32)
+        self.slider.setCursor(Qt.ArrowCursor)
+
         self.value_label = QLabel("100%")
         self.value_label.setFixedWidth(30)
         self.value_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.value_label.setStyleSheet("QLabel { background: transparent; border: none; }")
+        self.value_label.setStyleSheet(
+            "QLabel { background: transparent; border: none; }"
+        )
 
-        layout.addWidget(self.label)
-        layout.addWidget(self.slider)
+        layout.addWidget(self.slider, 1)
         layout.addWidget(self.value_label)
+
         self.slider.valueChanged.connect(self._on_value_changed)
         self.slider.sliderReleased.connect(self.editingFinished.emit)
+
         self.set_opacity(100)
-        self.setFixedSize(self.sizeHint().width() + 8, 38)
+
+        if width is not None:
+            self.setFixedWidth(int(width))
+        else:
+            self.setFixedWidth(72)
+        self.setFixedHeight(self.HEIGHT)
 
     def _on_value_changed(self, value):
         self.value_label.setText(f"{value}%")
