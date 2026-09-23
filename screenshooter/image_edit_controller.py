@@ -366,11 +366,23 @@ class ImageEditController:
 
         old_pixmap = self.background_item.pixmap()
         old_background_pos = self.background_item.pos()
+
+        # При повороте размеры pixmap меняются. Сохраняем центр подложки
+        # в тех же координатах сцены, а не просто старый левый верхний угол.
+        # Это исключает скачок изображения в сторону (0, 0).
+        old_scene_rect = self.background_item.sceneBoundingRect()
+        new_size = rotated_pixmap.size()
+        new_background_pos = old_scene_rect.center() - QPointF(
+            new_size.width() / 2.0,
+            new_size.height() / 2.0,
+        )
+
         command = RotateCommand(
             self.view.scene(), self.background_item,
             old_pixmap, rotated_pixmap, items_to_remove,
             blur_controller=self.view.blur_controller,
-            background_pos=old_background_pos
+            background_pos=old_background_pos,
+            new_background_pos=new_background_pos,
         )
         self.view.history.push(command)
 
