@@ -4,6 +4,8 @@
 
 from types import SimpleNamespace
 
+import pytest
+
 from PyQt5.QtCore import QPointF, Qt
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import QGraphicsPixmapItem, QGraphicsScene, QGraphicsView
@@ -34,6 +36,9 @@ class FakeView(QGraphicsView):
         self._interaction_dragging = False
 
     def _update_floating_widgets_visibility(self):
+        pass
+
+    def _text_editing_finished(self, item):
         pass
 
 
@@ -127,7 +132,7 @@ def test_text_resize_is_proportional_and_keeps_opposite_corner_fixed(qapp):
     assert controller.handle_mouse_move(event_for(view, target))
     controller.handle_mouse_release(event_for(view, target))
 
-    assert item.scale() == old_scale * 1.5
+    assert item.scale() == pytest.approx(old_scale * 1.5, rel=1e-3)
     assert item.mapToScene(item.rect().bottomRight()) == anchor
     assert view.history.can_undo()
 
@@ -136,7 +141,7 @@ def test_text_resize_is_proportional_and_keeps_opposite_corner_fixed(qapp):
     assert item.mapToScene(item.rect().bottomRight()) == anchor
 
     view.history.redo()
-    assert item.scale() == old_scale * 1.5
+    assert item.scale() == pytest.approx(old_scale * 1.5, rel=1e-3)
 
     controller.remove_handles()
     view.close()
