@@ -31,6 +31,16 @@ class MouseInteractionManager:
             item = self.view._interactive_item_at(sp)
             li = self.view._item_for_manipulation(item) if item else None
 
+            # В режиме blur ручки вставленного изображения имеют приоритет
+            # над ручками зоны размытия. Иначе при совпадении координат
+            # активная blur-рамка перехватывает resize картинки.
+            is_image_handle = False
+            for pasted in self.view.pasted_images:
+                if pasted.isSelected() and pasted.handles:
+                    if pasted.handles.hit_test(event.pos()):
+                        is_image_handle = True
+                        break
+
             is_blur_handle = False
             active_index = self.blur_controller.active_blur_index
             if active_index is not None and active_index < len(
@@ -44,7 +54,9 @@ class MouseInteractionManager:
 
             delegate_to_manipulation = False
 
-            if is_blur_handle:
+            if is_image_handle:
+                delegate_to_manipulation = True
+            elif is_blur_handle:
                 pass
             elif li is not None and not self.view._is_background_item(li):
                 if isinstance(li, BlurRegionItem):
