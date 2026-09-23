@@ -16,7 +16,7 @@ from .blur_commands import (AddBlurRegionCommand, RemoveBlurRegionCommand,
                             MoveBlurRegionCommand, ResizeBlurRegionCommand)
 from .image_commands import (AddPastedImageCommand, RemovePastedImageCommand,
                              ResizePastedImageCommand, CropPastedImageCommand,
-                             RotatePastedImageCommand)
+                             RotatePastedImageCommand, ChangeImageOpacityCommand)
 from .composite_commands import RemoveSelectedItemsCommand, PasteItemsCommand
 from .layer_commands import ChangeLayerCommand
 
@@ -34,7 +34,7 @@ __all__ = [
     # Команды вставленных изображений
     'AddPastedImageCommand', 'RemovePastedImageCommand',
     'ResizePastedImageCommand', 'CropPastedImageCommand',
-    'RotatePastedImageCommand',
+    'RotatePastedImageCommand', 'ChangeImageOpacityCommand',
     # Составные команды
     'RemoveSelectedItemsCommand', 'PasteItemsCommand',
     'ChangeLayerCommand',
