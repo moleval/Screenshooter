@@ -147,6 +147,31 @@ def test_text_resize_is_proportional_and_keeps_opposite_corner_fixed(qapp):
     view.close()
 
 
+def test_text_resize_keeps_anchor_stable_during_multiple_moves(qapp):
+    view, _ = make_fixture(qapp)
+    item = make_text(view)
+    item.setRotation(45)
+    controller = AnnotationResizeController(view)
+    controller.sync_handles()
+
+    moving = item.mapToScene(item.rect().topLeft())
+    anchor = item.mapToScene(item.rect().bottomRight())
+    original_scale = item.scale()
+
+    assert controller.handle_mouse_press(event_for(view, moving))
+
+    for factor in (1.1, 1.25, 1.4, 1.6, 1.8):
+        target = anchor + (moving - anchor) * factor
+        assert controller.handle_mouse_move(event_for(view, target))
+        assert item.mapToScene(item.rect().bottomRight()) == pytest.approx(anchor)
+
+    controller.handle_mouse_release(event_for(view, target))
+    assert item.scale() == pytest.approx(original_scale * 1.8, rel=1e-3)
+
+    controller.remove_handles()
+    view.close()
+
+
 def test_text_resize_respects_minimum_scale(qapp):
     view, _ = make_fixture(qapp)
     item = make_text(view)
