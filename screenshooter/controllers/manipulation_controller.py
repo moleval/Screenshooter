@@ -21,6 +21,7 @@ from ..items.blur_region_item import BlurRegionItem
 from ..history import (MoveItemsCommand, MoveBlurRegionCommand,
                        ResizePastedImageCommand)
 from ..tools import RectTool, EllipseTool, LineTool, ArrowTool, TextTool
+from ..constants import DRAG_OUTSIDE_DAMPING
 
 
 class ManipulationController:
@@ -530,6 +531,33 @@ class ManipulationController:
                 int(self._pan_start_scroll.y() - dy / scale))
         return True
 
+    @staticmethod
+    def _dampen_point_outside_background(point, background_rect, damping=DRAG_OUTSIDE_DAMPING):
+        """Мягко замедляет координаты точки за пределами подложки.
+
+        Внутри подложки координата не меняется. За каждой границей ось
+        замедляется независимо: это позволяет, например, продолжать
+        свободно двигать объект по Y, даже если курсор вышел за подложку
+        только справа. Чем дальше курсор уходит наружу, тем меньше
+        дополнительное перемещение объекта.
+        """
+        if damping <= 0:
+            return QPointF(point)
+
+        def damp_axis(value, low, high):
+            if value < low:
+                excess = value - low
+                return low + excess / (1.0 + abs(excess) / damping)
+            if value > high:
+                excess = value - high
+                return high + excess / (1.0 + abs(excess) / damping)
+            return value
+
+        return QPointF(
+            damp_axis(point.x(), background_rect.left(), background_rect.right()),
+            damp_axis(point.y(), background_rect.top(), background_rect.bottom()),
+        )
+
     def _handle_drag_move(self, event) -> bool:
         """Групповое перетаскивание элементов."""
         if not self._drag_items:
@@ -586,6 +614,17 @@ class ManipulationController:
         # Берём обе точки через mapToScene. Он автоматически учитывает
         # текущее положение scrollbar.
         current_scene_pos = self.view.mapToScene(event.pos())
+
+        # За пределами подложки не запрещаем перемещение полностью, но
+        # постепенно уменьшаем его. Это предотвращает случайный уход объекта
+        # на сотни/тысячи пикселей и последующее создание огромных белых полей
+        # при expand_background_to_content(). По X и Y торможение независимое.
+        bg = self.view.image_editor.background_item
+        if bg is not None and not sip.isdeleted(bg):
+            bg_rect = bg.sceneBoundingRect()
+            current_scene_pos = self._dampen_point_outside_background(
+                current_scene_pos, bg_rect)
+
         delta = current_scene_pos - self._drag_start_scene_pos
 
         if event.modifiers() & Qt.ShiftModifier:
