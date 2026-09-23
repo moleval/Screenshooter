@@ -635,6 +635,9 @@ class BlurController:
             return True
 
         if self.blur_interaction == 'moving':
+            if not self._blur_drag_scene_prepared:
+                self.view.prepare_drag_scene_rect(event.pos())
+                self._blur_drag_scene_prepared = True
             self._auto_scroll_during_drag(event)
             if self.active_blur_index is not None:
                 item = self.blur_region_items[self.active_blur_index]
@@ -817,6 +820,9 @@ class BlurController:
 
         sp = self.view.mapToScene(event.pos())
         if self.blur_outside_interaction == 'resizing':
+            if not self._blur_drag_scene_prepared:
+                self.view.prepare_drag_scene_rect(event.pos())
+                self._blur_drag_scene_prepared = True
             self._auto_scroll_during_drag(event)
             if self.active_blur_index is not None:
                 new_rect = self._apply_blur_resize(
@@ -827,6 +833,9 @@ class BlurController:
                 self._schedule_blur_recompute(moving_index=self.active_blur_index)
             return True
         elif self.blur_outside_interaction == 'moving':
+            if not self._blur_drag_scene_prepared:
+                self.view.prepare_drag_scene_rect(event.pos())
+                self._blur_drag_scene_prepared = True
             self._auto_scroll_during_drag(event)
             if self.active_blur_index is not None:
                 item = self.blur_region_items[self.active_blur_index]
