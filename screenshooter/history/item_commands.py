@@ -137,6 +137,22 @@ class ChangePenCommand(QUndoCommand):
         self.item.setPen(self.old_pen)
 
 
+class ChangeBrushCommand(QUndoCommand):
+    """Команда изменения заливки объекта."""
+
+    def __init__(self, item, old_brush, new_brush):
+        super().__init__("Изменить заливку")
+        self.item = item
+        self.old_brush = old_brush
+        self.new_brush = new_brush
+
+    def redo(self):
+        self.item.setBrush(self.new_brush)
+
+    def undo(self):
+        self.item.setBrush(self.old_brush)
+
+
 class ChangeTextCommand(QUndoCommand):
     """Команда изменения текста."""
 
