@@ -138,19 +138,49 @@ class AnnotationResizeController:
 
         return QRectF(QPointF(left, top), QPointF(right, bottom)).normalized()
 
-    def _clamp_to_background(self, rect):
+    def _clamp_to_background(self, rect, anchor, handle_id):
+        """Ограничивает только перемещаемую сторону, сохраняя anchor."""
         bg = self.view.image_editor.background_item
         if bg is None or sip.isdeleted(bg):
             return rect
 
         bg_rect = bg.mapRectToScene(QRectF(bg.pixmap().rect())).normalized()
-        width = min(rect.width(), bg_rect.width())
-        height = min(rect.height(), bg_rect.height())
+        left, right = rect.left(), rect.right()
+        top, bottom = rect.top(), rect.bottom()
 
-        left = max(bg_rect.left(), min(rect.left(), bg_rect.right() - width))
-        top = max(bg_rect.top(), min(rect.top(), bg_rect.bottom() - height))
+        if handle_id in ('tl', 'lm', 'bl'):
+            left = max(bg_rect.left(), left)
+        if handle_id in ('tr', 'rm', 'br'):
+            right = min(bg_rect.right(), right)
+        if handle_id in ('tl', 'tm', 'tr'):
+            top = max(bg_rect.top(), top)
+        if handle_id in ('bl', 'bm', 'br'):
+            bottom = min(bg_rect.bottom(), bottom)
 
-        return QRectF(left, top, width, height)
+        # Для центральных ручек противоположная координата фиксирована.
+        if handle_id in ('lm', 'rm'):
+            top, bottom = self._start_scene_rect.top(), self._start_scene_rect.bottom()
+        if handle_id in ('tm', 'bm'):
+            left, right = self._start_scene_rect.left(), self._start_scene_rect.right()
+
+        # Anchor является окончательной гарантией: при упоре в границу
+        # неподвижная противоположная точка не должна смещаться.
+        if anchor is not None:
+            if handle_id in ('tl', 'tr', 'bl', 'br'):
+                if anchor.x() <= left:
+                    left = anchor.x()
+                if anchor.x() >= right:
+                    right = anchor.x()
+                if anchor.y() <= top:
+                    top = anchor.y()
+                if anchor.y() >= bottom:
+                    bottom = anchor.y()
+            elif handle_id in ('lm', 'rm'):
+                top, bottom = anchor.y() - self._start_scene_rect.height() / 2, anchor.y() + self._start_scene_rect.height() / 2
+            elif handle_id in ('tm', 'bm'):
+                left, right = anchor.x() - self._start_scene_rect.width() / 2, anchor.x() + self._start_scene_rect.width() / 2
+
+        return QRectF(QPointF(left, top), QPointF(right, bottom)).normalized()
 
     def _local_anchor_for_handle(self, rect, handle_id):
         return self._anchor_for_handle(rect, handle_id)
@@ -230,7 +260,9 @@ class AnnotationResizeController:
                 new_scene_rect.setTop(self._start_scene_rect.top())
                 new_scene_rect.setBottom(self._start_scene_rect.bottom())
 
-        new_scene_rect = self._clamp_to_background(new_scene_rect)
+        new_scene_rect = self._clamp_to_background(
+            new_scene_rect, anchor, self._handle_id
+        )
         self._apply_scene_rect(self._item, new_scene_rect, anchor)
         return True
 
