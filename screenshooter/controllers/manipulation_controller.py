@@ -620,6 +620,13 @@ class ManipulationController:
 
         self.view.scene().update()
         self.view._update_pasted_image_handles()
+
+        # Ручки аннотаций принадлежат геометрии фигуры и должны следовать
+        # за ней во время обычного перетаскивания.
+        annotation = getattr(self.view, 'annotation_resize_controller', None)
+        if annotation is not None:
+            annotation.sync_handles()
+
         return True
 
     def _handle_rubber_band_move(self, event) -> bool:
