@@ -24,12 +24,12 @@ from .widgets.text_format_widget import TextFormatWidget
 from .widgets.info_widget import InfoWidget
 from .widgets.mode_widgets import (ShapeModeWidget, ShapeModeWidgetEllipse,
                                    ShapeModeWidgetArrow, LineModeWidget,
-                                   LayerModeWidget)
+                                   LayerModeWidget, ImageOpacityWidget)
 from .history import (HistoryManager, AddItemCommand, RemoveItemCommand,
                       MoveItemCommand, MoveItemsCommand, ChangePenCommand,
                       AddPastedImageCommand, RemovePastedImageCommand,
                       ResizePastedImageCommand, CropPastedImageCommand,
-                      RotatePastedImageCommand, RemoveSelectedItemsCommand,
+                      RotatePastedImageCommand, RemoveSelectedItemsCommand, ChangeImageOpacityCommand,
                       MoveBlurRegionCommand, ResizeBlurRegionCommand)
 from .history import ChangeLayerCommand
 from .image_edit_controller import ImageEditController
@@ -112,6 +112,9 @@ class EditorView(QGraphicsView):
 
         self.layer_widget = LayerModeWidget(self)
         self.layer_widget.setVisible(False)
+
+        self.image_opacity_widget = ImageOpacityWidget(self)
+        self.image_opacity_widget.setVisible(False)
         self.layer_widget.layerChanged.connect(self._on_layer_widget_changed)
 
         self.status_label = QLabel(self)
@@ -146,7 +149,8 @@ class EditorView(QGraphicsView):
         for w in (self.zoom_widget, self.text_format_widget,
                   self.shape_mode_widget, self.ellipse_mode_widget,
                   self.arrow_mode_widget, self.line_mode_widget,
-                  self.info_widget, self.layer_widget, self.status_label):
+                  self.info_widget, self.layer_widget, self.image_opacity_widget,
+                  self.status_label):
             w.setCursor(Qt.ArrowCursor)
 
         self.scene().selectionChanged.connect(self._schedule_selection_update)
