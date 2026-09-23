@@ -2,6 +2,8 @@
 
 from PyQt5.QtWidgets import QUndoCommand
 
+from ..items import LineItem, WavyLineItem, ArrowItem, DimensionItem
+
 
 class ResizeAnnotationCommand(QUndoCommand):
     """Атомарное изменение геометрии аннотации через её нативный API."""
@@ -20,11 +22,13 @@ class ResizeAnnotationCommand(QUndoCommand):
     def _apply(self, rect, pos, geometry):
         if geometry is not None:
             start, end = geometry
-            if hasattr(self.item, "set_line"):
-                self.item.set_line(start, end)
-            elif hasattr(self.item, "set_points"):
+            if isinstance(self.item, LineItem):
+                self.item.setLine(start.x(), start.y(), end.x(), end.y())
+            elif isinstance(self.item, WavyLineItem):
                 self.item.set_points(start.x(), start.y(), end.x(), end.y())
-            elif self.item.__class__.__name__ == "DimensionItem":
+            elif isinstance(self.item, ArrowItem):
+                self.item.set_line(start, end)
+            elif isinstance(self.item, DimensionItem):
                 self.item.setRect(start, end)
             else:
                 raise TypeError("Unsupported annotation geometry")
