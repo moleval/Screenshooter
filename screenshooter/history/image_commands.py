@@ -119,3 +119,20 @@ class RotatePastedImageCommand(QUndoCommand):
         self.item.scale = self.old_scale
         self.item.set_image_scale(self.old_scale)
         self.item.update_handles()
+
+class ChangeImageOpacityCommand(QUndoCommand):
+    """Команда изменения прозрачности только вставленных изображений."""
+
+    def __init__(self, items, old_opacities, new_opacity):
+        super().__init__("Изменить прозрачность изображения")
+        self.items = list(items)
+        self.old_opacities = list(old_opacities)
+        self.new_opacity = max(0, min(100, int(new_opacity)))
+
+    def redo(self):
+        for item in self.items:
+            item.set_image_opacity(self.new_opacity)
+
+    def undo(self):
+        for item, opacity in zip(self.items, self.old_opacities):
+            item.set_image_opacity(opacity)
