@@ -193,6 +193,7 @@ class AnnotationResizeController:
         self._start_anchor = self._anchor_for_handle(
             self._start_scene_rect, handle_id)
         self._old_rect = QRectF(item.rect())
+        self._old_pos = QPointF(item.pos())
         self.view._interaction_dragging = True
         return True
 
@@ -239,9 +240,14 @@ class AnnotationResizeController:
         old_rect = self._old_rect
         new_rect = QRectF(item.rect()) if item is not None else None
 
-        if item is not None and old_rect != new_rect:
+        new_pos = QPointF(item.pos()) if item is not None else None
+        if item is not None and (old_rect != new_rect or self._old_pos != new_pos):
             self.view.history.push(
-                ResizeAnnotationCommand(item, old_rect, new_rect)
+                ResizeAnnotationCommand(
+                    item, old_rect, new_rect,
+                    old_pos=self._old_pos,
+                    new_pos=new_pos,
+                )
             )
 
         self._handle_id = None
@@ -249,6 +255,7 @@ class AnnotationResizeController:
         self._start_local_rect = None
         self._start_anchor = None
         self._old_rect = None
+        self._old_pos = None
         self.view._interaction_dragging = False
         self.sync_handles()
         self.view._update_floating_widgets_visibility()
