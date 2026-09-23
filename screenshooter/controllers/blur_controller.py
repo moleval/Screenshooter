@@ -44,6 +44,7 @@ class BlurController:
         self.blur_move_start = None
         self.blur_resize_handle = None
         self.blur_old_rect = None
+        self._blur_drag_scene_prepared = False
 
         # Зоны размытия
         self.blur_base_pixmap = None
@@ -575,6 +576,7 @@ class BlurController:
             handle_id = item.handles.hit_test(QPointF(event.pos()))
             if handle_id:
                 self.blur_interaction = 'resizing'
+                self._blur_drag_scene_prepared = False
                 self.blur_resize_handle = handle_id
                 self.blur_old_rect = QRectF(item.rect())
                 if not item.isSelected():
@@ -583,9 +585,9 @@ class BlurController:
                 return True
             if item.rect().contains(sp):
                 self.blur_interaction = 'moving'
+                self._blur_drag_scene_prepared = False
                 self.blur_move_start = sp
                 self.blur_old_rect = QRectF(item.rect())
-                self.view.prepare_drag_scene_rect(event.pos())
                 if not item.isSelected():
                     self.view.scene().clearSelection()
                     item.setSelected(True)
@@ -597,9 +599,9 @@ class BlurController:
             if rect.contains(sp):
                 self._set_active_blur(idx)
                 self.blur_interaction = 'moving'
+                self._blur_drag_scene_prepared = False
                 self.blur_move_start = sp
                 self.blur_old_rect = QRectF(rect)
-                self.view.prepare_drag_scene_rect(event.pos())
                 item = self.blur_region_items[idx]
                 self.view.scene().clearSelection()
                 item.setSelected(True)
@@ -745,6 +747,7 @@ class BlurController:
                 # Ручки активного blur имеют приоритет над любым объектом.
                 self.blur_outside_mode = True
                 self.blur_outside_interaction = 'resizing'
+                self._blur_drag_scene_prepared = False
                 self.blur_resize_handle = handle_id
                 self.blur_old_rect = QRectF(item.rect())
                 if not item.isSelected():
@@ -759,9 +762,9 @@ class BlurController:
             if top_item is item and item.rect().contains(sp):
                 self.blur_outside_mode = True
                 self.blur_outside_interaction = 'moving'
+                self._blur_drag_scene_prepared = False
                 self.blur_move_start = sp
                 self.blur_old_rect = QRectF(item.rect())
-                self.view.prepare_drag_scene_rect(event.pos())
                 if not item.isSelected():
                     self.view.scene().clearSelection()
                     item.setSelected(True)
@@ -780,9 +783,9 @@ class BlurController:
                     self._set_active_blur(idx)
                     self.blur_outside_mode = True
                     self.blur_outside_interaction = 'moving'
+                    self._blur_drag_scene_prepared = False
                     self.blur_move_start = sp
                     self.blur_old_rect = QRectF(rect)
-                    self.view.prepare_drag_scene_rect(event.pos())
                     item = self.blur_region_items[idx]
                     self.view.scene().clearSelection()
                     item.setSelected(True)
