@@ -212,10 +212,8 @@ class AnnotationResizeController:
         self._handle_id = handle_id
         self._start_scene_rect = item.mapRectToScene(item.rect()).normalized()
         self._start_local_rect = QRectF(item.rect())
-        self._start_anchor = (
-            self._start_scene_rect.center()
-            if isinstance(item, EllipseItem)
-            else self._anchor_for_handle(self._start_scene_rect, handle_id)
+        self._start_anchor = self._anchor_for_handle(
+            self._start_scene_rect, handle_id
         )
         self._old_rect = QRectF(item.rect())
         self._old_pos = QPointF(item.pos())
