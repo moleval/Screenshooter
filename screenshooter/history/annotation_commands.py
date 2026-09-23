@@ -22,16 +22,23 @@ class ResizeAnnotationCommand(QUndoCommand):
     def _apply(self, rect, pos, geometry):
         if geometry is not None:
             start, end = geometry
-            if isinstance(self.item, LineItem):
+            # Используем нативный API конкретного line-like item.
+            # Проверка по API надёжнее isinstance для QGraphicsItem/SIP-обёрток:
+            # LineItem наследуется от QGraphicsLineItem, остальные типы имеют
+            # собственные методы set_points/set_line/setRect.
+            if hasattr(self.item, "setLine"):
                 self.item.setLine(start.x(), start.y(), end.x(), end.y())
-            elif isinstance(self.item, WavyLineItem):
+            elif hasattr(self.item, "set_points"):
                 self.item.set_points(start.x(), start.y(), end.x(), end.y())
-            elif isinstance(self.item, ArrowItem):
+            elif hasattr(self.item, "set_line"):
                 self.item.set_line(start, end)
-            elif isinstance(self.item, DimensionItem):
+            elif hasattr(self.item, "setRect"):
                 self.item.setRect(start, end)
             else:
-                raise TypeError("Unsupported annotation geometry")
+                raise TypeError(
+                    f"Unsupported annotation geometry: "
+                    f"{type(self.item).__module__}.{type(self.item).__name__}"
+                )
         elif rect is not None:
             self.item.setRect(rect)
 
