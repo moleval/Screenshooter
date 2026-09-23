@@ -17,7 +17,7 @@ class AnnotationResizeController:
     """Единственная точка входа для resize аннотаций."""
 
     RECT_HANDLES = ('tl', 'tm', 'tr', 'lm', 'rm', 'bl', 'bm', 'br')
-    ELLIPSE_HANDLES = ('right', 'top')
+    ELLIPSE_HANDLES = RECT_HANDLES
     RECT_ITEMS = (RectangleItem, FilledRectItem, CloudItem)
 
     def __init__(self, view):
@@ -49,12 +49,6 @@ class AnnotationResizeController:
 
     @staticmethod
     def _handle_points(scene_rect, item):
-        if isinstance(item, EllipseItem):
-            center = scene_rect.center()
-            return {
-                'right': QPointF(scene_rect.right(), center.y()),
-                'top': QPointF(center.x(), scene_rect.top()),
-            }
         return {
             'tl': scene_rect.topLeft(),
             'tm': QPointF(scene_rect.center().x(), scene_rect.top()),
@@ -141,57 +135,6 @@ class AnnotationResizeController:
 
         return QRectF(QPointF(left, top), QPointF(right, bottom)).normalized()
 
-    def _resize_ellipse(self, old_rect, handle_id, cursor_pos):
-        center = old_rect.center()
-        half_w = max(MIN_RECT_SIZE / 2.0, abs(cursor_pos.x() - center.x()))
-        half_h = max(MIN_RECT_SIZE / 2.0, abs(cursor_pos.y() - center.y()))
-
-        if handle_id == 'right':
-            return QRectF(
-                center.x() - half_w, old_rect.top(),
-                2 * half_w, old_rect.height(),
-            )
-        if handle_id == 'top':
-            return QRectF(
-                old_rect.left(), center.y() - half_h,
-                old_rect.width(), 2 * half_h,
-            )
-        return old_rect
-
-    def _clamp_ellipse_to_background(self, rect, old_rect, handle_id):
-        bg = self.view.image_editor.background_item
-        if bg is None or sip.isdeleted(bg):
-            return rect
-
-        bg_rect = bg.mapRectToScene(QRectF(bg.pixmap().rect())).normalized()
-        center = old_rect.center()
-
-        if handle_id == 'right':
-            radius = min(
-                rect.width() / 2.0,
-                max(0.0, bg_rect.right() - center.x()),
-                max(0.0, center.x() - bg_rect.left()),
-            )
-            radius = max(MIN_RECT_SIZE / 2.0, radius)
-            return QRectF(
-                center.x() - radius, rect.top(),
-                2 * radius, rect.height(),
-            )
-
-        if handle_id == 'top':
-            radius = min(
-                rect.height() / 2.0,
-                max(0.0, bg_rect.bottom() - center.y()),
-                max(0.0, center.y() - bg_rect.top()),
-            )
-            radius = max(MIN_RECT_SIZE / 2.0, radius)
-            return QRectF(
-                rect.left(), center.y() - radius,
-                rect.width(), 2 * radius,
-            )
-
-        return rect
-
     def _clamp_to_background(self, rect, anchor, handle_id):
         """Ограничивает только перемещаемую сторону, сохраняя anchor."""
         bg = self.view.image_editor.background_item
@@ -248,11 +191,6 @@ class AnnotationResizeController:
         item.setPos(item.pos() + delta)
         self.sync_handles()
 
-    def _apply_ellipse_rect(self, item, scene_rect):
-        local_rect = item.mapRectFromScene(scene_rect).normalized()
-        item.setRect(local_rect)
-        self.sync_handles()
-
     def handle_mouse_press(self, event) -> bool:
         if self._blocked_by_mode():
             return False
@@ -292,16 +230,6 @@ class AnnotationResizeController:
 
         cursor_scene = self.view.mapToScene(event.pos())
         item = self._item
-
-        if isinstance(item, EllipseItem):
-            new_scene_rect = self._resize_ellipse(
-                self._start_scene_rect, self._handle_id, cursor_scene
-            )
-            new_scene_rect = self._clamp_ellipse_to_background(
-                new_scene_rect, self._start_scene_rect, self._handle_id
-            )
-            self._apply_ellipse_rect(item, new_scene_rect)
-            return True
 
         new_scene_rect = self._resize_scene_rect(
             self._start_scene_rect, self._handle_id, cursor_scene
