@@ -9,7 +9,7 @@ from PyQt5.QtGui import QPixmap, QPen, QColor
 from PyQt5.QtWidgets import QGraphicsPixmapItem, QGraphicsScene, QGraphicsView
 
 from screenshooter.controllers.annotation_resize_controller import AnnotationResizeController
-from screenshooter.history import HistoryManager
+from screenshooter.history import HistoryManager, ChangeBrushCommand
 from screenshooter.items import CloudItem, EllipseItem, FilledRectItem, RectangleItem
 
 
@@ -142,25 +142,27 @@ def test_cloud_has_eight_handles_and_rebuilds_path(qapp):
     view.close()
 
 
-def test_ellipse_has_two_radius_handles(qapp):
+def test_ellipse_has_eight_handles(qapp):
     view, _ = make_fixture(qapp)
     item = EllipseItem(QRectF(40, 30, 80, 60), QPen(Qt.red, 2))
     view.scene().addItem(item)
     controller = select_item(view, item)
 
-    assert set(controller.handles.handle_items) == {"right", "top"}
+    assert set(controller.handles.handle_items) == {
+        "tl", "tm", "tr", "lm", "rm", "bl", "bm", "br"
+    }
 
     old = QRectF(item.rect())
-    center = item.mapToScene(old.center())
+    anchor = item.mapToScene(old.topLeft())
 
-    assert controller.handle_mouse_press(event_for(view, item.mapToScene(QPointF(old.right(), old.center().y()))))
-    assert controller.handle_mouse_move(event_for(view, QPointF(150, center.y())))
-    controller.handle_mouse_release(event_for(view, QPointF(150, center.y())))
+    assert controller.handle_mouse_press(event_for(view, item.mapToScene(old.bottomRight())))
+    assert controller.handle_mouse_move(event_for(view, QPointF(150, 110)))
+    controller.handle_mouse_release(event_for(view, QPointF(150, 110)))
 
     new_rect = item.mapRectToScene(item.rect()).normalized()
-    assert new_rect.center() == center
+    assert new_rect.topLeft() == anchor
     assert new_rect.width() > old.width()
-    assert new_rect.height() == old.height()
+    assert new_rect.height() > old.height()
     assert view.history.can_undo()
 
     view.history.undo()
@@ -169,4 +171,22 @@ def test_ellipse_has_two_radius_handles(qapp):
     assert item.rect() != old
 
     controller.remove_handles()
+    view.close()
+
+
+def test_filled_rect_brush_change_has_undo_redo(qapp):
+    view, _ = make_fixture(qapp)
+    item = FilledRectItem(QRectF(20, 20, 80, 60), QColor(255, 0, 0))
+    view.scene().addItem(item)
+
+    old_brush = item.brush()
+    new_brush = QColor(0, 255, 0, 80)
+    view.history.push(ChangeBrushCommand(item, old_brush, new_brush))
+
+    assert item.brush().color() == new_brush
+    view.history.undo()
+    assert item.brush() == old_brush
+    view.history.redo()
+    assert item.brush().color() == new_brush
+
     view.close()
