@@ -22,14 +22,28 @@ class PastedImageItem(QGraphicsPixmapItem):
         self.original_pixmap = pixmap
         self.scale = 1.0
         self.layer = 1
+        # Прозрачность относится только к вставленному изображению.
+        self.image_opacity = 100
 
         # Перемещением управляет ManipulationController, чтобы не смешивать
         # его с автоматическим drag-механизмом QGraphicsItem.
         self.setFlag(QGraphicsPixmapItem.ItemIsSelectable, True)
         self.setTransformationMode(Qt.SmoothTransformation)
         self.set_layer(self.layer)
+        self.setOpacity(1.0)
 
         self.handles = None
+
+    def set_image_opacity(self, opacity: int):
+        """Устанавливает прозрачность только этого вставленного изображения."""
+        opacity = max(0, min(100, int(opacity)))
+        self.image_opacity = opacity
+        self.setOpacity(opacity / 100.0)
+        self.update()
+
+    def get_image_opacity(self) -> int:
+        """Возвращает прозрачность изображения в процентах."""
+        return int(self.image_opacity)
 
     def set_layer(self, layer: int):
         """Устанавливает пользовательский слой изображения (0 — верх, 2 — ниже)."""
