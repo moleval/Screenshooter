@@ -576,6 +576,7 @@ class BlurController:
                 self.blur_interaction = 'moving'
                 self.blur_move_start = sp
                 self.blur_old_rect = QRectF(item.rect())
+                self.view.prepare_drag_scene_rect(event.pos())
                 if not item.isSelected():
                     self.view.scene().clearSelection()
                     item.setSelected(True)
@@ -589,6 +590,7 @@ class BlurController:
                 self.blur_interaction = 'moving'
                 self.blur_move_start = sp
                 self.blur_old_rect = QRectF(rect)
+                self.view.prepare_drag_scene_rect(event.pos())
                 item = self.blur_region_items[idx]
                 self.view.scene().clearSelection()
                 item.setSelected(True)
@@ -746,6 +748,7 @@ class BlurController:
                 self.blur_outside_interaction = 'moving'
                 self.blur_move_start = sp
                 self.blur_old_rect = QRectF(item.rect())
+                self.view.prepare_drag_scene_rect(event.pos())
                 if not item.isSelected():
                     self.view.scene().clearSelection()
                     item.setSelected(True)
@@ -766,6 +769,7 @@ class BlurController:
                     self.blur_outside_interaction = 'moving'
                     self.blur_move_start = sp
                     self.blur_old_rect = QRectF(rect)
+                    self.view.prepare_drag_scene_rect(event.pos())
                     item = self.blur_region_items[idx]
                     self.view.scene().clearSelection()
                     item.setSelected(True)
@@ -895,19 +899,6 @@ class BlurController:
         return QRectF(left, top, right - left, bottom - top).normalized()
 
     def _constrain_move(self, old_rect: QRectF, delta: QPointF):
-        background_item = self.view.image_editor.background_item
-        image_rect = background_item.mapRectToScene(
-            QRectF(background_item.pixmap().rect()))
-        new_rect = old_rect.translated(delta)
-
-        if new_rect.left() < image_rect.left():
-            new_rect.moveLeft(image_rect.left())
-        elif new_rect.right() > image_rect.right():
-            new_rect.moveRight(image_rect.right())
-
-        if new_rect.top() < image_rect.top():
-            new_rect.moveTop(image_rect.top())
-        elif new_rect.bottom() > image_rect.bottom():
-            new_rect.moveBottom(image_rect.bottom())
-
-        return new_rect
+        # Blur, как и остальные редактируемые объекты, может свободно
+        # выходить за пределы исходной подложки.
+        return old_rect.translated(delta)
