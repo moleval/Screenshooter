@@ -35,6 +35,10 @@ class CropCommand(QUndoCommand):
         self.background_pos = background_pos
         self.new_background_pos = (new_background_pos if new_background_pos is not None else background_pos)
 
+        # Локальная рамка crop в старом pixmap нужна для корректного redo
+        # после смены позиции/размера подложки.
+        self._local_crop_rect = None
+
         if self.blur_controller is not None:
             self.blur_state = self.blur_controller._get_blur_state()
         else:
@@ -55,7 +59,8 @@ class CropCommand(QUndoCommand):
         self.background_item.update()
 
         if self.blur_controller is not None and self.crop_rect is not None:
-            self.blur_controller._apply_crop_to_blur_regions(self.crop_rect)
+            self.blur_controller._apply_crop_to_blur_regions(
+                self.crop_rect, self._local_crop_rect)
             self.blur_controller.view.set_scene_rect_preserving_view(
                 self.background_item.sceneBoundingRect())
             self.blur_controller.view.update_resolution_from_background()
