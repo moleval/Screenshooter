@@ -50,6 +50,7 @@ class ThemeManager:
         'crop_label_bg': QColor(255, 255, 255, 180),
         'crop_cursor_outline': QColor(255, 255, 255),
         'crop_cursor_line': QColor(0, 0, 0),
+        'annotation_handle': QColor(0, 120, 215),
 
         'status_normal_bg': QColor(255, 255, 255, 180),
         'status_normal_text': QColor(51, 51, 51),
@@ -96,6 +97,7 @@ class ThemeManager:
         'crop_label_bg': QColor(0, 0, 0, 180),
         'crop_cursor_outline': QColor(255, 255, 255),
         'crop_cursor_line': QColor(0, 0, 0),
+        'annotation_handle': QColor(0, 150, 255),
 
         'status_normal_bg': QColor(60, 60, 60, 200),
         'status_normal_text': QColor(220, 220, 220),
