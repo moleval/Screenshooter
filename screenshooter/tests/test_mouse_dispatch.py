@@ -18,7 +18,7 @@
 import pytest
 from PyQt5.QtCore import Qt, QPointF, QEvent, QRectF
 from PyQt5.QtGui import QMouseEvent, QPixmap, QColor
-from PyQt5.QtWidgets import QGraphicsScene, QGraphicsRectItem
+from PyQt5.QtWidgets import QGraphicsScene, QGraphicsRectItem, QApplication
 
 from screenshooter.view import EditorView
 from screenshooter.items.blur_region_item import BlurRegionItem
@@ -368,6 +368,51 @@ def test_multi_selection_drag_with_blur_survives_repeated_drags(view_and_scene):
 
     drag_from(blur.sceneBoundingRect().center(), QPointF(10, 10))
     assert set(view.scene().selectedItems()) == {first, second, blur}
+
+
+def test_group_drag_with_blur_keeps_render_and_selection_stable(view_and_scene):
+    view, scene = view_and_scene
+
+    first = QGraphicsRectItem(20, 20, 20, 20)
+    first.setFlag(QGraphicsRectItem.ItemIsSelectable, True)
+    scene.addItem(first)
+
+    blur = BlurRegionItem(QRectF(70, 70, 60, 60), view, mode='inactive')
+    scene.addItem(blur)
+
+    # Создаём реальное состояние blur, включая рассчитанный pixmap.
+    view.blur_controller.blur_base_pixmap = view.background_item.pixmap().copy()
+    view.blur_controller.blur_regions = [QRectF(70, 70, 60, 60)]
+    view.blur_controller.blur_region_items = [blur]
+    view.blur_controller._force_blur_recompute()
+    assert not blur.blurred_pixmap.isNull()
+
+    first.setSelected(True)
+    blur.setSelected(True)
+
+    def drag_from(scene_pos, delta):
+        start = view.mapFromScene(scene_pos)
+        end = view.mapFromScene(scene_pos + delta)
+        view.mousePressEvent(make_mouse_event(
+            view, QEvent.MouseButtonPress, pos=start))
+        view.mouseMoveEvent(make_mouse_event(
+            view, QEvent.MouseMove, pos=end))
+        # Реальный GUI успевает обработать 16 ms blur-timer между mouse
+        # events. Для группы с blur таймер не должен запускаться вообще.
+        QApplication.processEvents()
+        view.mouseReleaseEvent(make_mouse_event(
+            view, QEvent.MouseButtonRelease, pos=end))
+        view.qapp.processEvents() if hasattr(view, 'qapp') else None
+
+    drag_from(first.sceneBoundingRect().center(), QPointF(10, 10))
+    assert not view.blur_controller._blur_recompute_timer.isActive()
+    assert not blur.blurred_pixmap.isNull()
+    assert set(scene.selectedItems()) == {first, blur}
+
+    drag_from(blur.sceneBoundingRect().center(), QPointF(10, 10))
+    assert not view.blur_controller._blur_recompute_timer.isActive()
+    assert not blur.blurred_pixmap.isNull()
+    assert set(scene.selectedItems()) == {first, blur}
 
 
 def test_manipulation_press_move_release_cycle(view_and_scene, monkeypatch):
