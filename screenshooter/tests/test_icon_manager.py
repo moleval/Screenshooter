@@ -115,3 +115,23 @@ def test_icon_manager_disabled_icon_is_transparent(qapp):
 
     assert normal_alpha == 255
     assert disabled_alpha == round(255 * IconManager.DISABLED_OPACITY)
+
+def test_app_theme_switch_refreshes_existing_editing_icon(qapp):
+    from screenshooter.app import ScreenshotApp
+
+    app = ScreenshotApp()
+    try:
+        app.apply_theme("dark")
+        dark = app.crop_action.icon().pixmap(
+            IconManager.ICON_SIZE, QIcon.Normal, QIcon.Off
+        )
+        assert _has_color_close_to(dark, (215, 245, 255))
+
+        app.apply_theme("light")
+        light = app.crop_action.icon().pixmap(
+            IconManager.ICON_SIZE, QIcon.Normal, QIcon.Off
+        )
+        assert _has_color_close_to(light, (0, 90, 158))
+    finally:
+        app.close()
+
