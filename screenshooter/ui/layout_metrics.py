@@ -10,7 +10,7 @@
 # ==============================================================
 
 TOOLBAR_BUTTON_SIZE = 36          # единый размер основной кнопки тулбара
-TOOLBAR_ICON_SIZE = 30              # размер SVG-иконки внутри кнопки
+TOOLBAR_ICON_SIZE = 28            # размер SVG-иконки внутри кнопки
 TOOLBAR_SPACING = 0               # spacing внутри вложенных тулбаров
 TOOLBAR_MARGIN = 0                # margin внутри вложенных тулбаров
 
@@ -25,17 +25,17 @@ TOOLBAR_SEPARATOR_V_MARGIN = 8      # вертикальный отступ св
 # Отступы и интервалы главного окна
 # ==============================================================
 
-MAIN_LAYOUT_MARGIN = 9            # отступы главного layout со всех сторон
-MAIN_LAYOUT_SPACING = 4           # вертикальный интервал между элементами главного layout
+MAIN_LAYOUT_MARGIN = 9
+MAIN_LAYOUT_SPACING = 4
 
-TOP_ACTIONS_SPACING = 6           # горизонтальный интервал в верхней строке действий
-TOP_ACTIONS_MARGIN = 0            # отступы верхней строки действий
+TOP_ACTIONS_SPACING = 6
+TOP_ACTIONS_MARGIN = 0
 
 # ==============================================================
 # Геометрия окна
 # ==============================================================
 
-WINDOW_MIN_HEIGHT = 650           # минимальная высота окна
-WINDOW_INITIAL_WIDTH = 1030       # стартовая ширина окна
-WINDOW_INITIAL_HEIGHT = 750       # стартовая высота окна
-TOOLBAR_CONTROL_HEIGHT = 26     # высота элементов управления в верхней панели
+WINDOW_MIN_HEIGHT = 650
+WINDOW_INITIAL_WIDTH = 1030
+WINDOW_INITIAL_HEIGHT = 750
+TOOLBAR_CONTROL_HEIGHT = 26
