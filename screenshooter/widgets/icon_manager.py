@@ -16,7 +16,7 @@ from ..theme import theme_manager
 class IconManager:
     """Загружает локальные Lucide SVG и применяет семантический цвет."""
 
-    ICON_SIZE = 28
+    ICON_SIZE = 32
     DISABLED_OPACITY = 0.4
 
     SELECTION = "selection"
