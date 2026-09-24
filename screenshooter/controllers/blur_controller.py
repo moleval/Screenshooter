@@ -188,8 +188,12 @@ class BlurController:
         for rect in self.blur_regions:
             inter = rect.intersected(crop_rect)
             if not inter.isEmpty():
-                inter.moveLeft(inter.left() - crop_rect.left())
-                inter.moveTop(inter.top() - crop_rect.top())
+                # BlurRegionItem живёт непосредственно в scene и хранит
+                # геометрию в координатах сцены. После crop подложка
+                # переносится в crop.topLeft(), поэтому повторно переводить
+                # пересечение в локальные координаты нельзя: это сдвигает
+                # blur к (0, 0). При следующем перемещении такой blur
+                # начинает визуально "выталкивать" белое поле.
                 new_regions.append(inter)
 
         self.blur_regions = new_regions
