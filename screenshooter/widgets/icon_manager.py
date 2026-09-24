@@ -34,6 +34,7 @@ class IconManager:
         "text": (ANNOTATION, "type.svg"),
         "crop": (EDITING, "crop.svg"),
         "blur": (EDITING, "scan-eye.svg"),
+        "trim": (EDITING, "scan.svg"),
         "rotate-cw": (EDITING, "rotate-cw.svg"),
         "rotate-ccw": (EDITING, "rotate-cw.svg"),
         "undo": (EDITING, "undo-2.svg"),
