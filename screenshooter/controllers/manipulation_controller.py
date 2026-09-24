@@ -731,6 +731,25 @@ class ManipulationController:
         if annotation is not None:
             annotation.sync_handles()
 
+        # Во время drag снимок группы является источником истины. Blur
+        # и связанные с ним обновления могут косвенно менять selection;
+        # восстанавливаем группу уже на каждом move, а не только на release.
+        # Это исключает состояние "после первого движения группа потеряла
+        # фокус", когда следующий press начинает работать как одиночный.
+        selection_snapshot = [
+            it for it in self._drag_selection_snapshot
+            if not sip.isdeleted(it) and it.scene() is self.view.scene()
+        ]
+        current_selection = [
+            it for it in self.view.scene().selectedItems()
+            if not self.view._is_background_item(it)
+            and not sip.isdeleted(it)
+        ]
+        if set(current_selection) != set(selection_snapshot):
+            self.view.scene().clearSelection()
+            for it in selection_snapshot:
+                it.setSelected(True)
+
         return True
 
     def _handle_rubber_band_move(self, event) -> bool:
