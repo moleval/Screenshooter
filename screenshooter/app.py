@@ -92,14 +92,12 @@ class ScreenshotApp(QMainWindow):
 
         self.undo_btn = QPushButton()
         self.undo_btn.setIcon(IconManager.icon("undo"))
-        self.undo_btn.setFixedSize(36, 36)
         self.undo_btn.setToolTip("Отменить")
         self.undo_btn.clicked.connect(self.undo_action)
         left_group_layout.addWidget(self.undo_btn)
 
         self.redo_btn = QPushButton()
         self.redo_btn.setIcon(IconManager.icon("redo"))
-        self.redo_btn.setFixedSize(36, 36)
         self.redo_btn.setToolTip("Повторить")
         self.redo_btn.clicked.connect(self.redo_action)
         left_group_layout.addWidget(self.redo_btn)
