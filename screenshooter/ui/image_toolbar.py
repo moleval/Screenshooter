@@ -28,9 +28,3 @@ class ImageToolbar(QWidget):
             btn.setCheckable(act.isCheckable())
             layout.addWidget(btn)
             buttons.append(btn)
-
-        # Ширина вычисляется по sizeHint, который зависит от текущего шрифта.
-        # Убедитесь, что тема применена до создания тулбара.
-        max_width = max(btn.sizeHint().width() for btn in buttons)
-        for btn in buttons:
-            btn.setFixedWidth(max_width)
