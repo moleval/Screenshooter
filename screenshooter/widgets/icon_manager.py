@@ -56,7 +56,12 @@ class IconManager:
     @classmethod
     def _render(cls, path, color):
         svg = path.read_text(encoding="utf-8")
-        svg = svg.replace("currentColor", color.name(QColor.HexArgb))
+        opacity = color.alphaF()
+        render_color = QColor(color)
+        render_color.setAlpha(255)
+        svg = svg.replace(
+            "currentColor", render_color.name(QColor.HexRgb)
+        )
         renderer = QSvgRenderer(QByteArray(svg.encode("utf-8")))
         if not renderer.isValid():
             raise FileNotFoundError(f"Invalid SVG icon: {path}")
@@ -67,6 +72,18 @@ class IconManager:
         painter = QPainter(pixmap)
         renderer.render(painter)
         painter.end()
+
+        if opacity < 1.0:
+            image = pixmap.toImage().convertToFormat(
+                QImage.Format_ARGB32_Premultiplied
+            )
+            painter = QPainter(image)
+            painter.setCompositionMode(QPainter.CompositionMode_DestinationIn)
+            alpha = round(opacity * 255)
+            painter.fillRect(image.rect(), QColor(0, 0, 0, alpha))
+            painter.end()
+            pixmap = QPixmap.fromImage(image)
+
         return pixmap
 
     @classmethod
