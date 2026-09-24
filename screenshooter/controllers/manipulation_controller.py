@@ -258,8 +258,16 @@ class ManipulationController:
         if is_ctrl or is_shift:
             skip_blur_handler = True
         elif li is not None and isinstance(li, BlurRegionItem):
+            # При уже существующем множественном выделении клик по blur
+            # должен продолжать групповое перетаскивание, а не переключать
+            # управление на саму зону размытия. Иначе blur_controller
+            # снимает выделение с остальных объектов.
             selected_items = self.view.scene().selectedItems()
-            if li.isSelected() and len(selected_items) > 1:
+            non_bg_selected = [
+                item for item in selected_items
+                if not self.view._is_background_item(item)
+            ]
+            if len(non_bg_selected) > 1:
                 skip_blur_handler = True
 
         if not skip_blur_handler:
