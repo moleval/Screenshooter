@@ -7,7 +7,7 @@ QIcon, поэтому один и тот же набор SVG работает д
 from pathlib import Path
 
 from PyQt5.QtCore import QByteArray, QSize, Qt
-from PyQt5.QtGui import QColor, QIcon, QImage, QPainter, QPixmap
+from PyQt5.QtGui import QColor, QIcon, QPainter, QPixmap
 from PyQt5.QtSvg import QSvgRenderer
 
 from ..theme import theme_manager
@@ -73,17 +73,9 @@ class IconManager:
         pixmap = QPixmap(size)
         pixmap.fill(Qt.transparent)
         painter = QPainter(pixmap)
+        painter.setOpacity(opacity)
         renderer.render(painter)
         painter.end()
-
-        if opacity < 1.0:
-            image = pixmap.toImage().convertToFormat(QImage.Format_ARGB32)
-            for y in range(image.height()):
-                for x in range(image.width()):
-                    pixel = image.pixelColor(x, y)
-                    pixel.setAlpha(round(pixel.alpha() * opacity))
-                    image.setPixelColor(x, y, pixel)
-            pixmap = QPixmap.fromImage(image)
 
         return pixmap
 
