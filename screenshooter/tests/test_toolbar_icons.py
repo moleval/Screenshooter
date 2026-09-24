@@ -39,7 +39,7 @@ def test_toolbar_buttons_are_36px_icon_only(qapp, toolbar_cls):
         assert button.height() == 36
         assert button.toolButtonStyle() == Qt.ToolButtonIconOnly
         assert button.iconSize() == QSize(TOOLBAR_ICON_SIZE, TOOLBAR_ICON_SIZE)
-        assert TOOLBAR_ICON_SIZE == 32
+        assert TOOLBAR_ICON_SIZE == 30
 
 def test_editor_toolbar_has_trim_button_after_editing_toolbar(qapp):
     trim_action = QAction("Убрать поля", qapp)
@@ -53,6 +53,6 @@ def test_editor_toolbar_has_trim_button_after_editing_toolbar(qapp):
     )
 
     assert strip.trim_button is not None
-    assert strip.trim_button.iconSize() == QSize(32, 32)
+    assert strip.trim_button.iconSize() == QSize(30, 30)
     assert strip.trim_button.width() == 36
     assert strip.trim_button.height() == 36
