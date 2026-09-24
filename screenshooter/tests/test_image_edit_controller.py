@@ -124,3 +124,30 @@ def test_rotate_undo_does_not_restore_annotation_handles_as_scene_items(setup_ed
     assert controller.handles.positions != old_positions
     assert controller.handles.positions == controller._handle_points(
         item.mapRectToScene(item.rect()).normalized(), item)
+
+def test_trim_white_fields_keeps_annotation_moved_outside_background(qapp):
+    scene = QGraphicsScene()
+    view = EditorView(scene)
+
+    pm = QPixmap(120, 100)
+    pm.fill(QColor("white"))
+    image = pm.toImage()
+    for y in range(20, 80):
+        for x in range(20, 100):
+            image.setPixelColor(x, y, QColor("gray"))
+    view.set_background_from_pixmap(QPixmap.fromImage(image))
+
+    annotation = RectangleItem(
+        QRectF(105, 40, 10, 10), QPen(QColor("red"), 2)
+    )
+    scene.addItem(annotation)
+    annotation.setSelected(True)
+    view.annotation_resize_controller.sync_handles()
+
+    assert view.trim_white_fields() is True
+    assert view.background_item.pixmap().width() < 120
+    assert annotation.scene() is scene
+    assert annotation.pos().x() < 105
+
+    view.undo()
+    assert view.background_item.pixmap().size() == pm.size()
