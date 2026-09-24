@@ -128,6 +128,15 @@ class BlurController:
         }
 
     def _restore_blur_state(self, state):
+        # QUndoStack.push() немедленно вызывает redo(), поэтому при
+        # восстановлении состояния после обычного drag старые BlurRegionItem
+        # заменяются новыми. Сохраняем индексы выделенных blur, чтобы
+        # восстановить selection на новые экземпляры.
+        selected_blur_indices = {
+            index for index, item in enumerate(self.blur_region_items)
+            if not self._is_deleted(item) and item.isSelected()
+        }
+
         self._clear_all_blur_regions()
         self.blur_regions = [QRectF(r) for r in state.get('rects', [])]
         self.blur_base_pixmap = state.get('base_pixmap')
@@ -141,9 +150,20 @@ class BlurController:
                 item.set_layer(layers[index])
             self.view.scene().addItem(item)
             self.blur_region_items.append(item)
+
         for it in self.view.scene().items():
             if isinstance(it, BlurRegionItem) and it not in self.blur_region_items:
                 it.remove()
+
+        # _restore_blur_state обязан восстанавливать не только геометрию,
+        # но и визуальный результат blur. Иначе после первого перемещения
+        # QUndoCommand заменяет старый item новым с пустым blurred_pixmap.
+        self._invalidate_blur_cache()
+        self._recompute_blurred_pixmap()
+
+        for index in selected_blur_indices:
+            if 0 <= index < len(self.blur_region_items):
+                self.blur_region_items[index].setSelected(True)
 
     def _apply_crop_to_blur_regions(self, crop_rect: QRectF, local_crop_rect=None):
         """Обновляет зоны размытия после обрезки фона.
