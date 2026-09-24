@@ -76,14 +76,12 @@ def test_icon_manager_uses_semantic_colors(qapp):
 
 
 def test_icon_manager_disabled_icon_is_transparent(qapp):
-    color = IconManager._color_for_category(IconManager.ANNOTATION)
-    normal = IconManager._render(
-        IconManager._ROOT / "annotation" / "square.svg", color
+    icon = IconManager.icon("rect")
+    normal = icon.pixmap(
+        IconManager.ICON_SIZE, QIcon.Normal, QIcon.Off
     ).toImage()
-    disabled_color = QColor(color)
-    disabled_color.setAlphaF(IconManager.DISABLED_OPACITY)
-    disabled = IconManager._render(
-        IconManager._ROOT / "annotation" / "square.svg", disabled_color
+    disabled = icon.pixmap(
+        IconManager.ICON_SIZE, QIcon.Disabled, QIcon.Off
     ).toImage()
 
     normal_alpha = max(
