@@ -3,10 +3,10 @@
 Описание: Компонент тулбара аннотаций (QWidget + QToolButton).
 """
 
-from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtCore import QSize
 from PyQt5.QtWidgets import QWidget, QHBoxLayout, QToolButton, QSizePolicy
 
-from ..ui.layout_metrics import TOOLBAR_ICON_SIZE
+from ..ui.layout_metrics import TOOLBAR_BUTTON_SIZE, TOOLBAR_ICON_SIZE
 
 
 class AnnotationToolbar(QWidget):
@@ -23,7 +23,8 @@ class AnnotationToolbar(QWidget):
             btn = QToolButton()
             btn.setDefaultAction(act)
             btn.setIconSize(QSize(TOOLBAR_ICON_SIZE, TOOLBAR_ICON_SIZE))
-            btn.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
+            btn.setToolButtonStyle(0)
+            btn.setFixedSize(TOOLBAR_BUTTON_SIZE, TOOLBAR_BUTTON_SIZE)
             btn.setCheckable(act.isCheckable())
             layout.addWidget(btn)
             buttons.append(btn)
