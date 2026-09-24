@@ -53,7 +53,11 @@ class IconManager:
         if category == cls.ANNOTATION:
             return QColor(cls._ANNOTATION_COLOR)
         if category == cls.EDITING:
-            color = cls._EDITING_COLOR_DARK if theme_manager.effective_theme == "dark" else cls._EDITING_COLOR
+            color = (
+                cls._EDITING_COLOR_DARK
+                if theme_manager.effective_theme == "dark"
+                else cls._EDITING_COLOR
+            )
             return QColor(color)
         raise ValueError(f"Unknown icon category: {category}")
 
@@ -63,21 +67,27 @@ class IconManager:
         opacity = color.alphaF()
         render_color = QColor(color)
         render_color.setAlpha(255)
-        svg = svg.replace(
-            "currentColor", render_color.name(QColor.HexRgb)
-        )
+        svg = svg.replace("currentColor", render_color.name(QColor.HexRgb))
+
         renderer = QSvgRenderer(QByteArray(svg.encode("utf-8")))
         if not renderer.isValid():
             raise FileNotFoundError(f"Invalid SVG icon: {path}")
 
         size = QSize(cls.ICON_SIZE, cls.ICON_SIZE)
-        image = QImage(size, QImage.Format_ARGB32_Premultiplied)
+        image = QImage(size, QImage.Format_ARGB32)
         image.fill(Qt.transparent)
+
         painter = QPainter(image)
-        if opacity < 1.0:
-            painter.setOpacity(opacity)
         renderer.render(painter)
         painter.end()
+
+        if opacity < 1.0:
+            for y in range(image.height()):
+                for x in range(image.width()):
+                    pixel = image.pixelColor(x, y)
+                    alpha = round(pixel.alpha() * opacity)
+                    pixel.setAlpha(alpha)
+                    image.setPixelColor(x, y, pixel)
 
         return QPixmap.fromImage(image)
 
