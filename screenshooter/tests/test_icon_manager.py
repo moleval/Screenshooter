@@ -42,10 +42,10 @@ def test_icon_manager_loads_all_local_icons(qapp, name):
 def _nontransparent_pixels(pixmap):
     image = pixmap.toImage()
     return [
-        QColor(image.pixel(x, y))
+        image.pixelColor(x, y)
         for y in range(image.height())
         for x in range(image.width())
-        if QColor(image.pixel(x, y)).alpha() > 0
+        if image.pixelColor(x, y).alpha() > 0
     ]
 
 
@@ -103,18 +103,19 @@ def test_icon_manager_disabled_icon_is_transparent(qapp):
     ).toImage()
 
     normal_alpha = max(
-        QColor(normal.pixel(x, y)).alpha()
+        normal.pixelColor(x, y).alpha()
         for y in range(normal.height())
         for x in range(normal.width())
     )
     disabled_alpha = max(
-        QColor(disabled.pixel(x, y)).alpha()
+        disabled.pixelColor(x, y).alpha()
         for y in range(disabled.height())
         for x in range(disabled.width())
     )
 
     assert normal_alpha == 255
     assert disabled_alpha == round(255 * IconManager.DISABLED_OPACITY)
+
 
 def test_app_theme_switch_refreshes_existing_editing_icon(qapp):
     from screenshooter.app import ScreenshotApp
