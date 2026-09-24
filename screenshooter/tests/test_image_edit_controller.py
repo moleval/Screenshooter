@@ -145,10 +145,8 @@ def test_trim_white_fields_keeps_annotation_moved_outside_background(qapp):
     view.annotation_resize_controller.sync_handles()
 
     assert view.trim_white_fields() is True
-    assert view.background_item.pixmap().width() < 120
-
-    # Если объект оказывается частично за новой границей, обычный CropCommand
-    # удаляет его целиком — это допустимое поведение для операции "Убрать поля".
+    # Белая рамка определяется по содержимому подложки, а не по аннотации.
+    assert view.background_item.pixmap().width() == 80
     assert annotation.scene() is None
 
     view.undo()
