@@ -404,7 +404,13 @@ class ManipulationController:
                 and not (is_ctrl or is_shift)
             )
 
-            if not preserve_multi_selection_on_blur:
+            if preserve_multi_selection_on_blur:
+                # Клик по blur при существующей группе означает включение
+                # самой зоны в группу. Раньше blur оставался вне selection,
+                # поэтому после первого drag следующий клик по нему мог
+                # переключить обработчик blur и визуально "уронить" группу.
+                li.setSelected(True)
+            else:
                 if li.isSelected():
                     if is_ctrl:
                         li.setSelected(False)
