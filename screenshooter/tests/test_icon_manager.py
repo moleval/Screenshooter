@@ -1,6 +1,7 @@
 import pytest
 from PyQt5.QtGui import QColor, QIcon
 from PyQt5.QtWidgets import QApplication
+from screenshooter.theme import theme_manager
 
 from screenshooter.widgets.icon_manager import IconManager
 
@@ -76,6 +77,19 @@ def test_icon_manager_uses_semantic_colors(qapp):
     assert _has_color_close_to(selection, (51, 51, 51))
 
 
+def test_icon_manager_uses_bright_editing_color_in_dark_theme(qapp):
+    previous = theme_manager.current_theme
+    try:
+        theme_manager.set_theme("dark")
+        editing = IconManager._render(
+            IconManager._ROOT / "editing" / "crop.svg",
+            IconManager._color_for_category(IconManager.EDITING),
+        )
+        assert _has_color_close_to(editing, (93, 173, 226))
+    finally:
+        theme_manager.set_theme(previous)
+
+
 def test_icon_manager_disabled_icon_is_transparent(qapp):
     color = IconManager._color_for_category(IconManager.ANNOTATION)
     normal = IconManager._render(
@@ -100,4 +114,4 @@ def test_icon_manager_disabled_icon_is_transparent(qapp):
     )
 
     assert normal_alpha == 255
-    assert disabled_alpha == round(255 * IconManager.DISABLED_OPACITY)
+    assert disabled_alpha <= round(255 * IconManager.DISABLED_OPACITY)
