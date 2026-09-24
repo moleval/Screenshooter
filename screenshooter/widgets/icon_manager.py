@@ -16,7 +16,7 @@ from ..theme import theme_manager
 class IconManager:
     """Загружает локальные Lucide SVG и применяет семантический цвет."""
 
-    ICON_SIZE = 20
+    ICON_SIZE = 24
     DISABLED_OPACITY = 0.4
 
     SELECTION = "selection"
@@ -33,6 +33,7 @@ class IconManager:
         "arrow": (ANNOTATION, "arrow-right.svg"),
         "text": (ANNOTATION, "type.svg"),
         "crop": (EDITING, "crop.svg"),
+        "blur": (EDITING, "scan-eye.svg"),
         "rotate-cw": (EDITING, "rotate-cw.svg"),
         "rotate-ccw": (EDITING, "rotate-cw.svg"),
         "undo": (EDITING, "undo-2.svg"),
