@@ -38,4 +38,4 @@ def test_toolbar_buttons_are_36px_icon_only(qapp, toolbar_cls):
         assert button.height() == 36
         assert button.toolButtonStyle() == Qt.ToolButtonIconOnly
         assert button.iconSize() == QSize(TOOLBAR_ICON_SIZE, TOOLBAR_ICON_SIZE)
-        assert TOOLBAR_ICON_SIZE == 24
+        assert TOOLBAR_ICON_SIZE == 32
