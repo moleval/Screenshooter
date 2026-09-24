@@ -399,6 +399,9 @@ class EditorView(QGraphicsView):
 
         self.background_changed.emit()
 
+    def trim_white_fields(self):
+        return self.image_editor.trim_white_fields()
+
     def start_crop_mode(self):
         selected_pasted = [it for it in self.scene().selectedItems()
                            if isinstance(it, PastedImageItem)]
