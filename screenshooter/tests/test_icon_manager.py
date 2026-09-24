@@ -85,7 +85,7 @@ def test_icon_manager_uses_bright_editing_color_in_dark_theme(qapp):
             IconManager._ROOT / "editing" / "crop.svg",
             IconManager._color_for_category(IconManager.EDITING),
         )
-        assert _has_color_close_to(editing, (93, 173, 226))
+        assert _has_color_close_to(editing, (215, 245, 255))
     finally:
         theme_manager.set_theme(previous)
 
