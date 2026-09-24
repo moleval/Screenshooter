@@ -45,6 +45,7 @@ class ManipulationController:
         self._drag_blur_needs_recompute = False
         self._drag_old_background = None
         self._drag_old_blur_state = None
+        self._drag_selection_snapshot = []
 
         # Изменение размера вставленных изображений
         self._resizing_pasted_item = None
@@ -414,10 +415,18 @@ class ManipulationController:
                     li.setSelected(True)
 
             selected = self.view.scene().selectedItems()
-            self._drag_items = [it for it in selected
-                                if not self.view._is_background_item(it)]
+            # Снимок выделения фиксируем на весь drag. BlurRegionItem является
+            # полноценным участником группы и не должен исчезать из selection
+            # из-за промежуточного пересчёта blur/подложки.
+            self._drag_selection_snapshot = [
+                it for it in selected
+                if not self.view._is_background_item(it)
+                and not sip.isdeleted(it)
+            ]
+            self._drag_items = list(self._drag_selection_snapshot)
 
             if not self._drag_items:
+                self._drag_selection_snapshot = []
                 return True
 
             self._drag_old_positions = []
@@ -802,8 +811,24 @@ class ManipulationController:
         self._drag_start_item_pos = QPointF()
         self._drag_old_background = None
         self._drag_old_blur_state = None
+
+        # Внутренние операции завершения drag (пересчёт blur, расширение
+        # подложки, обновление ручек) могут менять active blur. Selection же
+        # должно остаться тем же самым набором объектов, с которого начался
+        # drag. Восстанавливаем его последним — перед следующим кликом.
+        selection_snapshot = [
+            it for it in self._drag_selection_snapshot
+            if not sip.isdeleted(it) and it.scene() is self.view.scene()
+        ]
+        self.view.scene().clearSelection()
+        for it in selection_snapshot:
+            it.setSelected(True)
+        self._drag_selection_snapshot = []
+
         self.view._update_pasted_image_handles()
         self.view._update_blur_region_handles()
+        # _update_blur_region_handles управляет только визуальным active
+        # состоянием blur и не должен менять восстановленное выделение.
         self.invalidate_cursor_cache()
         return True
 
