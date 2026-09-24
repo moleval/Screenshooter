@@ -317,22 +317,26 @@ def test_multi_selection_drag_started_on_blur_keeps_all_selected_items(view_and_
     view.mousePressEvent(make_mouse_event(
         view, QEvent.MouseButtonPress, pos=press_pos))
 
-    assert {first, second} == set(view.scene().selectedItems())
-    assert view.manipulation_controller._drag_items == [first, second]
+    # Клик по blur включает его в уже существующую группу, не сбрасывая
+    # ранее выбранные объекты.
+    assert set(view.scene().selectedItems()) == {first, second, blur}
+    assert set(view.manipulation_controller._drag_items) == {first, second, blur}
 
     first_old = first.pos()
     second_old = second.pos()
+    blur_old = blur.rect()
     move_pos = view.mapFromScene(QPointF(100, 100))
     view.mouseMoveEvent(make_mouse_event(
         view, QEvent.MouseMove, pos=move_pos))
 
     assert first.pos() != first_old
     assert second.pos() != second_old
-    assert {first, second} == set(view.scene().selectedItems())
+    assert blur.rect() != blur_old
+    assert set(view.scene().selectedItems()) == {first, second, blur}
 
     view.mouseReleaseEvent(make_mouse_event(
         view, QEvent.MouseButtonRelease, pos=move_pos))
-
+    assert set(view.scene().selectedItems()) == {first, second, blur}
 
 def test_multi_selection_drag_with_blur_survives_repeated_drags(view_and_scene):
     view, scene = view_and_scene
