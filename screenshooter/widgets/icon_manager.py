@@ -44,7 +44,7 @@ class IconManager:
     _SELECTION_COLOR = QColor("#333333")
     _ANNOTATION_COLOR = QColor("#D25145")
     _EDITING_COLOR = QColor("#005A9E")
-    _EDITING_COLOR_DARK = QColor("#5DADE2")
+    _EDITING_COLOR_DARK = QColor("#D7F5FF")
 
     @classmethod
     def _color_for_category(cls, category):
@@ -78,13 +78,13 @@ class IconManager:
         painter.end()
 
         if opacity < 1.0:
-            image = pixmap.toImage().convertToFormat(QImage.Format_ARGB32)
+            image = pixmap.toImage().convertToFormat(QImage.Format_RGBA8888)
             for y in range(image.height()):
                 for x in range(image.width()):
                     pixel = image.pixelColor(x, y)
                     pixel.setAlpha(int(round(pixel.alpha() * opacity)))
                     image.setPixelColor(x, y, pixel)
-            pixmap = QPixmap.fromImage(image, Qt.NoFormatConversion)
+            pixmap = QPixmap.fromImage(image)
 
         return pixmap
 
