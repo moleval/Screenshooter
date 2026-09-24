@@ -34,6 +34,7 @@ class IconManager:
         "text": (ANNOTATION, "type.svg"),
         "crop": (EDITING, "crop.svg"),
         "rotate-cw": (EDITING, "rotate-cw.svg"),
+        "rotate-ccw": (EDITING, "rotate-cw.svg"),
         "undo": (EDITING, "undo-2.svg"),
         "redo": (EDITING, "redo-2.svg"),
     }
@@ -79,6 +80,9 @@ class IconManager:
         color = cls._color_for_category(category)
 
         normal = cls._render(path, color)
+        if name == "rotate-ccw":
+            normal = normal.transformed(QTransform())
+            normal = normal.transformed(QTransform(-1, 0, 0, 1, 0, 0))
         disabled_color = QColor(color)
         disabled_color.setAlphaF(cls.DISABLED_OPACITY)
         disabled = cls._render(path, disabled_color)
