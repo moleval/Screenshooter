@@ -299,10 +299,16 @@ class ScreenshotApp(QMainWindow):
         blur_action.setToolTip("Размыть область")
         blur_action.triggered.connect(self._on_blur_action_triggered)
 
+        trim_action = QAction("Убрать поля", self)
+        trim_action.setIcon(IconManager.icon("trim"))
+        trim_action.setToolTip("Убрать лишние белые поля")
+        trim_action.triggered.connect(self._on_trim_action_triggered)
+
         self.crop_action = crop_action
         self.rotate_cw_action = rotate_cw_action
         self.rotate_ccw_action = rotate_ccw_action
         self.blur_action = blur_action
+        self.trim_action = trim_action
 
         image_actions = [crop_action, rotate_cw_action, rotate_ccw_action, blur_action]
 
@@ -314,6 +320,7 @@ class ScreenshotApp(QMainWindow):
             annotation_toolbar,
             image_toolbar,
             options_toolbar,
+            trim_action=trim_action,
             parent=cw
         )
 
@@ -641,6 +648,7 @@ class ScreenshotApp(QMainWindow):
         self.rotate_cw_action.setEnabled(has_bg)
         self.rotate_ccw_action.setEnabled(has_bg)
         self.blur_action.setEnabled(has_bg)
+        self.trim_action.setEnabled(has_bg)
 
     # --------------------------------------------------------------
     # Обработчики режимов изображения
@@ -653,6 +661,15 @@ class ScreenshotApp(QMainWindow):
         else:
             self.view.start_crop_mode()
             self.pointer_action.setChecked(True)
+
+    def _on_trim_action_triggered(self):
+        if self.view.blur_mode:
+            self.view.cancel_blur_mode()
+        if self.view.crop_mode:
+            self.view.cancel_crop_mode()
+        self.pointer_action.setChecked(True)
+        self.view.trim_white_fields()
+        self.view.viewport().update()
 
     def _on_blur_action_triggered(self):
         if self.view.crop_mode:
