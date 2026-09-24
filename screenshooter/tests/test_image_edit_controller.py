@@ -110,6 +110,8 @@ def test_rotate_undo_does_not_restore_annotation_handles_as_scene_items(setup_ed
     view.undo()
 
     assert item.scene() is view.scene()
+    item.setSelected(True)
+    controller.sync_handles()
     assert controller.handles is not None
     expected = controller._handle_points(
         item.mapRectToScene(item.rect()).normalized(), item)
