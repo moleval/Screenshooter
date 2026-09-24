@@ -16,7 +16,7 @@ from ..theme import theme_manager
 class IconManager:
     """Загружает локальные Lucide SVG и применяет семантический цвет."""
 
-    ICON_SIZE = 24
+    ICON_SIZE = 28
     DISABLED_OPACITY = 0.4
 
     SELECTION = "selection"
@@ -43,6 +43,7 @@ class IconManager:
     _SELECTION_COLOR = QColor("#333333")
     _ANNOTATION_COLOR = QColor("#D25145")
     _EDITING_COLOR = QColor("#005A9E")
+    _EDITING_COLOR_DARK = QColor("#5DADE2")
 
     @classmethod
     def _color_for_category(cls, category):
@@ -51,7 +52,8 @@ class IconManager:
         if category == cls.ANNOTATION:
             return QColor(cls._ANNOTATION_COLOR)
         if category == cls.EDITING:
-            return QColor(cls._EDITING_COLOR)
+            color = cls._EDITING_COLOR_DARK if theme_manager.effective_theme == "dark" else cls._EDITING_COLOR
+            return QColor(color)
         raise ValueError(f"Unknown icon category: {category}")
 
     @classmethod
