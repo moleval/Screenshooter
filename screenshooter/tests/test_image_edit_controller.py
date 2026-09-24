@@ -9,6 +9,7 @@ from PyQt5.QtGui import QPixmap, QColor, QPen
 from PyQt5.QtWidgets import QGraphicsScene, QGraphicsEllipseItem
 
 from screenshooter.items.pasted_image_item import PastedImageItem
+from screenshooter.items.blur_region_item import BlurRegionItem
 from screenshooter.items.shape_items import RectangleItem
 from screenshooter.view import EditorView
 
@@ -87,6 +88,46 @@ def test_crop_removes_partially_cut_annotation(setup_editor):
     assert outside not in items_to_shift
 
 
+def test_trim_keeps_blur_in_scene_coordinates_and_background_geometry(setup_editor):
+    view = setup_editor
+    bg = view.background_item
+
+    image = bg.pixmap().toImage()
+    image.fill(QColor("white"))
+    for y in range(20, 80):
+        for x in range(20, 100):
+            image.setPixelColor(x, y, QColor("gray"))
+    bg.setPixmap(QPixmap.fromImage(image))
+
+    view.blur_controller._add_blur_region_internal(QRectF(85, 40, 20, 20))
+    assert len(view.blur_controller.blur_region_items) == 1
+
+    assert view.trim_white_fields() is True
+
+    # После trim подложка начинается в старых scene-координатах (20, 20).
+    # Blur остаётся в scene-координатах и обрезается только пересечением
+    # с новой границей: (85, 40, 15, 20).
+    bg_rect = bg.sceneBoundingRect().normalized()
+    blur = view.blur_controller.blur_region_items[0]
+    blur_rect = blur.sceneBoundingRect().normalized()
+    assert bg_rect == QRectF(20, 20, 80, 60)
+    assert blur_rect == QRectF(85, 40, 15, 20)
+
+    old_bg_rect = QRectF(bg_rect)
+    old_blur_rect = QRectF(blur_rect)
+
+    # Перемещение обрезанного blur не должно менять геометрию подложки
+    # или внезапно создавать новое белое поле.
+    moved = old_blur_rect.translated(10, 0)
+    view.blur_controller._update_blur_region_rect(0, moved)
+
+    assert bg.sceneBoundingRect().normalized() == old_bg_rect
+    assert view.blur_controller.blur_region_items[0].sceneBoundingRect().normalized() == moved
+    assert bg.pixmap().size().width() == 80
+    assert bg.pixmap().size().height() == 60
+    assert not bg.pixmap().isNull()
+
+
 def test_rotate_undo_does_not_restore_annotation_handles_as_scene_items(setup_editor):
     view = setup_editor
     item = RectangleItem(QRectF(20, 20, 30, 20), QPen(QColor("red"), 2))
@@ -148,6 +189,11 @@ def test_trim_white_fields_keeps_annotation_moved_outside_background(qapp):
     # Белая рамка определяется по содержимому подложки, а не по аннотации.
     assert view.background_item.pixmap().width() == 80
     assert annotation.scene() is None
+    # Ручки удалённой аннотации не должны остаться отдельными QGraphicsItem.
+    assert not [
+        item for item in scene.items()
+        if isinstance(item, QGraphicsEllipseItem) and item.zValue() == 2000
+    ]
 
     view.undo()
     assert view.background_item.pixmap().size() == pm.size()
