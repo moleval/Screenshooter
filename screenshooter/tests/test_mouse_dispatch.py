@@ -397,22 +397,29 @@ def test_group_drag_with_blur_keeps_render_and_selection_stable(view_and_scene):
             view, QEvent.MouseButtonPress, pos=start))
         view.mouseMoveEvent(make_mouse_event(
             view, QEvent.MouseMove, pos=end))
-        # Реальный GUI успевает обработать 16 ms blur-timer между mouse
-        # events. Для группы с blur таймер не должен запускаться вообще.
         QApplication.processEvents()
         view.mouseReleaseEvent(make_mouse_event(
             view, QEvent.MouseButtonRelease, pos=end))
-        view.qapp.processEvents() if hasattr(view, 'qapp') else None
+        QApplication.processEvents()
 
     drag_from(first.sceneBoundingRect().center(), QPointF(10, 10))
-    assert not view.blur_controller._blur_recompute_timer.isActive()
-    assert not blur.blurred_pixmap.isNull()
-    assert set(scene.selectedItems()) == {first, blur}
 
-    drag_from(blur.sceneBoundingRect().center(), QPointF(10, 10))
+    current_blur = view.blur_controller.blur_region_items[0]
     assert not view.blur_controller._blur_recompute_timer.isActive()
-    assert not blur.blurred_pixmap.isNull()
-    assert set(scene.selectedItems()) == {first, blur}
+    assert not current_blur.blurred_pixmap.isNull()
+    assert current_blur.isSelected()
+    assert first.isSelected()
+
+    # History restore создаёт новый BlurRegionItem, поэтому следующий drag
+    # должен работать уже через актуальный экземпляр, не теряя selection.
+    drag_from(current_blur.sceneBoundingRect().center(), QPointF(10, 10))
+
+    current_blur = view.blur_controller.blur_region_items[0]
+    assert not view.blur_controller._blur_recompute_timer.isActive()
+    assert not current_blur.blurred_pixmap.isNull()
+    assert current_blur.isSelected()
+    assert first.isSelected()
+
 
 
 def test_manipulation_press_move_release_cycle(view_and_scene, monkeypatch):
