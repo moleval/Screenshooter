@@ -111,7 +111,7 @@ def test_trim_keeps_blur_in_scene_coordinates_and_background_geometry(setup_edit
     blur = view.blur_controller.blur_region_items[0]
     blur_rect = blur.sceneBoundingRect().normalized()
     assert bg_rect == QRectF(20, 20, 80, 60)
-    assert blur_rect == QRectF(85, 40, 15, 20)
+    assert blur.rect() == QRectF(85, 40, 15, 20)
 
     old_bg_rect = QRectF(bg_rect)
     old_blur_rect = QRectF(blur_rect)
@@ -126,6 +126,46 @@ def test_trim_keeps_blur_in_scene_coordinates_and_background_geometry(setup_edit
     assert bg.pixmap().size().width() == 80
     assert bg.pixmap().size().height() == 60
     assert not bg.pixmap().isNull()
+
+
+def test_trim_removes_pasted_image_handles_with_removed_image(setup_editor):
+    view = setup_editor
+    scene = view.scene()
+
+    image = QPixmap(30, 30)
+    image.fill(QColor("blue"))
+    pasted = view.add_pasted_image(image, scene_pos=QPointF(85, 35))
+
+    assert pasted in view.pasted_images
+    assert pasted.handles is not None
+    assert [
+        item for item in scene.items()
+        if isinstance(item, QGraphicsEllipseItem) and item.zValue() == 2000
+    ]
+
+    # Обрезаем правое белое поле так, чтобы вставленная картинка была удалена.
+    bg = view.background_item
+    bg_image = bg.pixmap().toImage()
+    bg_image.fill(QColor("white"))
+    for y in range(20, 60):
+        for x in range(20, 80):
+            bg_image.setPixelColor(x, y, QColor("gray"))
+    bg.setPixmap(QPixmap.fromImage(bg_image))
+
+    assert view.trim_white_fields() is True
+    assert pasted.scene() is None
+    assert pasted not in view.pasted_images
+    assert pasted.handles is None
+    assert not [
+        item for item in scene.items()
+        if isinstance(item, QGraphicsEllipseItem) and item.zValue() == 2000
+    ]
+
+    # Последующая операция, которая расширяет подложку по реальному
+    # содержимому, не должна учитывать ручки удалённой картинки.
+    old_size = bg.pixmap().size()
+    view.expand_background_to_content(margin=0, threshold=1)
+    assert bg.pixmap().size() == old_size
 
 
 def test_rotate_undo_does_not_restore_annotation_handles_as_scene_items(setup_editor):
