@@ -24,7 +24,6 @@ from .export import Exporter
 from .view import EditorView
 from .widgets.thickness import ThicknessWidget
 from .widgets.color_palette import ColorPaletteWidget
-from .widgets.tool_icons import create_blur_icon
 from .widgets.icon_manager import IconManager
 from .settings import AppSettings
 from .utils import load_app_icon
@@ -296,7 +295,7 @@ class ScreenshotApp(QMainWindow):
 
         blur_action = QAction("Размыть", self)
         blur_action.setCheckable(True)
-        blur_action.setIcon(create_blur_icon())
+        blur_action.setIcon(IconManager.icon("blur"))
         blur_action.setToolTip("Размыть область")
         blur_action.triggered.connect(self._on_blur_action_triggered)
 
