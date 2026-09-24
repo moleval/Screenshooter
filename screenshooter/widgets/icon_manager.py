@@ -7,7 +7,7 @@ QIcon, поэтому один и тот же набор SVG работает д
 from pathlib import Path
 
 from PyQt5.QtCore import QByteArray, QSize, Qt
-from PyQt5.QtGui import QColor, QIcon, QPainter, QPixmap
+from PyQt5.QtGui import QColor, QIcon, QImage, QPainter, QPixmap
 from PyQt5.QtSvg import QSvgRenderer
 
 from ..theme import theme_manager
@@ -71,15 +71,15 @@ class IconManager:
             raise FileNotFoundError(f"Invalid SVG icon: {path}")
 
         size = QSize(cls.ICON_SIZE, cls.ICON_SIZE)
-        pixmap = QPixmap(size)
-        pixmap.fill(Qt.transparent)
-        painter = QPainter(pixmap)
+        image = QImage(size, QImage.Format_ARGB32_Premultiplied)
+        image.fill(Qt.transparent)
+        painter = QPainter(image)
         if opacity < 1.0:
             painter.setOpacity(opacity)
         renderer.render(painter)
         painter.end()
 
-        return pixmap
+        return QPixmap.fromImage(image)
 
     @classmethod
     def icon(cls, name):
