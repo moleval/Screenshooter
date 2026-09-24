@@ -1,6 +1,6 @@
 import pytest
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QAction, QApplication, QActionGroup
+from PyQt5.QtWidgets import QAction, QApplication, QActionGroup, QToolButton
 
 from screenshooter.ui.annotation_toolbar import AnnotationToolbar
 from screenshooter.ui.image_toolbar import ImageToolbar
@@ -29,7 +29,7 @@ def test_toolbar_buttons_are_36px_icon_only(qapp, toolbar_cls):
         actions.append(action)
 
     toolbar = toolbar_cls(actions)
-    buttons = toolbar.findChildren(type(toolbar.findChildren.__self__)) if False else toolbar.findChildren(__import__("PyQt5.QtWidgets", fromlist=["QToolButton"]).QToolButton)
+    buttons = toolbar.findChildren(QToolButton)
 
     assert buttons
     for button in buttons:
