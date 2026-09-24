@@ -923,10 +923,16 @@ class ScreenshotApp(QMainWindow):
         p = max(10.0, min(400.0, float(p)))
         scale = p / 100.0
 
-        # При масштабировании от Shift+колёсика сохраняем точку под курсором.
-        # Для кнопок/ползунка anchor_pos=None — сохраняется центр вида.
+        # Shift+колёсико должно масштабировать относительно центра подложки,
+        # а не относительно курсора. Иначе при прокрутке у края окна подложка
+        # визуально "уезжает" в сторону. Для кнопок/ползунка без anchor_pos
+        # сохраняем текущий центр вида.
         if anchor_pos is not None:
-            anchor_scene_pos = self.view.mapToScene(anchor_pos)
+            background = self.view.image_editor.background_item
+            if background is not None and not sip.isdeleted(background):
+                anchor_scene_pos = background.sceneBoundingRect().center()
+            else:
+                anchor_scene_pos = self.view.mapToScene(anchor_pos)
         else:
             anchor_scene_pos = self.view.mapToScene(
                 self.view.viewport().rect().center())
