@@ -364,6 +364,15 @@ class ImageEditController:
         if not self.background_item:
             return
 
+        # Ручки аннотаций — отдельные служебные QGraphicsItem. Перед
+        # растеризацией поворота их нужно удалить из сцены: иначе RotateCommand
+        # сохранит их как часть поворачиваемого содержимого, а затем undo()
+        # сможет вернуть их как независимые устаревшие маркеры.
+        annotation_controller = getattr(
+            self.view, "annotation_resize_controller", None)
+        if annotation_controller is not None:
+            annotation_controller.remove_handles()
+
         items_to_remove = []
         for item in self.view.scene().items():
             if item is self.background_item:
@@ -410,6 +419,8 @@ class ImageEditController:
             new_background_pos=new_background_pos,
         )
         self.view.history.push(command)
+        if annotation_controller is not None:
+            self.view.annotation_resize_controller.sync_handles()
 
     # --------------------------------------------------------------
     # Обработчики мыши — только режим обрезки
