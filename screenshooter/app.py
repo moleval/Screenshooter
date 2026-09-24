@@ -24,12 +24,8 @@ from .export import Exporter
 from .view import EditorView
 from .widgets.thickness import ThicknessWidget
 from .widgets.color_palette import ColorPaletteWidget
-from .widgets.tool_icons import (
-    create_tool_icon,
-    create_crop_icon,
-    create_rotate_icon,
-    create_blur_icon
-)
+from .widgets.tool_icons import create_blur_icon
+from .widgets.icon_manager import IconManager
 from .settings import AppSettings
 from .utils import load_app_icon
 from .theme import theme_manager
@@ -95,13 +91,15 @@ class ScreenshotApp(QMainWindow):
         left_group_layout.setSpacing(6)
 
         self.undo_btn = QPushButton()
-        self.undo_btn.setIcon(self.style().standardIcon(QStyle.SP_ArrowBack))
+        self.undo_btn.setIcon(IconManager.icon("undo"))
+        self.undo_btn.setFixedSize(36, 36)
         self.undo_btn.setToolTip("Отменить")
         self.undo_btn.clicked.connect(self.undo_action)
         left_group_layout.addWidget(self.undo_btn)
 
         self.redo_btn = QPushButton()
-        self.redo_btn.setIcon(self.style().standardIcon(QStyle.SP_ArrowForward))
+        self.redo_btn.setIcon(IconManager.icon("redo"))
+        self.redo_btn.setFixedSize(36, 36)
         self.redo_btn.setToolTip("Повторить")
         self.redo_btn.clicked.connect(self.redo_action)
         left_group_layout.addWidget(self.redo_btn)
@@ -247,27 +245,27 @@ class ScreenshotApp(QMainWindow):
 
         pointer_action = self._create_tool_action(
             "Выбор", None, action_group,
-            icon=create_tool_icon('pointer', QColor(30, 30, 30)),
+            icon=IconManager.icon("pointer"),
             tooltip="Выделение")
         line_action = self._create_tool_action(
             "Линия", 'line', action_group,
-            icon=create_tool_icon('line', QColor(220, 30, 30)),
+            icon=IconManager.icon("line"),
             tooltip="Линия")
         rect_action = self._create_tool_action(
             "Контур", 'rect', action_group,
-            icon=create_tool_icon('rect', QColor(220, 30, 30)),
+            icon=IconManager.icon("rect"),
             tooltip="Контур")
         ellipse_action = self._create_tool_action(
             "Эллипс", 'ellipse', action_group,
-            icon=create_tool_icon('ellipse', QColor(220, 30, 30)),
+            icon=IconManager.icon("ellipse"),
             tooltip="Эллипс")
         arrow_action = self._create_tool_action(
             "Стрелка", 'arrow', action_group,
-            icon=create_tool_icon('arrow', QColor(220, 30, 30)),
+            icon=IconManager.icon("arrow"),
             tooltip="Стрелка")
         text_action = self._create_tool_action(
             "Текст", 'text', action_group,
-            icon=create_tool_icon('text', QColor(220, 30, 30)),
+            icon=IconManager.icon("text"),
             tooltip="Текст")
 
         self.pointer_action = pointer_action
@@ -284,17 +282,17 @@ class ScreenshotApp(QMainWindow):
 
         crop_action = QAction("Обрезать", self)
         crop_action.setCheckable(True)
-        crop_action.setIcon(create_crop_icon())
+        crop_action.setIcon(IconManager.icon("crop"))
         crop_action.setToolTip("Обрезать изображение")
         crop_action.triggered.connect(self._on_crop_action_triggered)
 
         rotate_cw_action = QAction("Повернуть", self)
-        rotate_cw_action.setIcon(create_rotate_icon(clockwise=True))
+        rotate_cw_action.setIcon(IconManager.icon("rotate-cw"))
         rotate_cw_action.setToolTip("Повернуть на 90° по часовой")
         rotate_cw_action.triggered.connect(lambda: self._rotate_image(90))
 
         rotate_ccw_action = QAction("Повернуть", self)
-        rotate_ccw_action.setIcon(create_rotate_icon(clockwise=False))
+        rotate_ccw_action.setIcon(IconManager.icon("rotate-ccw"))
         rotate_ccw_action.setToolTip("Повернуть на 90° против часовой")
         rotate_ccw_action.triggered.connect(lambda: self._rotate_image(-90))
 
