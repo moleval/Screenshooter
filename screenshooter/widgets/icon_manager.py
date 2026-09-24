@@ -6,8 +6,8 @@ QIcon, поэтому один и тот же набор SVG работает д
 
 from pathlib import Path
 
-from PyQt5.QtCore import QSize, Qt
-from PyQt5.QtGui import QColor, QIcon, QPainter, QPixmap
+from PyQt5.QtCore import QByteArray, QSize, Qt
+from PyQt5.QtGui import QColor, QIcon, QImage, QPainter, QPixmap
 from PyQt5.QtSvg import QSvgRenderer
 
 from ..theme import theme_manager
@@ -55,7 +55,9 @@ class IconManager:
 
     @classmethod
     def _render(cls, path, color):
-        renderer = QSvgRenderer(str(path))
+        svg = path.read_text(encoding="utf-8")
+        svg = svg.replace("currentColor", color.name(QColor.HexArgb))
+        renderer = QSvgRenderer(QByteArray(svg.encode("utf-8")))
         if not renderer.isValid():
             raise FileNotFoundError(f"Invalid SVG icon: {path}")
 
@@ -63,7 +65,6 @@ class IconManager:
         pixmap = QPixmap(size)
         pixmap.fill(Qt.transparent)
         painter = QPainter(pixmap)
-        painter.setOpacity(color.alphaF())
         renderer.render(painter)
         painter.end()
         return pixmap
@@ -79,11 +80,13 @@ class IconManager:
         color = cls._color_for_category(category)
 
         normal = cls._render(path, color)
-        if name == "rotate-ccw":
-            normal = normal.mirrored(True, False)
         disabled_color = QColor(color)
         disabled_color.setAlphaF(cls.DISABLED_OPACITY)
         disabled = cls._render(path, disabled_color)
+
+        if name == "rotate-ccw":
+            normal = QPixmap.fromImage(normal.toImage().mirrored(True, False))
+            disabled = QPixmap.fromImage(disabled.toImage().mirrored(True, False))
 
         icon = QIcon()
         icon.addPixmap(normal, QIcon.Normal, QIcon.Off)
