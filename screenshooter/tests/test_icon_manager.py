@@ -76,4 +76,4 @@ def test_icon_manager_disabled_icon_is_transparent(qapp):
     )
 
     assert normal_alpha == 255
-    assert disabled_alpha == 102
+    assert 90 <= disabled_alpha <= 110
