@@ -334,6 +334,38 @@ def test_multi_selection_drag_started_on_blur_keeps_all_selected_items(view_and_
         view, QEvent.MouseButtonRelease, pos=move_pos))
 
 
+def test_multi_selection_drag_with_blur_survives_repeated_drags(view_and_scene):
+    view, scene = view_and_scene
+
+    first = QGraphicsRectItem(20, 20, 20, 20)
+    second = QGraphicsRectItem(120, 120, 20, 20)
+    for item in (first, second):
+        item.setFlag(QGraphicsRectItem.ItemIsSelectable, True)
+        scene.addItem(item)
+
+    blur = BlurRegionItem(QRectF(70, 70, 60, 60), view, mode='inactive')
+    scene.addItem(blur)
+
+    for item in (first, second, blur):
+        item.setSelected(True)
+
+    def drag_from(scene_pos, delta):
+        start = view.mapFromScene(scene_pos)
+        end = view.mapFromScene(scene_pos + delta)
+        view.mousePressEvent(make_mouse_event(
+            view, QEvent.MouseButtonPress, pos=start))
+        view.mouseMoveEvent(make_mouse_event(
+            view, QEvent.MouseMove, pos=end))
+        view.mouseReleaseEvent(make_mouse_event(
+            view, QEvent.MouseButtonRelease, pos=end))
+
+    drag_from(first.sceneBoundingRect().center(), QPointF(10, 10))
+    assert set(view.scene().selectedItems()) == {first, second, blur}
+
+    drag_from(blur.sceneBoundingRect().center(), QPointF(10, 10))
+    assert set(view.scene().selectedItems()) == {first, second, blur}
+
+
 def test_manipulation_press_move_release_cycle(view_and_scene, monkeypatch):
     view, _ = view_and_scene
     manip_pressed = False
