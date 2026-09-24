@@ -63,9 +63,8 @@ class IconManager:
         pixmap = QPixmap(size)
         pixmap.fill(Qt.transparent)
         painter = QPainter(pixmap)
+        painter.setOpacity(color.alphaF())
         renderer.render(painter)
-        painter.setCompositionMode(QPainter.CompositionMode_SourceIn)
-        painter.fillRect(pixmap.rect(), color)
         painter.end()
         return pixmap
 
