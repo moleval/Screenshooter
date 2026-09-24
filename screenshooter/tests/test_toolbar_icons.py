@@ -1,9 +1,10 @@
 import pytest
 from PyQt5.QtCore import Qt, QSize
-from PyQt5.QtWidgets import QAction, QApplication, QActionGroup, QToolButton
+from PyQt5.QtWidgets import QAction, QApplication, QActionGroup, QToolButton, QWidget
 
 from screenshooter.ui.annotation_toolbar import AnnotationToolbar
 from screenshooter.ui.image_toolbar import ImageToolbar
+from screenshooter.ui.editor_toolbar_strip import EditorToolbarStrip
 from screenshooter.widgets.icon_manager import IconManager
 from screenshooter.ui.layout_metrics import TOOLBAR_ICON_SIZE
 
@@ -39,3 +40,19 @@ def test_toolbar_buttons_are_36px_icon_only(qapp, toolbar_cls):
         assert button.toolButtonStyle() == Qt.ToolButtonIconOnly
         assert button.iconSize() == QSize(TOOLBAR_ICON_SIZE, TOOLBAR_ICON_SIZE)
         assert TOOLBAR_ICON_SIZE == 32
+
+def test_editor_toolbar_has_trim_button_after_editing_toolbar(qapp):
+    trim_action = QAction("Убрать поля", qapp)
+    trim_action.setIcon(IconManager.icon("trim"))
+
+    annotation = AnnotationToolbar([])
+    image = ImageToolbar([])
+    options = QWidget()
+    strip = EditorToolbarStrip(
+        annotation, image, options, trim_action=trim_action
+    )
+
+    assert strip.trim_button is not None
+    assert strip.trim_button.iconSize() == QSize(32, 32)
+    assert strip.trim_button.width() == 36
+    assert strip.trim_button.height() == 36
