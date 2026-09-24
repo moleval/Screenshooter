@@ -431,6 +431,15 @@ class ManipulationController:
             ]
             self._drag_items = list(self._drag_selection_snapshot)
 
+            # Если группа содержит blur, на время группового drag фиксируем
+            # уже рассчитанное размытие. Пересчёт blur одновременно с
+            # изменением rect самой BlurRegionItem может временно заменить
+            # её pixmap и визуально "погасить" blur; кроме того, таймер может
+            # отработать уже после отпускания мыши. Финальный пересчёт будет
+            # выполнен в _handle_drag_release().
+            if any(isinstance(it, BlurRegionItem) for it in self._drag_items):
+                self.view.blur_controller._force_blur_recompute()
+
             if not self._drag_items:
                 self._drag_selection_snapshot = []
                 return True
@@ -682,6 +691,10 @@ class ManipulationController:
             else:
                 delta.setX(0.0)
 
+        group_contains_blur = any(
+            isinstance(it, BlurRegionItem) for it in self._drag_items
+        )
+
         for idx, drag_item in enumerate(self._drag_items):
             if isinstance(drag_item, BlurRegionItem):
                 old_rect = self._drag_old_rects[idx]
@@ -691,7 +704,10 @@ class ManipulationController:
                     idx_blur = self.view.blur_controller.blur_region_items.index(drag_item)
                     self.view.blur_controller.blur_regions[idx_blur] = new_rect
                     self._drag_blur_needs_recompute = True
-                    self.view.blur_controller._schedule_blur_recompute(moving_index=idx_blur)
+                    # При наличии blur в самой группе не запускаем
+                    # асинхронный preview-recompute во время drag.
+                    # Геометрию зоны обновляем сразу, а pixmap пересчитаем
+                    # один раз после release.
                 except ValueError:
                     pass
                 if drag_item.handles:
@@ -702,7 +718,7 @@ class ManipulationController:
                 drag_item.setPos(new_pos)
                 if isinstance(drag_item, PastedImageItem):
                     drag_item.show_handles()
-                    if self.view.blur_controller.blur_regions:
+                    if self.view.blur_controller.blur_regions and not group_contains_blur:
                         self._drag_blur_needs_recompute = True
                         self.view.blur_controller._schedule_blur_recompute()
 
