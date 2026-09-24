@@ -5,6 +5,7 @@
 import pytest
 from PyQt5.QtWidgets import QWidget, QApplication
 from PyQt5.QtGui import QPixmap, QColor
+from PyQt5.QtCore import QPoint
 
 from screenshooter.app import ScreenshotApp
 from screenshooter.ui.editor_toolbar_strip import EditorToolbarStrip
@@ -58,3 +59,20 @@ def test_editor_toolbar_strip_minimum_width_sufficient(app):
     expected_min = sum_min + sep_width
 
     assert strip.minimumSizeHint().width() >= expected_min
+
+def test_shift_wheel_zoom_keeps_background_centered(app):
+    view = app.view
+    background = view.image_editor.background_item
+    assert background is not None
+
+    center = background.sceneBoundingRect().center()
+    view.resize(800, 600)
+    view.show()
+    QApplication.processEvents()
+
+    view.zoomChangedByWheel.emit(150.0, QPoint(80, 80))
+    QApplication.processEvents()
+
+    viewport_center = view.viewport().rect().center()
+    mapped_center = view.mapFromScene(center)
+    assert (mapped_center - viewport_center).manhattanLength() <= 2
