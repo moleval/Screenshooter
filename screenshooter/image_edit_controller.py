@@ -356,34 +356,45 @@ class ImageEditController:
         if self.crop_mode or self.view.blur_controller.blur_mode:
             return False
 
-        local_content = trim_white_border(bg.pixmap())
-        if local_content.isEmpty():
-            return False
+        annotation_controller = getattr(
+            self.view, "annotation_resize_controller", None)
+        if annotation_controller is not None:
+            annotation_controller.remove_handles()
+        self.view.hide_pasted_image_handles_for_render()
 
-        crop = bg.mapRectToScene(local_content)
+        try:
+            local_content = trim_white_border(bg.pixmap())
+            if local_content.isEmpty():
+                return False
 
-        for item in self.view.scene().items():
-            if item is bg or self.view._is_background_item(item):
-                continue
-            if not item.isVisible():
-                continue
-            try:
-                item_rect = item.sceneBoundingRect()
-            except (AttributeError, RuntimeError):
-                continue
-            if not item_rect.isEmpty():
-                crop = crop.united(item_rect)
+            crop = bg.mapRectToScene(local_content)
 
-        crop = crop.normalized()
-        old_rect = bg.sceneBoundingRect()
-        if (abs(crop.left() - old_rect.left()) < 0.5
-                and abs(crop.top() - old_rect.top()) < 0.5
-                and abs(crop.right() - old_rect.right()) < 0.5
-                and abs(crop.bottom() - old_rect.bottom()) < 0.5):
-            return False
+            for item in self.view.scene().items():
+                if item is bg or self.view._is_background_item(item):
+                    continue
+                if not item.isVisible():
+                    continue
+                try:
+                    item_rect = item.sceneBoundingRect()
+                except (AttributeError, RuntimeError):
+                    continue
+                if not item_rect.isEmpty():
+                    crop = crop.united(item_rect)
 
-        self._apply_crop_to_background(crop)
-        return True
+            crop = crop.normalized()
+            old_rect = bg.sceneBoundingRect()
+            if (abs(crop.left() - old_rect.left()) < 0.5
+                    and abs(crop.top() - old_rect.top()) < 0.5
+                    and abs(crop.right() - old_rect.right()) < 0.5
+                    and abs(crop.bottom() - old_rect.bottom()) < 0.5):
+                return False
+
+            self._apply_crop_to_background(crop)
+            return True
+        finally:
+            self.view.show_pasted_image_handles_after_render()
+            if annotation_controller is not None:
+                annotation_controller.sync_handles()
 
     # --------------------------------------------------------------
     # Поворот
