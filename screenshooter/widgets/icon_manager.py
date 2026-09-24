@@ -74,14 +74,12 @@ class IconManager:
         painter.end()
 
         if opacity < 1.0:
-            image = pixmap.toImage().convertToFormat(
-                QImage.Format_ARGB32_Premultiplied
-            )
-            painter = QPainter(image)
-            painter.setCompositionMode(QPainter.CompositionMode_DestinationIn)
-            alpha = round(opacity * 255)
-            painter.fillRect(image.rect(), QColor(0, 0, 0, alpha))
-            painter.end()
+            image = pixmap.toImage().convertToFormat(QImage.Format_ARGB32)
+            for y in range(image.height()):
+                for x in range(image.width()):
+                    pixel = image.pixelColor(x, y)
+                    pixel.setAlpha(round(pixel.alpha() * opacity))
+                    image.setPixelColor(x, y, pixel)
             pixmap = QPixmap.fromImage(image)
 
         return pixmap
