@@ -369,18 +369,10 @@ class ImageEditController:
 
             crop = bg.mapRectToScene(local_content)
 
-            for item in self.view.scene().items():
-                if item is bg or self.view._is_background_item(item):
-                    continue
-                if not item.isVisible():
-                    continue
-                try:
-                    item_rect = item.sceneBoundingRect()
-                except (AttributeError, RuntimeError):
-                    continue
-                if not item_rect.isEmpty():
-                    crop = crop.united(item_rect)
-
+            # Границы определяются только реальным содержимым подложки.
+            # Аннотации и вставленные объекты не должны расширять crop обратно
+            # в белое поле: если объект пересекает новую границу, существующий
+            # CropCommand обработает его по обычным правилам crop.
             crop = crop.normalized()
             old_rect = bg.sceneBoundingRect()
             if (abs(crop.left() - old_rect.left()) < 0.5
