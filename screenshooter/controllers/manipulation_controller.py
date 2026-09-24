@@ -46,6 +46,7 @@ class ManipulationController:
         self._drag_old_background = None
         self._drag_old_blur_state = None
         self._drag_selection_snapshot = []
+        self._drag_selected_blur_indices = set()
 
         # Изменение размера вставленных изображений
         self._resizing_pasted_item = None
@@ -429,6 +430,13 @@ class ManipulationController:
                 if not self.view._is_background_item(it)
                 and not sip.isdeleted(it)
             ]
+            self._drag_selected_blur_indices = {
+                index for index, blur_item in enumerate(
+                    self.view.blur_controller.blur_region_items
+                )
+                if blur_item in self._drag_selection_snapshot
+                and not sip.isdeleted(blur_item)
+            }
             self._drag_items = list(self._drag_selection_snapshot)
 
             # Если группа содержит blur, на время группового drag фиксируем
@@ -864,7 +872,20 @@ class ManipulationController:
         self.view.scene().clearSelection()
         for it in selection_snapshot:
             it.setSelected(True)
+
+        # MoveItemsCommand может восстановить blur-state через redo() и
+        # заменить BlurRegionItem новыми экземплярами. Старые blur из
+        # _drag_selection_snapshot после этого уже удалены, поэтому
+        # восстанавливаем их selection по стабильному индексу состояния.
+        for index in self._drag_selected_blur_indices:
+            blur_items = self.view.blur_controller.blur_region_items
+            if 0 <= index < len(blur_items):
+                blur_item = blur_items[index]
+                if not sip.isdeleted(blur_item):
+                    blur_item.setSelected(True)
+
         self._drag_selection_snapshot = []
+        self._drag_selected_blur_indices = set()
 
         self.view._update_pasted_image_handles()
         self.view._update_blur_region_handles()
