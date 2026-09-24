@@ -21,6 +21,7 @@ def qapp():
         "arrow",
         "text",
         "crop",
+        "blur",
         "rotate-cw",
         "undo",
         "redo",
@@ -76,12 +77,15 @@ def test_icon_manager_uses_semantic_colors(qapp):
 
 
 def test_icon_manager_disabled_icon_is_transparent(qapp):
-    icon = IconManager.icon("rect")
-    normal = icon.pixmap(
-        IconManager.ICON_SIZE, QIcon.Normal, QIcon.Off
+    color = IconManager._color_for_category(IconManager.ANNOTATION)
+    normal = IconManager._render(
+        IconManager._ROOT / "annotation" / "square.svg", color
     ).toImage()
-    disabled = icon.pixmap(
-        IconManager.ICON_SIZE, QIcon.Disabled, QIcon.Off
+
+    disabled_color = QColor(color)
+    disabled_color.setAlpha(round(255 * IconManager.DISABLED_OPACITY))
+    disabled = IconManager._render(
+        IconManager._ROOT / "annotation" / "square.svg", disabled_color
     ).toImage()
 
     normal_alpha = max(
