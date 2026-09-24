@@ -17,7 +17,8 @@ from .controllers.crop_overlay_controller import CropOverlayController
 from .controllers.status_bar_manager import StatusBarManager
 from .history import (CropCommand, RotateCommand,
                       CropPastedImageCommand, RotatePastedImageCommand)
-from .image_processing import crop_pixmap, crop_pixmap_with_padding, rotate_pixmap
+from .image_processing import (crop_pixmap, crop_pixmap_with_padding,
+                                      rotate_pixmap, trim_white_border)
 from .items.pasted_image_item import PastedImageItem
 from .items.blur_region_item import BlurRegionItem
 
@@ -342,6 +343,47 @@ class ImageEditController:
 
         self.view.update_resolution_from_background()
         self.status_bar_manager.reset_to_normal()
+
+    # --------------------------------------------------------------
+    # Удаление лишних белых полей
+    # --------------------------------------------------------------
+    def trim_white_fields(self):
+        """Убирает белое поле, оставшееся после расширения подложки."""
+        bg = self.background_item
+        if (bg is None or self._is_deleted(bg)
+                or bg.scene() is not self.view.scene()):
+            return False
+        if self.crop_mode or self.view.blur_controller.blur_mode:
+            return False
+
+        local_content = trim_white_border(bg.pixmap())
+        if local_content.isEmpty():
+            return False
+
+        crop = bg.mapRectToScene(local_content)
+
+        for item in self.view.scene().items():
+            if item is bg or self.view._is_background_item(item):
+                continue
+            if not item.isVisible():
+                continue
+            try:
+                item_rect = item.sceneBoundingRect()
+            except (AttributeError, RuntimeError):
+                continue
+            if not item_rect.isEmpty():
+                crop = crop.united(item_rect)
+
+        crop = crop.normalized()
+        old_rect = bg.sceneBoundingRect()
+        if (abs(crop.left() - old_rect.left()) < 0.5
+                and abs(crop.top() - old_rect.top()) < 0.5
+                and abs(crop.right() - old_rect.right()) < 0.5
+                and abs(crop.bottom() - old_rect.bottom()) < 0.5):
+            return False
+
+        self._apply_crop_to_background(crop)
+        return True
 
     # --------------------------------------------------------------
     # Поворот
