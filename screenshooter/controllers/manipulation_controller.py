@@ -392,14 +392,26 @@ class ManipulationController:
             is_ctrl = bool(modifiers & Qt.ControlModifier)
             is_shift = bool(modifiers & Qt.ShiftModifier)
 
-            if li.isSelected():
-                if is_ctrl:
-                    li.setSelected(False)
-                    return True
-            else:
-                if not (is_ctrl or is_shift):
-                    self.view.scene().clearSelection()
-                li.setSelected(True)
+            selected_before_click = self.view.scene().selectedItems()
+            non_bg_selected_before_click = [
+                selected_item for selected_item in selected_before_click
+                if not self.view._is_background_item(selected_item)
+            ]
+            preserve_multi_selection_on_blur = (
+                isinstance(li, BlurRegionItem)
+                and len(non_bg_selected_before_click) > 1
+                and not (is_ctrl or is_shift)
+            )
+
+            if not preserve_multi_selection_on_blur:
+                if li.isSelected():
+                    if is_ctrl:
+                        li.setSelected(False)
+                        return True
+                else:
+                    if not (is_ctrl or is_shift):
+                        self.view.scene().clearSelection()
+                    li.setSelected(True)
 
             selected = self.view.scene().selectedItems()
             self._drag_items = [it for it in selected
