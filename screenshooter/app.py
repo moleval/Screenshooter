@@ -527,9 +527,32 @@ class ScreenshotApp(QMainWindow):
     # --------------------------------------------------------------
     # Применение темы
     # --------------------------------------------------------------
+    def _refresh_theme_icons(self):
+        icon_names = {
+            "pointer_action": "pointer",
+            "line_action": "line",
+            "rect_action": "rect",
+            "ellipse_action": "ellipse",
+            "arrow_action": "arrow",
+            "text_action": "text",
+            "crop_action": "crop",
+            "rotate_cw_action": "rotate-cw",
+            "rotate_ccw_action": "rotate-ccw",
+            "blur_action": "blur",
+            "trim_action": "trim",
+        }
+        for attr_name, icon_name in icon_names.items():
+            action = getattr(self, attr_name, None)
+            if action is not None:
+                action.setIcon(IconManager.icon(icon_name))
+
+        self.undo_btn.setIcon(IconManager.icon("undo"))
+        self.redo_btn.setIcon(IconManager.icon("redo"))
+
     def apply_theme(self, theme_key: str):
         theme_manager.set_theme(theme_key)
         theme_manager.apply(QApplication.instance())
+        self._refresh_theme_icons()
         self.view.update_theme_colors()
         self.settings.set_theme(theme_key)
 
