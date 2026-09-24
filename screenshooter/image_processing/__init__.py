@@ -67,6 +67,37 @@ def crop_pixmap(pixmap: QPixmap, rect: QRectF) -> QPixmap:
     return pixmap.copy(crop_rect.toRect())
 
 
+def trim_white_border(pixmap: QPixmap, threshold: int = 250) -> QRectF:
+    """Возвращает границы содержимого, исключая белое поле по краям."""
+    if pixmap.isNull():
+        return QRectF()
+
+    image = pixmap.toImage().convertToFormat(QImage.Format_ARGB32)
+    width, height = image.width(), image.height()
+    left, top = width, height
+    right, bottom = -1, -1
+
+    for y in range(height):
+        for x in range(width):
+            pixel = image.pixel(x, y)
+            alpha = (pixel >> 24) & 0xFF
+            if alpha == 0:
+                continue
+            red = (pixel >> 16) & 0xFF
+            green = (pixel >> 8) & 0xFF
+            blue = pixel & 0xFF
+            if red < threshold or green < threshold or blue < threshold:
+                left = min(left, x)
+                right = max(right, x)
+                top = min(top, y)
+                bottom = max(bottom, y)
+
+    if right < left or bottom < top:
+        return QRectF(0, 0, width, height)
+
+    return QRectF(left, top, right - left + 1, bottom - top + 1)
+
+
 def rotate_pixmap(pixmap: QPixmap, angle: float) -> QPixmap:
     if pixmap.isNull():
         return QPixmap()
