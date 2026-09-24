@@ -56,7 +56,7 @@ class IconManager:
     @classmethod
     def _render(cls, path, color):
         svg = path.read_text(encoding="utf-8")
-        opacity = color.alphaF()
+        opacity = color.alpha() / 255.0
         render_color = QColor(color)
         render_color.setAlpha(255)
         svg = svg.replace(
