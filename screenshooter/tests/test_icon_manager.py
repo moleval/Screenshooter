@@ -22,7 +22,7 @@ def qapp():
         "arrow",
         "text",
         "crop",
-        "blur",
+        "blur", "trim",
         "rotate-cw",
         "undo",
         "redo",
