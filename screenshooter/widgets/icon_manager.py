@@ -81,8 +81,7 @@ class IconManager:
 
         normal = cls._render(path, color)
         if name == "rotate-ccw":
-            normal = normal.transformed(QTransform())
-            normal = normal.transformed(QTransform(-1, 0, 0, 1, 0, 0))
+            normal = normal.mirrored(True, False)
         disabled_color = QColor(color)
         disabled_color.setAlphaF(cls.DISABLED_OPACITY)
         disabled = cls._render(path, disabled_color)
