@@ -16,7 +16,7 @@ from ..theme import theme_manager
 class IconManager:
     """Загружает локальные Lucide SVG и применяет семантический цвет."""
 
-    ICON_SIZE = 30
+    ICON_SIZE = 28
     DISABLED_OPACITY = 0.4
 
     SELECTION = "selection"
@@ -60,7 +60,7 @@ class IconManager:
     @classmethod
     def _render(cls, path, color):
         svg = path.read_text(encoding="utf-8")
-        opacity = color.alpha() / 255.0
+        opacity = color.alphaF()
         render_color = QColor(color)
         render_color.setAlpha(255)
         svg = svg.replace(
@@ -82,9 +82,9 @@ class IconManager:
             for y in range(image.height()):
                 for x in range(image.width()):
                     pixel = image.pixelColor(x, y)
-                    pixel.setAlpha(round(pixel.alpha() * opacity))
+                    pixel.setAlpha(int(round(pixel.alpha() * opacity)))
                     image.setPixelColor(x, y, pixel)
-            pixmap = QPixmap.fromImage(image)
+            pixmap = QPixmap.fromImage(image, Qt.NoFormatConversion)
 
         return pixmap
 
