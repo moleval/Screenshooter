@@ -21,6 +21,7 @@ from PyQt5.QtGui import QMouseEvent, QPixmap, QColor
 from PyQt5.QtWidgets import QGraphicsScene, QGraphicsRectItem
 
 from screenshooter.view import EditorView
+from screenshooter.items.blur_region_item import BlurRegionItem
 
 
 @pytest.fixture
@@ -295,6 +296,42 @@ def test_crop_press_move_release_cycle(view_and_scene, monkeypatch):
     assert crop_moved
     assert crop_released
     assert not manip_any
+
+
+def test_multi_selection_drag_started_on_blur_keeps_all_selected_items(view_and_scene):
+    view, scene = view_and_scene
+
+    first = QGraphicsRectItem(20, 20, 20, 20)
+    second = QGraphicsRectItem(120, 120, 20, 20)
+    for item in (first, second):
+        item.setFlag(QGraphicsRectItem.ItemIsSelectable, True)
+        scene.addItem(item)
+        item.setSelected(True)
+
+    blur = BlurRegionItem(QRectF(70, 70, 60, 60), view, mode='inactive')
+    scene.addItem(blur)
+
+    assert len(scene.selectedItems()) == 2
+
+    press_pos = view.mapFromScene(QPointF(80, 80))
+    view.mousePressEvent(make_mouse_event(
+        view, QEvent.MouseButtonPress, pos=press_pos))
+
+    assert {first, second} == set(view.scene().selectedItems())
+    assert view.manipulation_controller._drag_items == [first, second]
+
+    first_old = first.pos()
+    second_old = second.pos()
+    move_pos = view.mapFromScene(QPointF(100, 100))
+    view.mouseMoveEvent(make_mouse_event(
+        view, QEvent.MouseMove, pos=move_pos))
+
+    assert first.pos() != first_old
+    assert second.pos() != second_old
+    assert {first, second} == set(view.scene().selectedItems())
+
+    view.mouseReleaseEvent(make_mouse_event(
+        view, QEvent.MouseButtonRelease, pos=move_pos))
 
 
 def test_manipulation_press_move_release_cycle(view_and_scene, monkeypatch):
