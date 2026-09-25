@@ -442,11 +442,11 @@ class HotkeyManager(QObject):
         )
 
     @staticmethod
-    def _deliver(target, pixmap):
+    def _deliver(target, pixmap, screen_capture=False):
         if target.is_empty():
             target.view.set_background_from_pixmap(pixmap)
         else:
-            target.view.add_pasted_image(pixmap)
+            target.view.add_pasted_image(pixmap, screen_capture=screen_capture)
 
     def _target(self):
         # Каждый новый скриншот должен попадать в отдельное окно.
@@ -498,7 +498,7 @@ class HotkeyManager(QObject):
         try:
             pixmap = screen.grabWindow(0)
             if not pixmap.isNull():
-                self._deliver(target, pixmap)
+                self._deliver(target, pixmap, screen_capture=True)
         except Exception as error:
             print(f"Ошибка вставки снимка выбранного экрана: {error}")
         finally:
