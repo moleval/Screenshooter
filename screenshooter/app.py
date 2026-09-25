@@ -310,7 +310,7 @@ class ScreenshotApp(QMainWindow):
         self.blur_action = blur_action
         self.trim_action = trim_action
 
-        image_actions = [crop_action, rotate_cw_action, rotate_ccw_action, blur_action]
+        image_actions = [blur_action, crop_action, rotate_cw_action, rotate_ccw_action]
 
         annotation_toolbar = AnnotationToolbar(annotation_actions)
         image_toolbar = ImageToolbar(image_actions)
