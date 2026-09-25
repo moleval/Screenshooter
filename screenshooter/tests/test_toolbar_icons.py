@@ -56,3 +56,12 @@ def test_editor_toolbar_has_trim_button_after_editing_toolbar(qapp):
     assert strip.trim_button.iconSize() == QSize(28, 28)
     assert strip.trim_button.width() == 36
     assert strip.trim_button.height() == 36
+
+
+def test_image_toolbar_places_blur_before_crop(qapp):
+    blur = QAction("Размыть", qapp)
+    crop = QAction("Обрезать", qapp)
+    toolbar = ImageToolbar([blur, crop])
+    buttons = toolbar.findChildren(QToolButton)
+    assert buttons[0].defaultAction() is blur
+    assert buttons[1].defaultAction() is crop
