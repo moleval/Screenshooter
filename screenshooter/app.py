@@ -814,7 +814,7 @@ class ScreenshotApp(QMainWindow):
         if self.view.background_item is None or sip.isdeleted(self.view.background_item):
             self.view.set_background_from_pixmap(pixmap)
         else:
-            self.view.add_pasted_image(pixmap)
+            self.view.add_pasted_image(pixmap, screen_capture=True)
 
     def capture_monitor(self):
         if self.capture.is_capturing():
