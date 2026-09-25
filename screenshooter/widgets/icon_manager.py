@@ -27,10 +27,10 @@ class IconManager:
 
     _ICONS = {
         "pointer": (SELECTION, "mouse-pointer-2.svg"),
-        "line": (ANNOTATION, "minus.svg"),
+        "line": (ANNOTATION, "slash.svg"),
         "rect": (ANNOTATION, "square.svg"),
         "ellipse": (ANNOTATION, "circle.svg"),
-        "arrow": (ANNOTATION, "arrow-right.svg"),
+        "arrow": (ANNOTATION, "move-up-right.svg"),
         "text": (ANNOTATION, "type.svg"),
         "crop": (EDITING, "crop.svg"),
         "blur": (EDITING, "scan-eye.svg"),
