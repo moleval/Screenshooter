@@ -591,8 +591,14 @@ class EditorView(QGraphicsView):
             return None
         return bg.pixmap(), bg.pos()
 
-    def add_pasted_image(self, pixmap, scene_pos=None):
-        """Добавляет изображение на сцену."""
+    def add_pasted_image(self, pixmap, scene_pos=None, screen_capture=False):
+        """Добавляет изображение на сцену.
+
+        Для снимка, сделанного кнопкой «Экран N», при наличии подложки
+        изображение масштабируется так, чтобы занимать 60% подложки
+        (с сохранением пропорций) и центрируется относительно неё.
+        Обычная вставка изображения сохраняет прежнее поведение.
+        """
         if self.background_item is None or sip.isdeleted(self.background_item):
             self.set_background_from_pixmap(pixmap)
             return None
@@ -601,18 +607,37 @@ class EditorView(QGraphicsView):
         self.scene().addItem(item)
         self.pasted_images.append(item)
 
-        if scene_pos is None:
-            center = self.mapToScene(self.viewport().rect().center())
-            scene_pos = center - QPointF(pixmap.width() / 2, pixmap.height() / 2)
+        if screen_capture:
+            background_rect = self.background_item.sceneBoundingRect()
+            if pixmap.width() > 0 and pixmap.height() > 0:
+                scale = min(
+                    background_rect.width() * 0.6 / pixmap.width(),
+                    background_rect.height() * 0.6 / pixmap.height(),
+                )
+                if scale > 0:
+                    item.set_image_scale(scale)
 
-        item.setPos(scene_pos)
+                image_rect = item.mapRectToScene(item.boundingRect())
+                item.setPos(
+                    item.pos()
+                    + background_rect.center()
+                    - image_rect.center()
+                )
+        else:
+            if scene_pos is None:
+                center = self.mapToScene(self.viewport().rect().center())
+                scene_pos = center - QPointF(
+                    pixmap.width() / 2, pixmap.height() / 2
+                )
 
-        viewport_rect = self.viewport().rect()
-        max_w = viewport_rect.width() * 0.8
-        max_h = viewport_rect.height() * 0.8
-        if pixmap.width() > max_w or pixmap.height() > max_h:
-            scale = min(max_w / pixmap.width(), max_h / pixmap.height())
-            item.set_image_scale(scale)
+            item.setPos(scene_pos)
+
+            viewport_rect = self.viewport().rect()
+            max_w = viewport_rect.width() * 0.8
+            max_h = viewport_rect.height() * 0.8
+            if pixmap.width() > max_w or pixmap.height() > max_h:
+                scale = min(max_w / pixmap.width(), max_h / pixmap.height())
+                item.set_image_scale(scale)
 
         self.history.push(AddPastedImageCommand(self.scene(), item, self))
         self.scene().clearSelection()
