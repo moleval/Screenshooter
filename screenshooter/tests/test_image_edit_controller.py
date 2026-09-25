@@ -114,15 +114,17 @@ def test_trim_keeps_blur_in_scene_coordinates_and_background_geometry(setup_edit
     assert blur.rect() == QRectF(85, 40, 15, 20)
 
     old_bg_rect = QRectF(bg_rect)
-    old_blur_rect = QRectF(blur_rect)
+    old_blur_rect = QRectF(blur.rect())
 
-    # Перемещение обрезанного blur не должно менять геометрию подложки
-    # или внезапно создавать новое белое поле.
+    # BlurRegionItem хранит rect() непосредственно в координатах сцены.
+    # sceneBoundingRect() включает расширение под толщину рамки QPen,
+    # поэтому использовать его как исходную геометрию для update_rect()
+    # нельзя.
     moved = old_blur_rect.translated(10, 0)
     view.blur_controller._update_blur_region_rect(0, moved)
 
     assert bg.sceneBoundingRect().normalized() == old_bg_rect
-    assert view.blur_controller.blur_region_items[0].sceneBoundingRect().normalized() == moved
+    assert view.blur_controller.blur_region_items[0].rect() == moved
     assert bg.pixmap().size().width() == 80
     assert bg.pixmap().size().height() == 60
     assert not bg.pixmap().isNull()
