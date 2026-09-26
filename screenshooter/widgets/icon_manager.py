@@ -39,6 +39,15 @@ class IconManager:
         "rotate-ccw": (EDITING, "rotate-cw.svg"),
         "undo": (EDITING, "undo-2.svg"),
         "redo": (EDITING, "redo-2.svg"),
+        "screen-1": (EDITING, "screen-share.svg"),
+        "screen-2": (EDITING, "screen-share.svg"),
+        "clear": (EDITING, "brush-cleaning.svg"),
+        "clipboard-copy": (EDITING, "clipboard-copy.svg"),
+        "image-plus": (EDITING, "image-plus.svg"),
+        "clipboard-paste": (EDITING, "clipboard-paste.svg"),
+        "save-all": (EDITING, "save-all.svg"),
+        "save": (EDITING, "save.svg"),
+        "help": (SELECTION, "circle-question-mark.svg"),
     }
 
     _SELECTION_COLOR = QColor("#333333")
@@ -62,7 +71,7 @@ class IconManager:
         raise ValueError(f"Unknown icon category: {category}")
 
     @classmethod
-    def _render(cls, path, color):
+    def _render(cls, path, color, size=None):
         svg = path.read_text(encoding="utf-8")
         opacity = color.alphaF()
         render_color = QColor(color)
@@ -73,7 +82,7 @@ class IconManager:
         if not renderer.isValid():
             raise FileNotFoundError(f"Invalid SVG icon: {path}")
 
-        size = QSize(cls.ICON_SIZE, cls.ICON_SIZE)
+        size = QSize(size or cls.ICON_SIZE, size or cls.ICON_SIZE)
         image = QImage(size, QImage.Format_ARGB32)
         image.fill(Qt.transparent)
 
@@ -92,7 +101,7 @@ class IconManager:
         return QPixmap.fromImage(image)
 
     @classmethod
-    def icon(cls, name):
+    def icon(cls, name, size=None):
         try:
             category, filename = cls._ICONS[name]
         except KeyError as exc:
@@ -101,12 +110,12 @@ class IconManager:
         path = cls._ROOT / category / filename
         color = cls._color_for_category(category)
 
-        normal = cls._render(path, color)
+        normal = cls._render(path, color, size)
         disabled_color = QColor(color)
         disabled_color.setAlpha(round(255 * cls.DISABLED_OPACITY))
-        disabled = cls._render(path, disabled_color)
+        disabled = cls._render(path, disabled_color, size)
 
-        if name == "rotate-ccw":
+        if name in {"rotate-ccw", "screen-2"}:
             normal = QPixmap.fromImage(normal.toImage().mirrored(True, False))
             disabled = QPixmap.fromImage(disabled.toImage().mirrored(True, False))
 

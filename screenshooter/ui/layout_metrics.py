@@ -39,3 +39,7 @@ WINDOW_MIN_HEIGHT = 650
 WINDOW_INITIAL_WIDTH = 1030
 WINDOW_INITIAL_HEIGHT = 750
 TOOLBAR_CONTROL_HEIGHT = 26
+
+# Размер SVG-иконок верхней панели. Меняйте только это значение
+# для ручного подбора визуально подходящего размера.
+MAIN_ACTION_ICON_SIZE = 18
