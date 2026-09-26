@@ -121,6 +121,8 @@ class CropHandles:
             return Qt.SizeVerCursor
         elif handle_id in ('lm', 'rm', 'right'):
             return Qt.SizeHorCursor
+        elif handle_id == 'rotate':
+            return Qt.OpenHandCursor
         return Qt.ArrowCursor
 
     def _normalize_points(self, points):
