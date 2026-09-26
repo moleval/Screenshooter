@@ -47,6 +47,8 @@ class AnnotationResizeController:
         self._text_original_vector = None
         self._rotation_start = None
         self._rotation_start_angle = None
+        self._rotation_start = None
+        self._rotation_start_angle = None
 
     def _blocked_by_mode(self) -> bool:
         return bool(
@@ -124,6 +126,13 @@ class AnnotationResizeController:
             'br': rect.bottomRight(),
         }
         return {key: item.mapToScene(point) for key, point in corners.items()}
+
+    def _text_rotation_handle_point(self, item):
+        rect = item.rect()
+        zoom = max(abs(self.view.transform().m11()), 1e-6)
+        scale = max(abs(item.scale()), 1e-6)
+        offset = 24.0 / (zoom * scale)
+        return item.mapToScene(QPointF(rect.center().x(), rect.top() - offset))
 
     def _text_rotation_handle_point(self, item):
         rect = item.rect()
@@ -447,6 +456,22 @@ class AnnotationResizeController:
             self.view._interaction_dragging = True
             return True
 
+        if handle_id == 'rotate':
+            item = self._item
+            if not isinstance(item, TextItem) or item._editable:
+                return False
+            scene_pos = self.view.mapToScene(event.pos())
+            center = item.mapToScene(item.rect().center())
+            vector = scene_pos - center
+            if vector.manhattanLength() <= 1e-6:
+                return False
+            self._handle_id = 'rotate'
+            self._rotation_start = float(item.rotation())
+            self._rotation_start_angle = math.degrees(math.atan2(vector.y(), vector.x()))
+            self._old_pos = QPointF(item.pos())
+            self.view._interaction_dragging = True
+            return True
+
         self._handle_id = handle_id
         self._old_rect = None
         self._old_pos = QPointF(item.pos())
@@ -504,6 +529,20 @@ class AnnotationResizeController:
 
         cursor_scene = self.view.mapToScene(event.pos())
         item = self._item
+
+        if self._handle_id == 'rotate':
+            vector = cursor_scene - item.mapToScene(item.rect().center())
+            if vector.manhattanLength() <= 1e-6:
+                return True
+            angle = math.degrees(math.atan2(vector.y(), vector.x()))
+            delta = angle - self._rotation_start_angle
+            while delta > 180.0:
+                delta -= 360.0
+            while delta < -180.0:
+                delta += 360.0
+            item.setRotation(self._rotation_start + delta)
+            self.sync_handles()
+            return True
 
         if self._handle_id == 'rotate':
             vector = cursor_scene - item.mapToScene(item.rect().center())
