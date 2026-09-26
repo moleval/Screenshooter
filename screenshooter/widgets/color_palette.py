@@ -109,12 +109,12 @@ class ColorPaletteWidget(QWidget):
             self.set_current_color(color)
 
     def _open_super_eyedropper(self):
-        self._super_eyedropper = SuperEyedropper(self.window())
-        self._super_eyedropper.colorPicked = self._on_super_color
+        self._super_eyedropper = SuperEyedropper(
+            self.window(), color_callback=self._on_super_color
+        )
         self._super_eyedropper.start()
 
     def _on_super_color(self, color, global_pos):
         self.colorSelected.emit(color)
         self.set_current_color(color)
-        if self._super_eyedropper is not None:
-            self._super_eyedropper.show_result(color, global_pos)
+        return None
