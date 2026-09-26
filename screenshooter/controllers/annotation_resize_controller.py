@@ -45,6 +45,8 @@ class AnnotationResizeController:
         self._text_moving_local = None
         self._text_anchor_scene = None
         self._text_original_vector = None
+        self._rotation_start = None
+        self._rotation_start_angle = None
 
     def _blocked_by_mode(self) -> bool:
         return bool(
@@ -123,6 +125,13 @@ class AnnotationResizeController:
         }
         return {key: item.mapToScene(point) for key, point in corners.items()}
 
+    def _text_rotation_handle_point(self, item):
+        rect = item.rect()
+        zoom = max(abs(self.view.transform().m11()), 1e-6)
+        scale = max(abs(item.scale()), 1e-6)
+        offset = 24.0 / (zoom * scale)
+        return item.mapToScene(QPointF(rect.center().x(), rect.top() - offset))
+
     def _line_handle_points(self, item):
         start, end = self._scene_line_geometry(item)
         return {'start': start, 'end': end}
@@ -143,6 +152,7 @@ class AnnotationResizeController:
                 self.remove_handles()
                 return
             points = self._text_handle_points(item)
+            points['rotate'] = self._text_rotation_handle_point(item)
             show_midpoints = False
         elif isinstance(item, CurvedArrowItem):
             points = self._curve_handle_points(item)
@@ -421,6 +431,22 @@ class AnnotationResizeController:
         if item is None:
             return False
 
+        if handle_id == 'rotate':
+            item = self._item
+            if not isinstance(item, TextItem) or item._editable:
+                return False
+            scene_pos = self.view.mapToScene(event.pos())
+            center = item.mapToScene(item.rect().center())
+            vector = scene_pos - center
+            if vector.manhattanLength() <= 1e-6:
+                return False
+            self._handle_id = 'rotate'
+            self._rotation_start = float(item.rotation())
+            self._rotation_start_angle = math.degrees(math.atan2(vector.y(), vector.x()))
+            self._old_pos = QPointF(item.pos())
+            self.view._interaction_dragging = True
+            return True
+
         self._handle_id = handle_id
         self._old_rect = None
         self._old_pos = QPointF(item.pos())
@@ -478,6 +504,20 @@ class AnnotationResizeController:
 
         cursor_scene = self.view.mapToScene(event.pos())
         item = self._item
+
+        if self._handle_id == 'rotate':
+            vector = cursor_scene - item.mapToScene(item.rect().center())
+            if vector.manhattanLength() <= 1e-6:
+                return True
+            angle = math.degrees(math.atan2(vector.y(), vector.x()))
+            delta = angle - self._rotation_start_angle
+            while delta > 180.0:
+                delta -= 360.0
+            while delta < -180.0:
+                delta += 360.0
+            item.setRotation(self._rotation_start + delta)
+            self.sync_handles()
+            return True
 
         if isinstance(item, TextItem):
             self._resize_text(item, self._handle_id, cursor_scene)
@@ -553,7 +593,13 @@ class AnnotationResizeController:
             return False
 
         item = self._item
-        if isinstance(item, TextItem):
+        if self._handle_id == 'rotate':
+            old_rotation = self._rotation_start
+            new_rotation = float(item.rotation())
+            if old_rotation != new_rotation:
+                self.view.history.push(ResizeAnnotationCommand(
+                    item, old_rotation=old_rotation, new_rotation=new_rotation))
+        elif isinstance(item, TextItem):
             old_scale = self._start_scale
             new_scale = item.scale()
             if old_scale is not None and old_scale != new_scale:
@@ -628,6 +674,8 @@ class AnnotationResizeController:
         self._text_moving_local = None
         self._text_anchor_scene = None
         self._text_original_vector = None
+        self._rotation_start = None
+        self._rotation_start_angle = None
         self.view._interaction_dragging = False
         self.sync_handles()
         self.view._update_floating_widgets_visibility()
