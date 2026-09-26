@@ -169,8 +169,9 @@ class ColorResultPopup(QWidget):
 class SuperEyedropper:
     """Координатор: экранный выбор → результат → выбор цвета в редакторе."""
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, color_callback=None):
         self.parent = parent
+        self.color_callback = color_callback
         self._picker = None
         self._popup = None
 
@@ -183,4 +184,6 @@ class SuperEyedropper:
         self._picker = None
         self._popup = ColorResultPopup(color, global_pos, self.parent)
         self._popup.show()
+        if self.color_callback is not None:
+            self.color_callback(color, global_pos)
         return color
