@@ -46,3 +46,19 @@ def test_text_rotation_is_undoable(qapp):
     assert abs(item.rotation()) < 1e-9
     view.history.redo()
     assert abs(item.rotation()) > 1.0
+
+
+def test_text_rotation_handle_click_rotates_90_degrees_and_is_undoable(qapp):
+    view = EditorView(QGraphicsScene())
+    item = make_text(view)
+    controller = view.annotation_resize_controller
+    controller.sync_handles()
+    handle = controller.handles.positions["rotate"]
+    pos = view.mapFromScene(handle)
+    assert controller.handle_mouse_press(ev(pos))
+    assert controller.handle_mouse_release(ev(pos))
+    assert item.rotation() == 90.0
+    view.history.undo()
+    assert item.rotation() == 0.0
+    view.history.redo()
+    assert item.rotation() == 90.0
