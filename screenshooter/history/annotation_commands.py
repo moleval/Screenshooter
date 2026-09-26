@@ -7,7 +7,7 @@ class ResizeAnnotationCommand(QUndoCommand):
 
     def __init__(self, item, old_rect=None, new_rect=None, old_pos=None,
                  new_pos=None, old_geometry=None, new_geometry=None,
-                 old_scale=None, new_scale=None):
+                 old_scale=None, new_scale=None, old_rotation=None, new_rotation=None):
         super().__init__("Изменить размер аннотации")
         self.item = item
         self.old_rect = old_rect
@@ -18,8 +18,10 @@ class ResizeAnnotationCommand(QUndoCommand):
         self.new_geometry = new_geometry
         self.old_scale = old_scale
         self.new_scale = new_scale
+        self.old_rotation = old_rotation
+        self.new_rotation = new_rotation
 
-    def _apply(self, rect, pos, geometry, scale=None):
+    def _apply(self, rect, pos, geometry, scale=None, rotation=None):
         if geometry is not None:
             if len(geometry) == 3 and hasattr(self.item, "set_curve"):
                 start, end, ctrl = geometry
@@ -47,9 +49,11 @@ class ResizeAnnotationCommand(QUndoCommand):
             self.item.setPos(pos)
         if scale is not None:
             self.item.setScale(scale)
+        if rotation is not None:
+            self.item.setRotation(rotation)
 
     def redo(self):
-        self._apply(self.new_rect, self.new_pos, self.new_geometry, self.new_scale)
+        self._apply(self.new_rect, self.new_pos, self.new_geometry, self.new_scale, self.new_rotation)
 
     def undo(self):
-        self._apply(self.old_rect, self.old_pos, self.old_geometry, self.old_scale)
+        self._apply(self.old_rect, self.old_pos, self.old_geometry, self.old_scale, self.old_rotation)
