@@ -48,6 +48,7 @@ class IconManager:
         "save-all": (EDITING, "save-all.svg"),
         "save": (EDITING, "save.svg"),
         "help": (SELECTION, "circle-question-mark.svg"),
+        "pipette": (EDITING, "pipette.svg"),
     }
 
     _SELECTION_COLOR = QColor("#333333")
