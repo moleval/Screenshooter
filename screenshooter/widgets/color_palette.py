@@ -8,6 +8,8 @@
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QPushButton, QColorDialog,
                              QSizePolicy)
+from .icon_manager import IconManager
+from .super_eyedropper import SuperEyedropper
 from PyQt5.QtGui import QColor
 from ..ui.layout_metrics import TOOLBAR_CONTROL_HEIGHT
 
@@ -55,7 +57,15 @@ class ColorPaletteWidget(QWidget):
         self.palette_btn.clicked.connect(self._open_palette)
         layout.addWidget(self.palette_btn)
 
+        self.eyedropper_btn = QPushButton()
+        self.eyedropper_btn.setFixedSize(32, TOOLBAR_CONTROL_HEIGHT)
+        self.eyedropper_btn.setIcon(IconManager.icon("pipette", size=18))
+        self.eyedropper_btn.setToolTip("Супер-пипетка: цвет с экрана")
+        self.eyedropper_btn.clicked.connect(self._open_super_eyedropper)
+        layout.addWidget(self.eyedropper_btn)
+
         self.selected_button = None
+        self._super_eyedropper = None
 
     def _on_color_click(self, color_str, button):
         color = QColor(color_str)
@@ -97,3 +107,14 @@ class ColorPaletteWidget(QWidget):
         if color.isValid():
             self.colorSelected.emit(color)
             self.set_current_color(color)
+
+    def _open_super_eyedropper(self):
+        self._super_eyedropper = SuperEyedropper(self.window())
+        self._super_eyedropper.colorPicked = self._on_super_color
+        self._super_eyedropper.start()
+
+    def _on_super_color(self, color, global_pos):
+        self.colorSelected.emit(color)
+        self.set_current_color(color)
+        if self._super_eyedropper is not None:
+            self._super_eyedropper.show_result(color, global_pos)
