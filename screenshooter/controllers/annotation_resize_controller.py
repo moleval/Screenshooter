@@ -47,8 +47,7 @@ class AnnotationResizeController:
         self._text_original_vector = None
         self._rotation_start = None
         self._rotation_start_angle = None
-        self._rotation_start = None
-        self._rotation_start_angle = None
+        self._rotation_press_pos = None
 
     def _blocked_by_mode(self) -> bool:
         return bool(
@@ -441,7 +440,6 @@ class AnnotationResizeController:
             return False
 
         if handle_id == 'rotate':
-            item = self._item
             if not isinstance(item, TextItem) or item._editable:
                 return False
             scene_pos = self.view.mapToScene(event.pos())
@@ -452,22 +450,7 @@ class AnnotationResizeController:
             self._handle_id = 'rotate'
             self._rotation_start = float(item.rotation())
             self._rotation_start_angle = math.degrees(math.atan2(vector.y(), vector.x()))
-            self._old_pos = QPointF(item.pos())
-            self.view._interaction_dragging = True
-            return True
-
-        if handle_id == 'rotate':
-            item = self._item
-            if not isinstance(item, TextItem) or item._editable:
-                return False
-            scene_pos = self.view.mapToScene(event.pos())
-            center = item.mapToScene(item.rect().center())
-            vector = scene_pos - center
-            if vector.manhattanLength() <= 1e-6:
-                return False
-            self._handle_id = 'rotate'
-            self._rotation_start = float(item.rotation())
-            self._rotation_start_angle = math.degrees(math.atan2(vector.y(), vector.x()))
+            self._rotation_press_pos = QPointF(event.pos())
             self._old_pos = QPointF(item.pos())
             self.view._interaction_dragging = True
             return True
@@ -634,7 +617,12 @@ class AnnotationResizeController:
         item = self._item
         if self._handle_id == 'rotate':
             old_rotation = self._rotation_start
+            press_pos = self._rotation_press_pos
+            moved = press_pos is not None and QPointF(event.pos()).manhattanLength() > 4
             new_rotation = float(item.rotation())
+            if not moved:
+                new_rotation = old_rotation + 90.0
+                item.setRotation(new_rotation)
             if old_rotation != new_rotation:
                 self.view.history.push(ResizeAnnotationCommand(
                     item, old_rotation=old_rotation, new_rotation=new_rotation))
@@ -715,6 +703,7 @@ class AnnotationResizeController:
         self._text_original_vector = None
         self._rotation_start = None
         self._rotation_start_angle = None
+        self._rotation_press_pos = None
         self.view._interaction_dragging = False
         self.sync_handles()
         self.view._update_floating_widgets_visibility()
