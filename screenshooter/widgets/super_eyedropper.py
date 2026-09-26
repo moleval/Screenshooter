@@ -1,7 +1,7 @@
 """Супер-пипетка: выбор исходного цвета с любого подключённого экрана."""
 
-from PyQt5.QtCore import Qt, QRect
-from PyQt5.QtGui import QColor, QCursor, QGuiApplication, QPixmap
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QColor, QGuiApplication
 from PyQt5.QtWidgets import (
     QApplication, QHBoxLayout, QLabel, QToolButton, QVBoxLayout, QWidget,
 )
@@ -115,10 +115,16 @@ class ColorResultPopup(QWidget):
             self.color.red(), self.color.green(),
             self.color.blue(), self.color.alpha(),
         )
-        h, s, v = self.color.getHsv()
+        h = self.color.hsvHue()
         h = 0 if h < 0 else h
-        _, sl, l = self.color.getHsl()
-        c, m, y, k = self.color.getCmyk()
+        s = self.color.hsvSaturation()
+        v = self.color.value()
+        sl = self.color.hslSaturation()
+        l = self.color.lightness()
+        c = self.color.cyan()
+        m = self.color.magenta()
+        y = self.color.yellow()
+        k = self.color.black()
         return {
             "HEX": self.color.name(QColor.HexRgb).upper(),
             "RGB": f"rgb({r}, {g}, {b})",
