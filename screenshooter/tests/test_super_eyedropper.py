@@ -60,3 +60,7 @@ def test_screen_picker_emits_sampled_color(qapp):
 
     assert received
     assert received[0][0] == "#abcdef"
+
+def test_screen_picker_accepts_mouse_events(qapp):
+    picker = ScreenColorPicker()
+    assert not picker.testAttribute(Qt.WA_TransparentForMouseEvents)
