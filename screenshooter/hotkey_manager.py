@@ -530,9 +530,13 @@ class HotkeyManager(QObject):
             print(f"Ошибка захвата экрана: {error}")
         finally:
             self._finish(target)
-            if target is not None:
-                target.showFullScreen()
+            self._show_monitor_capture_result_fullscreen(target)
             self._request_pending = False
+
+    @staticmethod
+    def _show_monitor_capture_result_fullscreen(target):
+        if target is not None:
+            target.showFullScreen()
 
     # ==============================================================
     # Захват окна
