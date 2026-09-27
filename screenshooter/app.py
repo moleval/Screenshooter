@@ -997,7 +997,7 @@ class ScreenshotApp(QMainWindow):
         """Переключает полноэкранный режим без артефактов."""
         if self.isFullScreen():
             # Выход из полноэкранного режима
-            was_maximized = bool(self._window_state_before_fullscreen & Qt.WindowMaximized)
+            was_maximized = bool(int(self._window_state_before_fullscreen) & int(Qt.WindowMaximized))
             self._window_state_before_fullscreen = None
 
             # Отключаем обновление окна, чтобы скрыть промежуточные состояния
