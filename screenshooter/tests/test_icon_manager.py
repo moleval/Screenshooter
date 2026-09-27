@@ -26,6 +26,9 @@ def qapp():
         "rotate-cw",
         "undo",
         "redo",
+        "palette",
+        "rotate-handle",
+        "pipette",
     ],
 )
 def test_icon_manager_loads_all_local_icons(qapp, name):
