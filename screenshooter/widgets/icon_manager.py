@@ -43,6 +43,7 @@ class IconManager:
         "screen-2": (EDITING, "screen-share.svg"),
         "clear": (EDITING, "brush-cleaning.svg"),
         "clipboard-copy": (EDITING, "clipboard-copy.svg"),
+        "clipboard-copy-mirrored": (EDITING, "clipboard-copy.svg"),
         "image-plus": (EDITING, "image-plus.svg"),
         "clipboard-paste": (EDITING, "clipboard-paste.svg"),
         "save-all": (EDITING, "save-all.svg"),
@@ -122,7 +123,7 @@ class IconManager:
         disabled_color.setAlpha(round(255 * cls.DISABLED_OPACITY))
         disabled = cls._render(path, disabled_color, size)
 
-        if name in {"rotate-ccw", "screen-2"}:
+        if name in {"rotate-ccw", "screen-2", "clipboard-copy-mirrored"}:
             normal = QPixmap.fromImage(normal.toImage().mirrored(True, False))
             disabled = QPixmap.fromImage(disabled.toImage().mirrored(True, False))
 
