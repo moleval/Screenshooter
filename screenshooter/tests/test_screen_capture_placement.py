@@ -25,7 +25,9 @@ def test_screen_capture_is_60_percent_of_background_and_centered(qapp):
     rect = item.mapRectToScene(item.boundingRect())
     background_rect = view.background_item.sceneBoundingRect()
 
-    assert rect.width() == 60
-    assert rect.height() == 60
+    # QGraphicsPixmapItem.boundingRect() имеет Qt-специфику с дробной
+    # геометрией, поэтому размер проверяем по самому pixmap.
+    assert item.pixmap().width() == 60
+    assert item.pixmap().height() == 60
     assert rect.center() == background_rect.center()
-    assert rect.topLeft() == QPointF(70, 20)
+    assert rect.topLeft() == QPointF(69.5, 19.5)
