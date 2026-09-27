@@ -530,6 +530,8 @@ class HotkeyManager(QObject):
             print(f"Ошибка захвата экрана: {error}")
         finally:
             self._finish(target)
+            if target is not None:
+                target.showFullScreen()
             self._request_pending = False
 
     # ==============================================================
