@@ -7,6 +7,7 @@ import math
 
 from PyQt5 import sip
 from PyQt5.QtCore import Qt, QPointF, QRectF
+from PyQt5.QtGui import QColor
 
 from ..constants import MIN_RECT_SIZE, MIN_ARROW_LENGTH, MIN_SCALE
 from ..history import ResizeAnnotationCommand
@@ -126,6 +127,25 @@ class AnnotationResizeController:
         }
         return {key: item.mapToScene(point) for key, point in corners.items()}
 
+    def _rotation_handle_color(self, item):
+        """Выбирает чёрный/белый цвет по яркости фона под маркером."""
+        bg = self.view.image_editor.background_item
+        if bg is None or sip.isdeleted(bg):
+            return QColor("#FFFFFF")
+
+        scene_point = self._text_rotation_handle_point(item)
+        local = bg.mapFromScene(scene_point)
+        image = bg.pixmap().toImage()
+        x = max(0, min(image.width() - 1, round(local.x())))
+        y = max(0, min(image.height() - 1, round(local.y())))
+        pixel = image.pixelColor(x, y)
+        luminance = (
+            0.299 * pixel.red()
+            + 0.587 * pixel.green()
+            + 0.114 * pixel.blue()
+        )
+        return QColor("#FFFFFF" if luminance < 160 else "#202020")
+
     def _text_rotation_handle_point(self, item):
         rect = item.rect()
         zoom = max(abs(self.view.transform().m11()), 1e-6)
@@ -161,6 +181,7 @@ class AnnotationResizeController:
                 return
             points = self._text_handle_points(item)
             points['rotate'] = self._text_rotation_handle_point(item)
+            rotate_color = self._rotation_handle_color(item)
             show_midpoints = False
         elif isinstance(item, CurvedArrowItem):
             points = self._curve_handle_points(item)
@@ -182,8 +203,12 @@ class AnnotationResizeController:
             )
             self._item = item
             self.handles.create_handles(points)
+            if isinstance(item, TextItem):
+                self.handles.set_rotate_color(rotate_color)
         else:
             self.handles.update_handles(points)
+            if isinstance(item, TextItem):
+                self.handles.set_rotate_color(rotate_color)
 
     def remove_handles(self):
         if self.handles is not None:
