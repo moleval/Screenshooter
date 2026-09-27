@@ -179,7 +179,7 @@ class ScreenshotApp(QMainWindow):
         right_group_layout.setSpacing(6)
 
         self.copy_btn = QPushButton()
-        self.copy_btn.setIcon(IconManager.icon("clipboard-copy", size=MAIN_ACTION_ICON_SIZE))
+        self.copy_btn.setIcon(IconManager.icon("clipboard-paste", size=MAIN_ACTION_ICON_SIZE))
         self.copy_btn.setToolTip("В буфер")
         self.copy_btn.clicked.connect(self.copy_to_clipboard)
         right_group_layout.addWidget(self.copy_btn)
@@ -191,7 +191,7 @@ class ScreenshotApp(QMainWindow):
         right_group_layout.addWidget(self.insert_file_btn)
 
         self.insert_clipboard_btn = QPushButton()
-        self.insert_clipboard_btn.setIcon(IconManager.icon("clipboard-paste", size=MAIN_ACTION_ICON_SIZE))
+        self.insert_clipboard_btn.setIcon(IconManager.icon("clipboard-copy", size=MAIN_ACTION_ICON_SIZE))
         self.insert_clipboard_btn.setToolTip("Из буфера")
         self.insert_clipboard_btn.clicked.connect(self.insert_image_from_clipboard)
         right_group_layout.addWidget(self.insert_clipboard_btn)
