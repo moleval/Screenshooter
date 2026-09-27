@@ -1,7 +1,7 @@
 """Супер-пипетка: выбор исходного цвета с любого подключённого экрана."""
 
 from PyQt5.QtCore import Qt, QRect, pyqtSignal
-from PyQt5.QtGui import QColor, QGuiApplication
+from PyQt5.QtGui import QColor, QGuiApplication, QPainter
 from PyQt5.QtWidgets import (
     QApplication, QHBoxLayout, QLabel, QToolButton, QVBoxLayout, QWidget,
 )
@@ -21,6 +21,8 @@ class ScreenColorPicker(QWidget):
         )
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setCursor(Qt.CrossCursor)
+        self.setAttribute(Qt.WA_TransparentForMouseEvents, False)
+        self.setMouseTracking(True)
         self._captures = []
         self._press_pos = None
 
@@ -42,8 +44,12 @@ class ScreenColorPicker(QWidget):
         self.setFocus(Qt.OtherFocusReason)
 
     def paintEvent(self, event):
-        # Прозрачный overlay намеренно ничего не рисует.
-        return
+        # Важно: прозрачный, но не нарисованный виджет может не получать
+        # мышиные события на Windows. Рисуем практически полностью
+        # прозрачный пиксельный слой, сохраняя визуальную прозрачность.
+        painter = QPainter(self)
+        painter.fillRect(self.rect(), QColor(0, 0, 0, 1))
+        painter.end()
 
     def mousePressEvent(self, event):
         if event.button() != Qt.LeftButton:
