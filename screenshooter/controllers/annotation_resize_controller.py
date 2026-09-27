@@ -643,9 +643,11 @@ class AnnotationResizeController:
         if self._handle_id == 'rotate':
             old_rotation = self._rotation_start
             press_pos = self._rotation_press_pos
+            event_pos = event.pos()
             moved = (
                 press_pos is not None
-                and (QPointF(event.pos()) - press_pos).manhattanLength() > 4
+                and event_pos is not None
+                and (QPointF(event_pos) - press_pos).manhattanLength() > 4
             )
             new_rotation = float(item.rotation())
             if not moved:
