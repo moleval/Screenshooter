@@ -22,6 +22,7 @@ class IconManager:
     SELECTION = "selection"
     ANNOTATION = "annotation"
     EDITING = "editing"
+    NEUTRAL = "neutral"
 
     _ROOT = Path(__file__).resolve().parents[1] / "resources" / "icons"
 
@@ -48,16 +49,21 @@ class IconManager:
         "save-all": (EDITING, "save-all.svg"),
         "save": (EDITING, "save.svg"),
         "help": (SELECTION, "circle-question-mark.svg"),
-        "pipette": (EDITING, "pipette.svg"),
-        "palette": (EDITING, "palette.svg"),
-        "rotate-handle": (EDITING, "rotate-ccw-arrow.svg"),
+        "pipette": (NEUTRAL, "pipette.svg"),
+        "palette": (NEUTRAL, "palette.svg"),
+        "rotate-handle": (NEUTRAL, "rotate-ccw.svg"),
     }
 
     @classmethod
     def _color_for_category(cls, category):
-        if category in {cls.SELECTION, cls.ANNOTATION, cls.EDITING}:
-            # Все иконки панели используют один цвет — цвет текста интерфейса,
-            # как у кнопки «Справка».
+        if category == cls.SELECTION:
+            return QColor(theme_manager.get_color("text"))
+        if category == cls.ANNOTATION:
+            return QColor("#D25145")
+        if category == cls.EDITING:
+            color = "#D7F5FF" if theme_manager.effective_theme == "dark" else "#005A9E"
+            return QColor(color)
+        if category == cls.NEUTRAL:
             return QColor(theme_manager.get_color("text"))
         raise ValueError(f"Unknown icon category: {category}")
 
@@ -92,14 +98,14 @@ class IconManager:
         return QPixmap.fromImage(image)
 
     @classmethod
-    def icon(cls, name, size=None):
+    def icon(cls, name, size=None, color=None):
         try:
             category, filename = cls._ICONS[name]
         except KeyError as exc:
             raise KeyError(f"Unknown icon: {name}") from exc
 
         path = cls._ROOT / category / filename
-        color = cls._color_for_category(category)
+        color = QColor(color) if color is not None else cls._color_for_category(category)
 
         normal = cls._render(path, color, size)
         disabled_color = QColor(color)
