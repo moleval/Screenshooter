@@ -13,3 +13,10 @@ def test_monitor_capture_result_is_shown_maximized():
 
 def test_monitor_capture_result_maximized_handles_missing_target():
     HotkeyManager._show_monitor_capture_result_fullscreen(None)
+
+
+def test_window_state_maximized_flag_uses_integer_qt_flags():
+    from PyQt5.QtCore import Qt
+
+    state = Qt.WindowMaximized
+    assert bool(int(state) & int(Qt.WindowMaximized))
