@@ -51,24 +51,12 @@ class IconManager:
         "pipette": (EDITING, "pipette.svg"),
     }
 
-    _SELECTION_COLOR = QColor("#333333")
-    _ANNOTATION_COLOR = QColor("#D25145")
-    _EDITING_COLOR = QColor("#005A9E")
-    _EDITING_COLOR_DARK = QColor("#D7F5FF")
-
     @classmethod
     def _color_for_category(cls, category):
-        if category == cls.SELECTION:
-            return theme_manager.get_color("text")
-        if category == cls.ANNOTATION:
-            return QColor(cls._ANNOTATION_COLOR)
-        if category == cls.EDITING:
-            color = (
-                cls._EDITING_COLOR_DARK
-                if theme_manager.effective_theme == "dark"
-                else cls._EDITING_COLOR
-            )
-            return QColor(color)
+        if category in {cls.SELECTION, cls.ANNOTATION, cls.EDITING}:
+            # Все иконки панели используют один цвет — цвет текста интерфейса,
+            # как у кнопки «Справка».
+            return QColor(theme_manager.get_color("text"))
         raise ValueError(f"Unknown icon category: {category}")
 
     @classmethod
