@@ -61,14 +61,15 @@ def _has_color_close_to(pixmap, expected, tolerance=8):
     )
 
 
-def test_icon_manager_uses_one_toolbar_color(qapp):
+def test_icon_manager_restores_toolbar_colors(qapp):
+    assert IconManager._color_for_category(IconManager.ANNOTATION).name() == "#d25145"
+    assert IconManager._color_for_category(IconManager.EDITING).name() == "#005a9e"
+
+
+def test_icon_manager_keeps_service_icons_neutral(qapp):
     expected = theme_manager.get_color("text")
-    for category in (
-        IconManager.SELECTION,
-        IconManager.ANNOTATION,
-        IconManager.EDITING,
-    ):
-        assert IconManager._color_for_category(category) == expected
+    for name in ("pipette", "palette", "undo", "save", "help"):
+        assert IconManager._color_for_icon(name, IconManager.EDITING) == expected
 
 
 def test_icon_manager_uses_bright_editing_color_in_dark_theme(qapp):
@@ -79,7 +80,7 @@ def test_icon_manager_uses_bright_editing_color_in_dark_theme(qapp):
             IconManager._ROOT / "editing" / "crop.svg",
             IconManager._color_for_category(IconManager.EDITING),
         )
-        assert _has_color_close_to(editing, (255, 255, 255))
+        assert _has_color_close_to(editing, (215, 245, 255))
     finally:
         theme_manager.set_theme(previous)
 
@@ -120,13 +121,13 @@ def test_app_theme_switch_refreshes_existing_editing_icon(qapp):
         dark = app.crop_action.icon().pixmap(
             IconManager.ICON_SIZE, QIcon.Normal, QIcon.Off
         )
-        assert _has_color_close_to(dark, (255, 255, 255))
+        assert _has_color_close_to(dark, (215, 245, 255))
 
         app.apply_theme("light")
         light = app.crop_action.icon().pixmap(
             IconManager.ICON_SIZE, QIcon.Normal, QIcon.Off
         )
-        assert _has_color_close_to(light, (51, 51, 51))
+        assert _has_color_close_to(light, (0, 90, 158))
     finally:
         app.close()
 
