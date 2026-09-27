@@ -1,4 +1,4 @@
-from PyQt5.QtCore import QPoint, QRect
+from PyQt5.QtCore import QPoint, QRect, Qt
 from PyQt5.QtGui import QColor, QPixmap
 
 from screenshooter.widgets.color_palette import ColorPaletteWidget
@@ -35,3 +35,28 @@ def test_color_result_popup_has_common_formats_and_copy_status(qapp):
 def test_color_palette_contains_super_eyedropper(qapp):
     palette = ColorPaletteWidget()
     assert palette.eyedropper_btn.toolTip().startswith("Супер-пипетка")
+
+def test_color_palette_uses_local_palette_icon(qapp):
+    palette = ColorPaletteWidget()
+    assert not palette.palette_btn.icon().isNull()
+
+
+def test_screen_picker_emits_sampled_color(qapp):
+    picker = ScreenColorPicker()
+    pixmap = QPixmap(2, 2)
+    pixmap.fill(QColor("#ABCDEF"))
+    picker._captures = [(QRect(100, 50, 2, 2), pixmap)]
+    received = []
+    picker.colorPicked.connect(lambda color, pos: received.append((color.name(), pos)))
+
+    class Event:
+        def button(self):
+            return Qt.LeftButton
+
+        def globalPos(self):
+            return QPoint(101, 51)
+
+    picker.mousePressEvent(Event())
+
+    assert received
+    assert received[0][0] == "#abcdef"
