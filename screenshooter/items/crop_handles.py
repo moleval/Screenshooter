@@ -6,7 +6,7 @@
 
 from PyQt5 import sip
 from PyQt5.QtCore import Qt, QPointF, QRectF
-from PyQt5.QtGui import QPen
+from PyQt5.QtGui import QPen, QColor
 from ..widgets.icon_manager import IconManager
 from PyQt5.QtWidgets import QGraphicsEllipseItem, QGraphicsPixmapItem, QGraphicsItem
 
@@ -23,6 +23,7 @@ class CropHandles:
         self.show_midpoints = show_midpoints
         self.handle_items = {}
         self.positions = {}
+        self.rotate_color = QColor("#FFFFFF")
 
     def create_handles(self, points):
         """Создаёт маркеры по словарю {handle_id: QPointF}.
@@ -39,7 +40,7 @@ class CropHandles:
         for handle_id, pos in points.items():
             if handle_id == 'rotate':
                 handle = QGraphicsPixmapItem(
-                    IconManager.icon("rotate-handle", size=20).pixmap(20, 20)
+                    IconManager.icon("rotate-handle", size=20, color=self.rotate_color).pixmap(20, 20)
                 )
                 handle.setOffset(-10, -10)
             else:
@@ -62,6 +63,22 @@ class CropHandles:
     def create_rect_handles(self, rect: QRectF):
         """Явная обёртка для стандартных прямоугольных маркеров."""
         self.create_handles(rect)
+
+    def set_rotate_color(self, color):
+        color = QColor(color)
+        if color == self.rotate_color:
+            return
+        self.rotate_color = color
+        handle = self.handle_items.get("rotate")
+        if handle is not None:
+            handle.setPixmap(
+                IconManager.icon(
+                    "rotate-handle", size=20, color=self.rotate_color
+                ).pixmap(20, 20)
+            )
+            handle.setOffset(-10, -10)
+            handle.update()
+            self.view.scene().update()
 
     def update_handles(self, points):
         """Обновляет произвольный набор маркеров.
