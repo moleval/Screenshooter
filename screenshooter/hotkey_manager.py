@@ -534,9 +534,9 @@ class HotkeyManager(QObject):
             self._request_pending = False
 
     @staticmethod
-    def _show_monitor_capture_result_fullscreen(target):
+    def _show_monitor_capture_result_maximized(target):
         if target is not None:
-            target.showFullScreen()
+            target.showMaximized()
 
     # ==============================================================
     # Захват окна
