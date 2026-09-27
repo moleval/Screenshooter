@@ -7,7 +7,8 @@
 from PyQt5 import sip
 from PyQt5.QtCore import Qt, QPointF, QRectF
 from PyQt5.QtGui import QPen
-from PyQt5.QtWidgets import QGraphicsEllipseItem, QGraphicsItem
+from ..widgets.icon_manager import IconManager
+from PyQt5.QtWidgets import QGraphicsEllipseItem, QGraphicsPixmapItem, QGraphicsItem
 
 from ..theme import theme_manager
 
@@ -36,14 +37,20 @@ class CropHandles:
 
         self.remove_handles()
         for handle_id, pos in points.items():
-            handle = QGraphicsEllipseItem(
-                -self.HANDLE_RADIUS, -self.HANDLE_RADIUS,
-                2 * self.HANDLE_RADIUS, 2 * self.HANDLE_RADIUS
-            )
-            pen = QPen(Qt.white, 2)
-            pen.setCosmetic(True)
-            handle.setPen(pen)
-            handle.setBrush(self.fill_color)
+            if handle_id == 'rotate':
+                handle = QGraphicsPixmapItem(
+                    IconManager.icon("rotate-handle", size=20).pixmap(20, 20)
+                )
+                handle.setOffset(-10, -10)
+            else:
+                handle = QGraphicsEllipseItem(
+                    -self.HANDLE_RADIUS, -self.HANDLE_RADIUS,
+                    2 * self.HANDLE_RADIUS, 2 * self.HANDLE_RADIUS
+                )
+                pen = QPen(Qt.white, 2)
+                pen.setCosmetic(True)
+                handle.setPen(pen)
+                handle.setBrush(self.fill_color)
             handle.setZValue(2000)
             handle.setFlag(QGraphicsItem.ItemIgnoresTransformations, True)
             handle.setAcceptedMouseButtons(Qt.LeftButton)
