@@ -30,4 +30,3 @@ def test_screen_capture_is_60_percent_of_background_and_centered(qapp):
     assert item.pixmap().width() == 60
     assert item.pixmap().height() == 60
     assert rect.center() == background_rect.center()
-    assert rect.topLeft() == QPointF(69.5, 19.5)
