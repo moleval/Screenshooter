@@ -78,7 +78,10 @@ def test_icon_manager_keeps_toolbar_colors_in_dark_theme(qapp):
         theme_manager.set_theme("dark")
         assert IconManager._color_for_category(IconManager.ANNOTATION).name() == "#d25145"
         assert IconManager._color_for_category(IconManager.EDITING).name() == "#d7f5ff"
-        assert IconManager._color_for_icon("pipette", IconManager.EDITING) == theme_manager.get_color("text")
+        assert IconManager._color_for_icon("pipette", IconManager.EDITING) == QColor("#ffffff")
+        assert IconManager._color_for_icon("palette", IconManager.EDITING) == QColor("#ffffff")
+        for name in ("undo", "redo", "screen-1", "screen-2", "clear", "save", "help"):
+            assert IconManager._color_for_icon(name, IconManager.EDITING) == QColor("#ffffff")
     finally:
         theme_manager.set_theme(previous)
 
