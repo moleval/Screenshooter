@@ -137,6 +137,7 @@ class ColorResultPopup(QWidget):
         y = self.color.yellow()
         k = self.color.black()
         return {
+            "HTML": self.color.name(QColor.HexRgb).upper(),
             "HEX": self.color.name(QColor.HexRgb).upper(),
             "RGB": f"rgb({r}, {g}, {b})",
             "RGBA": f"rgba({r}, {g}, {b}, {a})",
@@ -152,7 +153,7 @@ class ColorResultPopup(QWidget):
         value_label = QLabel(value)
         value_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
         copy_btn = QToolButton()
-        copy_btn.setIcon(IconManager.icon("clipboard-copy", size=16))
+        copy_btn.setIcon(IconManager.icon("clipboard-copy-mirrored", size=16))
         copy_btn.setToolTip("Копировать")
         copy_btn.setFixedSize(24, 24)
         copy_btn.clicked.connect(
