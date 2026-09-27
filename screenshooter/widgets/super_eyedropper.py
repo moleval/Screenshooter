@@ -12,6 +12,8 @@ from .icon_manager import IconManager
 class ScreenColorPicker(QWidget):
     """Прозрачный overlay над виртуальным рабочим столом."""
 
+    colorPicked = pyqtSignal(QColor, object)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowFlags(
@@ -27,11 +29,17 @@ class ScreenColorPicker(QWidget):
         for screen in QGuiApplication.screens():
             pixmap = screen.grabWindow(0)
             self._captures.append((screen.geometry(), pixmap))
-        virtual = QGuiApplication.primaryScreen().virtualGeometry()
+        screens = QGuiApplication.screens()
+        if not screens:
+            return
+        virtual = QRect(screens[0].geometry())
+        for screen in screens[1:]:
+            virtual = virtual.united(screen.geometry())
         self.setGeometry(virtual)
         self.show()
         self.raise_()
         self.activateWindow()
+        self.setFocus(Qt.OtherFocusReason)
 
     def paintEvent(self, event):
         # Прозрачный overlay намеренно ничего не рисует.
@@ -45,7 +53,7 @@ class ScreenColorPicker(QWidget):
         color = self._sample_global(global_pos)
         self.close()
         if color.isValid():
-            self.colorPicked(color, global_pos)
+            self.colorPicked.emit(color, global_pos)
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape:
@@ -182,8 +190,8 @@ class SuperEyedropper:
         self._popup = None
 
     def start(self):
-        self._picker = ScreenColorPicker(self.parent)
-        self._picker.colorPicked = self._picked
+        self._picker = ScreenColorPicker()
+        self._picker.colorPicked.connect(self._picked)
         self._picker.start()
 
     def _picked(self, color, global_pos):
