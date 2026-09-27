@@ -1,6 +1,6 @@
 """Супер-пипетка: выбор исходного цвета с любого подключённого экрана."""
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QRect, pyqtSignal
 from PyQt5.QtGui import QColor, QGuiApplication
 from PyQt5.QtWidgets import (
     QApplication, QHBoxLayout, QLabel, QToolButton, QVBoxLayout, QWidget,
@@ -78,9 +78,6 @@ class ScreenColorPicker(QWidget):
             y = max(0, min(image.height() - 1, y))
             return image.pixelColor(x, y)
         return QColor()
-
-    def colorPicked(self, color, global_pos):
-        """Переопределяется владельцем; оставлено методом вместо сигнала."""
 
 
 class ColorResultPopup(QWidget):
