@@ -67,14 +67,14 @@ class IconManager:
     @classmethod
     def _color_for_icon(cls, name, category):
         if name in {"pipette", "palette", "rotate-handle"}:
-            return QColor(theme_manager.get_color("text"))
-        # Иконки верхней панели команд используют тот же нейтральный цвет.
+            return QColor("#FFFFFF" if theme_manager.effective_theme == "dark" else "#333333")
+        # Иконки верхней панели команд используют нейтральный цвет.
         if name in {
             "undo", "redo", "screen-1", "screen-2", "clear",
             "clipboard-copy", "image-plus", "clipboard-paste",
             "save-all", "save", "help",
         }:
-            return QColor(theme_manager.get_color("text"))
+            return QColor("#FFFFFF" if theme_manager.effective_theme == "dark" else "#333333")
         return cls._color_for_category(category)
 
     @classmethod
