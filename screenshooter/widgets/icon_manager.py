@@ -72,7 +72,7 @@ class IconManager:
         # Иконки верхней панели команд используют нейтральный цвет.
         if name in {
             "undo", "redo", "screen-1", "screen-2", "clear",
-            "clipboard-copy", "image-plus", "clipboard-paste",
+            "clipboard-copy", "clipboard-copy-mirrored", "image-plus", "clipboard-paste",
             "save-all", "save", "help",
         }:
             return QColor("#FFFFFF" if theme_manager.effective_theme == "dark" else "#333333")
