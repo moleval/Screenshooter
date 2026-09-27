@@ -72,6 +72,17 @@ def test_icon_manager_keeps_service_icons_neutral(qapp):
         assert IconManager._color_for_icon(name, IconManager.EDITING) == expected
 
 
+def test_icon_manager_keeps_toolbar_colors_in_dark_theme(qapp):
+    previous = theme_manager.current_theme
+    try:
+        theme_manager.set_theme("dark")
+        assert IconManager._color_for_category(IconManager.ANNOTATION).name() == "#d25145"
+        assert IconManager._color_for_category(IconManager.EDITING).name() == "#d7f5ff"
+        assert IconManager._color_for_icon("pipette", IconManager.EDITING) == theme_manager.get_color("text")
+    finally:
+        theme_manager.set_theme(previous)
+
+
 def test_icon_manager_uses_bright_editing_color_in_dark_theme(qapp):
     previous = theme_manager.current_theme
     try:
