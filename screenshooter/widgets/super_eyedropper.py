@@ -96,7 +96,7 @@ class ColorResultPopup(QWidget):
         self.setAttribute(Qt.WA_DeleteOnClose)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 8, 10, 8)
+        layout.setContentsMargins(10, 8, 10, 3)
         layout.setSpacing(3)
 
         preview = QLabel()
