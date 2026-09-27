@@ -1,5 +1,6 @@
 from PyQt5.QtCore import QPoint, QRect, Qt
 from PyQt5.QtGui import QColor, QPixmap
+from PyQt5.QtWidgets import QToolButton
 
 from screenshooter.widgets.color_palette import ColorPaletteWidget
 from screenshooter.widgets.super_eyedropper import ColorResultPopup, ScreenColorPicker
@@ -21,11 +22,13 @@ def test_color_result_popup_has_common_formats_and_copy_status(qapp):
     popup = ColorResultPopup(QColor("#123456"), QPoint(10, 10))
     formats = popup._formats()
 
+    assert formats["HTML"] == "#123456".upper()
     assert formats["HEX"] == "#123456".upper()
     assert formats["RGB"] == "rgb(18, 52, 86)"
     assert "HSL" in formats
     assert "HSV" in formats
     assert "CMYK" in formats
+    assert popup._formats()["HTML"] == popup._formats()["HEX"]
 
     popup._copy_value(formats["HEX"])
     assert qapp.clipboard().text() == "#123456".upper()
@@ -64,3 +67,8 @@ def test_screen_picker_emits_sampled_color(qapp):
 def test_screen_picker_accepts_mouse_events(qapp):
     picker = ScreenColorPicker()
     assert not picker.testAttribute(Qt.WA_TransparentForMouseEvents)
+
+
+def test_color_result_popup_uses_mirrored_copy_icon(qapp):
+    popup = ColorResultPopup(QColor("#123456"), QPoint(10, 10))
+    assert not popup.findChildren(QToolButton)[0].icon().isNull()
