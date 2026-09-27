@@ -137,8 +137,7 @@ class ColorResultPopup(QWidget):
         y = self.color.yellow()
         k = self.color.black()
         return {
-            "HTML": self.color.name(QColor.HexRgb).upper(),
-            "HEX": self.color.name(QColor.HexRgb).upper(),
+            "HEX/HTML": self.color.name(QColor.HexRgb).upper(),
             "RGB": f"rgb({r}, {g}, {b})",
             "RGBA": f"rgba({r}, {g}, {b}, {a})",
             "HSL": f"hsl({h}, {sl}%, {l}%)",
