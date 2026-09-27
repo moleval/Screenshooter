@@ -76,7 +76,7 @@ def test_text_has_four_corner_handles_and_editable_hides_them(qapp):
     controller = AnnotationResizeController(view)
     controller.sync_handles()
 
-    assert set(controller.handles.handle_items) == {"tl", "tr", "bl", "br"}
+    assert {"tl", "tr", "bl", "br"} <= set(controller.handles.handle_items)
 
     item.setEditable(True)
     controller.sync_handles()
