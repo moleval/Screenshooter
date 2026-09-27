@@ -563,8 +563,27 @@ class ScreenshotApp(QMainWindow):
             if action is not None:
                 action.setIcon(IconManager.icon(icon_name))
 
-        self.undo_btn.setIcon(IconManager.icon("undo"))
-        self.redo_btn.setIcon(IconManager.icon("redo"))
+        for button, icon_name in (
+            (self.undo_btn, "undo"),
+            (self.redo_btn, "redo"),
+            *[(button, "screen-1" if index == 0 else "screen-2")
+              for index, button in enumerate(self.capture_buttons)],
+            (self.clear_btn, "clear"),
+            (self.copy_btn, "clipboard-paste"),
+            (self.insert_file_btn, "image-plus"),
+            (self.insert_clipboard_btn, "clipboard-copy"),
+            (self.save_as_btn, "save-all"),
+            (self.quick_save_btn, "save"),
+            (self.help_btn, "help"),
+        ):
+            button.setIcon(IconManager.icon(icon_name, size=MAIN_ACTION_ICON_SIZE))
+
+        self.color_palette.palette_btn.setIcon(
+            IconManager.icon("palette", size=18)
+        )
+        self.color_palette.eyedropper_btn.setIcon(
+            IconManager.icon("pipette", size=18)
+        )
 
     def apply_theme(self, theme_key: str):
         theme_manager.set_theme(theme_key)
