@@ -18,6 +18,11 @@ def test_screen_picker_samples_original_pixel(qapp):
     assert color.name() == "#123456"
 
 
+def test_color_result_popup_has_small_bottom_margin(qapp):
+    popup = ColorResultPopup(QColor("#123456"), QPoint(10, 10))
+    assert popup.layout().contentsMargins().bottom() == 3
+
+
 def test_color_result_popup_has_common_formats_and_copy_status(qapp):
     popup = ColorResultPopup(QColor("#123456"), QPoint(10, 10))
     formats = popup._formats()
