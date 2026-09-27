@@ -49,6 +49,8 @@ class IconManager:
         "save": (EDITING, "save.svg"),
         "help": (SELECTION, "circle-question-mark.svg"),
         "pipette": (EDITING, "pipette.svg"),
+        "palette": (EDITING, "palette.svg"),
+        "rotate-handle": (EDITING, "rotate-ccw-arrow.svg"),
     }
 
     @classmethod
