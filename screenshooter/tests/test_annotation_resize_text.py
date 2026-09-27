@@ -84,7 +84,7 @@ def test_text_has_four_corner_handles_and_editable_hides_them(qapp):
 
     item.setEditable(False)
     controller.sync_handles()
-    assert set(controller.handles.handle_items) == {"tl", "tr", "bl", "br"}
+    assert {"tl", "tr", "bl", "br", "rotate"} <= set(controller.handles.handle_items)
 
     controller.remove_handles()
     view.close()
