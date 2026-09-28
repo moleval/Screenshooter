@@ -399,3 +399,11 @@ def test_crop_pasted_image_ratio_snap_stays_inside_image(setup_editor):
     assert image_rect.contains(snapped)
     assert snapped.width() > 0
     assert snapped.height() > 0
+
+    controller.crop_rect = raw
+    controller._begin_aspect_drag("br", raw.bottomRight())
+    assert controller.aspect_drag_candidates
+    assert all(
+        image_rect.contains(candidate["rect"])
+        for candidate in controller.aspect_drag_candidates
+    )
