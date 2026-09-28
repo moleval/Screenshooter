@@ -33,6 +33,8 @@ class CropOverlayController:
         self.handles = None
         self.aspect_guide_items = []
         self.active_aspect_ratio = None
+        self._displayed_aspect_ratio = None
+        self._last_caught_aspect_ratio = None
 
     def update(self, rect, active_aspect_ratio=None):
         crop = rect.normalized()
@@ -83,7 +85,7 @@ class CropOverlayController:
 
 
     def _update_aspect_guides(self, rect):
-        """Показывает только ближайшие стандартные соотношения сторон."""
+        """Показывает одну текущую цель соотношения сторон с фиксацией цели."""
         ratios = (
             (1, 1), (4, 5), (5, 4), (3, 4), (4, 3),
             (2, 3), (3, 2), (10, 16), (16, 10), (9, 16),
@@ -93,53 +95,48 @@ class CropOverlayController:
         crop = QRectF(rect).normalized()
         if crop.width() < 20 or crop.height() < 20:
             self._clear_aspect_guides()
+            self._displayed_aspect_ratio = None
+            self._last_caught_aspect_ratio = None
             return
 
         current_ratio = crop.width() / crop.height()
-        ordered = sorted(
-            ratios,
-            key=lambda pair: pair[0] / pair[1],
-        )
+        ordered = sorted(ratios, key=lambda pair: pair[0] / pair[1])
 
-        lower = None
-        higher = None
-        active = None
-
-        for pair in ordered:
-            value = pair[0] / pair[1]
-            if value < current_ratio:
-                lower = pair
-            elif value > current_ratio and higher is None:
-                higher = pair
-            elif abs(value - current_ratio) < 1e-9:
-                active = pair
-
-        visible_ratios = []
-        if active is not None:
-            visible_ratios.append(active)
-            if lower is not None:
-                visible_ratios.append(lower)
-            if higher is not None:
-                visible_ratios.append(higher)
+        if self.active_aspect_ratio is not None:
+            self._displayed_aspect_ratio = self.active_aspect_ratio
+            self._last_caught_aspect_ratio = self.active_aspect_ratio
+        elif self._displayed_aspect_ratio is None:
+            self._displayed_aspect_ratio = min(
+                ordered,
+                key=lambda pair: abs(current_ratio - pair[0] / pair[1]),
+            )
         else:
-            if lower is not None:
-                visible_ratios.append(lower)
-            if higher is not None:
-                visible_ratios.append(higher)
-            if lower is None:
-                visible_ratios.extend(ordered[:2])
-            elif higher is None:
-                visible_ratios.extend(ordered[-2:])
+            displayed_value = (
+                self._displayed_aspect_ratio[0]
+                / self._displayed_aspect_ratio[1]
+            )
+            last_caught = self._last_caught_aspect_ratio
 
-        # Не показываем больше трёх рамок: активная + ближайшая слева
-        # + ближайшая справа.
-        unique = []
-        for pair in visible_ratios:
-            if pair not in unique:
-                unique.append(pair)
-        visible_ratios = unique[:3]
+            # После ухода с пойманной цели не возвращаем её сразу:
+            # следующей целью становится ближайшее другое соотношение.
+            if last_caught is not None:
+                candidates = [
+                    pair for pair in ordered if pair != last_caught
+                ]
+                next_ratio = min(
+                    candidates,
+                    key=lambda pair: abs(current_ratio - pair[0] / pair[1]),
+                )
+                if abs(current_ratio - displayed_value) > 0.08 * displayed_value:
+                    self._displayed_aspect_ratio = next_ratio
+                    self._last_caught_aspect_ratio = None
 
-        while len(self.aspect_guide_items) < len(visible_ratios):
+        visible_ratio = self._displayed_aspect_ratio
+        if visible_ratio is None:
+            self._clear_aspect_guides()
+            return
+
+        while len(self.aspect_guide_items) < 1:
             item = QGraphicsRectItem()
             item.setBrush(QBrush(Qt.NoBrush))
             item.setAcceptedMouseButtons(Qt.NoButton)
@@ -148,36 +145,35 @@ class CropOverlayController:
             self.aspect_guide_items.append(item)
 
         for index, item in enumerate(self.aspect_guide_items):
-            if index >= len(visible_ratios):
+            if index > 0:
                 item.setVisible(False)
-                continue
 
-            rw, rh = visible_ratios[index]
-            target_ratio = rw / rh
-            if crop.width() / crop.height() >= target_ratio:
-                height = crop.height()
-                width = height * target_ratio
-            else:
-                width = crop.width()
-                height = width / target_ratio
+        rw, rh = visible_ratio
+        target_ratio = rw / rh
+        if crop.width() / crop.height() >= target_ratio:
+            height = crop.height()
+            width = height * target_ratio
+        else:
+            width = crop.width()
+            height = width / target_ratio
 
-            target = QRectF(
-                crop.center().x() - width / 2,
-                crop.center().y() - height / 2,
-                width,
-                height,
-            )
-            is_active = active == (rw, rh)
-            color = (
-                QColor(245, 190, 0, 225)
-                if is_active
-                else QColor(0, 120, 215, 65)
-            )
-            pen = QPen(color, 2 if is_active else 1, Qt.DashLine)
-            pen.setCosmetic(True)
-            item.setPen(pen)
-            item.setRect(target)
-            item.setVisible(True)
+        target = QRectF(
+            crop.center().x() - width / 2,
+            crop.center().y() - height / 2,
+            width,
+            height,
+        )
+        is_active = self.active_aspect_ratio == visible_ratio
+        color = (
+            QColor(245, 190, 0, 225)
+            if is_active
+            else QColor(0, 120, 215, 65)
+        )
+        pen = QPen(color, 2 if is_active else 1, Qt.DashLine)
+        pen.setCosmetic(True)
+        self.aspect_guide_items[0].setPen(pen)
+        self.aspect_guide_items[0].setRect(target)
+        self.aspect_guide_items[0].setVisible(True)
 
     def _clear_aspect_guides(self):
         for item in self.aspect_guide_items:
