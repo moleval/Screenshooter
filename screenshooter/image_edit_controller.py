@@ -7,6 +7,7 @@
 
 from PyQt5 import sip
 from PyQt5.QtCore import Qt, QRectF, QPointF, QTimer
+import math
 from PyQt5.QtGui import QImage, QPainter, QPixmap
 from PyQt5.QtWidgets import QGraphicsRectItem
 
@@ -39,6 +40,7 @@ class ImageEditController:
         self.crop_rect = None
         self.temp_crop_start = None
         self.active_handle = None
+        self.active_aspect_ratio = None
 
         # Менеджер статусной строки
         self.status_bar_manager = StatusBarManager(self.view)
@@ -120,7 +122,7 @@ class ImageEditController:
 
         self.overlay.clear()
         self.overlay.create_handles(self.crop_rect)
-        self.overlay.update(self.crop_rect)
+        self.overlay.update(self.crop_rect, self.active_aspect_ratio)
         self.overlay.update_resolution_text(self.crop_rect, self.crop_target_item)
 
         self.view.crop_mode_changed.emit(True)
@@ -141,6 +143,7 @@ class ImageEditController:
         self.crop_rect = None
         self.temp_crop_start = None
         self.active_handle = None
+        self.active_aspect_ratio = None
 
         self.view.setCursor(Qt.CrossCursor)
         self.view.setBackgroundBrush(self.view.normal_background_color)
@@ -188,7 +191,105 @@ class ImageEditController:
         elif handle_id == 'rm':
             right = max(x, left + MIN_RECT_SIZE)
 
+        rect = QRectF(left, top, right - left, bottom - top).normalized()
+        rect, self.active_aspect_ratio = self._snap_aspect_ratio(
+            rect, handle_id, new_scene_pos)
+        return rect
+
+    ASPECT_RATIOS = (
+        (1, 1), (4, 5), (5, 4), (3, 4), (4, 3),
+        (2, 3), (3, 2), (10, 16), (16, 10), (9, 16),
+        (16, 9), (9, 21), (21, 9), (1, 2), (2, 1),
+        (1, 3), (3, 1),
+    )
+    ASPECT_SNAP_DISTANCE_PX = 8.0
+
+    @staticmethod
+    def _ratio_error(current, target):
+        return abs(current - target) / target
+
+    def _ratio_rect(self, rect, handle_id, ratio):
+        rect = QRectF(rect).normalized()
+        left, top = rect.left(), rect.top()
+        right, bottom = rect.right(), rect.bottom()
+        width, height = rect.width(), rect.height()
+
+        if handle_id in ("tm", "bm"):
+            height = width / ratio
+            if handle_id == "tm":
+                top = bottom - height
+            else:
+                bottom = top + height
+        elif handle_id in ("lm", "rm"):
+            width = height * ratio
+            if handle_id == "lm":
+                left = right - width
+            else:
+                right = left + width
+        else:
+            anchor_y = bottom if handle_id in ("tl", "tr") else top
+            anchor_x = right if handle_id in ("tl", "bl") else left
+
+            if width >= height * ratio:
+                height = width / ratio
+            else:
+                width = height * ratio
+
+            if handle_id in ("tl", "tr"):
+                top = anchor_y - height
+            else:
+                bottom = anchor_y + height
+            if handle_id in ("tl", "bl"):
+                left = anchor_x - width
+            else:
+                right = anchor_x + width
+
         return QRectF(left, top, right - left, bottom - top).normalized()
+
+    def _snap_aspect_ratio(self, rect, handle_id, mouse_pos):
+        if rect.width() < MIN_RECT_SIZE or rect.height() < MIN_RECT_SIZE:
+            return rect, None
+
+        current = rect.width() / rect.height()
+        best = min(
+            self.ASPECT_RATIOS,
+            key=lambda pair: self._ratio_error(current, pair[0] / pair[1]),
+        )
+        target = best[0] / best[1]
+        if self._ratio_error(current, target) > 0.05:
+            return rect, None
+
+        snapped = self._ratio_rect(rect, handle_id, target)
+        handle_points = {
+            "tl": snapped.topLeft(),
+            "tr": snapped.topRight(),
+            "bl": snapped.bottomLeft(),
+            "br": snapped.bottomRight(),
+            "tm": QPointF(snapped.center().x(), snapped.top()),
+            "bm": QPointF(snapped.center().x(), snapped.bottom()),
+            "lm": QPointF(snapped.left(), snapped.center().y()),
+            "rm": QPointF(snapped.right(), snapped.center().y()),
+        }
+        point = handle_points.get(handle_id)
+        if point is None:
+            return rect, None
+
+        zoom = abs(self.view.transform().m11())
+        if zoom < 1e-6:
+            zoom = 1.0
+        max_distance = self.ASPECT_SNAP_DISTANCE_PX / zoom
+        if math.hypot(point.x() - mouse_pos.x(), point.y() - mouse_pos.y()) > max_distance:
+            return rect, None
+
+        return snapped, best
+
+    def _snap_new_crop_rect(self, rect, start_pos, current_pos):
+        handle_id = (
+            ("r" if current_pos.x() >= start_pos.x() else "l") +
+            ("b" if current_pos.y() >= start_pos.y() else "t")
+        )
+        handle_id = {"rb": "br", "rt": "tr", "lb": "bl", "lt": "tl"}[handle_id]
+        return self._snap_aspect_ratio(rect, handle_id, current_pos)
 
     # --------------------------------------------------------------
     # Применение обрезки
@@ -497,7 +598,7 @@ class ImageEditController:
         if self.active_handle is not None:
             sp = self.view.mapToScene(event.pos())
             self.crop_rect = self._apply_handle_drag(self.active_handle, sp)
-            self.overlay.update(self.crop_rect)
+            self.overlay.update(self.crop_rect, self.active_aspect_ratio)
             self.overlay.update_resolution_text(self.crop_rect, self.crop_target_item)
             return True
 
@@ -529,6 +630,8 @@ class ImageEditController:
             sp = self.view.mapToScene(event.pos())
             sp = self._clamp_to_target(sp)
             self.crop_rect = QRectF(self.temp_crop_start, sp).normalized()
+            self.crop_rect, self.active_aspect_ratio = self._snap_new_crop_rect(
+                self.crop_rect, self.temp_crop_start, sp)
 
             if (self.crop_rect.width() < MIN_RECT_SIZE or
                     self.crop_rect.height() < MIN_RECT_SIZE):
