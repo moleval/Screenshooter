@@ -68,6 +68,12 @@ class ImageEditController:
         self.crop_rect = None
         self.temp_crop_start = None
         self.active_handle = None
+        self.active_aspect_ratio = None
+        self.aspect_drag_candidates = []
+        self.aspect_drag_caught_ratio = None
+        self.aspect_drag_used_ratios = set()
+        self.aspect_drag_handle = None
+        self.aspect_drag_last_mouse = None
 
         # Сброс размытия делегирован в blur_controller
         self.view.blur_controller.reset_state()
@@ -491,17 +497,65 @@ class ImageEditController:
         """Возвращает мягко притянутую цель или None."""
         if self.aspect_drag_handle != handle_id:
             return None
-
         if not self.aspect_drag_candidates:
             return None
 
         last_mouse = self.aspect_drag_last_mouse or QPointF(mouse_pos)
 
+        if self.aspect_drag_caught_ratio is not None:
+            caught = next(
+                (
+                    item
+                    for item in self.aspect_drag_candidates
+                    if tuple(item["ratio"])
+                    == tuple(self.aspect_drag_caught_ratio)
+                ),
+                None,
+            )
+            if caught is not None:
+                distance = self._distance_to_candidate(caught, mouse_pos)
+                movement = QPointF(
+                    mouse_pos.x() - last_mouse.x(),
+                    mouse_pos.y() - last_mouse.y(),
+                )
+                away = QPointF(
+                    mouse_pos.x() - caught["handle_point"].x(),
+                    mouse_pos.y() - caught["handle_point"].y(),
+                )
+                if (
+                    distance > self.ASPECT_RELEASE_DISTANCE_PX
+                    and movement.x() * away.x()
+                    + movement.y() * away.y() > 0
+                ):
+                    self._consume_caught_aspect_candidate(mouse_pos)
+                else:
+                    target_point = caught["handle_point"]
+                    current_point = self._handle_point(raw_rect, handle_id)
+                    strength = self.ASPECT_SOFT_SNAP_STRENGTH
+                    soft_point = QPointF(
+                        current_point.x()
+                        + (target_point.x() - current_point.x()) * strength,
+                        current_point.y()
+                        + (target_point.y() - current_point.y()) * strength,
+                    )
+                    self.aspect_drag_last_mouse = QPointF(mouse_pos)
+                    return {
+                        "ratio": caught["ratio"],
+                        "rect": self._rect_with_handle_point(
+                            raw_rect, handle_id, soft_point
+                        ),
+                    }
+
         caught = None
+        caught_distance = None
         for candidate in self.aspect_drag_candidates:
-            if self._distance_to_candidate(candidate, mouse_pos) <= self.ASPECT_SNAP_DISTANCE_PX:
-                if caught is None or candidate["distance"] < caught["distance"]:
+            if tuple(candidate["ratio"]) in self.aspect_drag_used_ratios:
+                continue
+            distance = self._distance_to_candidate(candidate, mouse_pos)
+            if distance <= self.ASPECT_SNAP_DISTANCE_PX:
+                if caught is None or distance < caught_distance:
                     caught = candidate
+                    caught_distance = distance
 
         if caught is not None:
             self.aspect_drag_caught_ratio = tuple(caught["ratio"])
@@ -514,34 +568,13 @@ class ImageEditController:
                 current_point.y()
                 + (target_point.y() - current_point.y()) * strength,
             )
-            result_rect = self._rect_with_handle_point(
-                raw_rect, handle_id, soft_point
-            )
             self.aspect_drag_last_mouse = QPointF(mouse_pos)
             return {
                 "ratio": caught["ratio"],
-                "rect": result_rect,
+                "rect": self._rect_with_handle_point(
+                    raw_rect, handle_id, soft_point
+                ),
             }
-
-        for candidate in self.aspect_drag_candidates:
-            if tuple(candidate["ratio"]) != tuple(self.aspect_drag_caught_ratio or ()):
-                continue
-            point = candidate["handle_point"]
-            distance = self._distance_to_candidate(candidate, mouse_pos)
-            movement = QPointF(
-                mouse_pos.x() - last_mouse.x(),
-                mouse_pos.y() - last_mouse.y(),
-            )
-            away = QPointF(
-                mouse_pos.x() - point.x(),
-                mouse_pos.y() - point.y(),
-            )
-            if (
-                distance > self.ASPECT_RELEASE_DISTANCE_PX
-                and movement.x() * away.x() + movement.y() * away.y() > 0
-            ):
-                self._consume_caught_aspect_candidate(mouse_pos)
-                break
 
         self.aspect_drag_last_mouse = QPointF(mouse_pos)
         return None
