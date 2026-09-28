@@ -44,10 +44,10 @@ class Exporter:
             return None
 
         # Все служебные элементы должны быть скрыты на время рендера.
-        # Annotation handles являются обычными QGraphicsItem, поэтому без
-        # этого они физически попадают в экспортируемое изображение.
-        # Selection outlines are painted by QGraphicsItem implementations
-        # themselves. Hiding handles alone is therefore insufficient.
+        # Ручки аннотаций являются обычными QGraphicsItem, поэтому без
+        # временного скрытия они физически попадают в экспортируемое изображение.
+        # Контур выделения рисуется самим QGraphicsItem, поэтому одного
+        # скрытия ручек недостаточно.
         selection_states = [
             (item, item.isSelected())
             for item in self.scene.selectedItems()
@@ -71,7 +71,7 @@ class Exporter:
         if annotation_controller is not None:
             annotation_controller.remove_handles()
 
-        # Remove selection contours for the duration of rendering.
+        # На время рендера убираем контуры выделения.
         self.scene.clearSelection()
 
         try:
@@ -91,7 +91,7 @@ class Exporter:
             self.view.show_pasted_image_handles_after_render()
             if crop_overlay is not None:
                 crop_overlay.show_after_render(crop_states)
-            # Restore the exact selection state before rebuilding handles.
+            # Сначала восстанавливаем исходное состояние выделения.
             self.scene.clearSelection()
             for item, selected in selection_states:
                 try:
