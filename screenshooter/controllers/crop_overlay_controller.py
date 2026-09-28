@@ -32,11 +32,18 @@ class CropOverlayController:
         self.crop_size_bg = None
         self.handles = None
         self.aspect_guide_items = []
+        self.aspect_label_items = []
+        self.aspect_label_bg_items = []
         self.active_aspect_ratio = None
-        self._displayed_aspect_ratio = None
-        self._last_caught_aspect_ratio = None
+        self.caught_aspect_ratio = None
 
-    def update(self, rect, active_aspect_ratio=None):
+    def update(
+        self,
+        rect,
+        active_aspect_ratio=None,
+        aspect_candidates=None,
+        caught_aspect_ratio=None,
+    ):
         crop = rect.normalized()
         scene_rect = self.view.sceneRect()
 
@@ -51,14 +58,30 @@ class CropOverlayController:
                 self.view.scene().addItem(overlay)
                 self.crop_overlay_items.append(overlay)
 
-        top = QRectF(scene_rect.left(), scene_rect.top(),
-                     scene_rect.width(), crop.top() - scene_rect.top())
-        bottom = QRectF(scene_rect.left(), crop.bottom(),
-                        scene_rect.width(), scene_rect.bottom() - crop.bottom())
-        left = QRectF(scene_rect.left(), crop.top(),
-                      crop.left() - scene_rect.left(), crop.height())
-        right = QRectF(crop.right(), crop.top(),
-                       scene_rect.right() - crop.right(), crop.height())
+        top = QRectF(
+            scene_rect.left(),
+            scene_rect.top(),
+            scene_rect.width(),
+            crop.top() - scene_rect.top(),
+        )
+        bottom = QRectF(
+            scene_rect.left(),
+            crop.bottom(),
+            scene_rect.width(),
+            scene_rect.bottom() - crop.bottom(),
+        )
+        left = QRectF(
+            scene_rect.left(),
+            crop.top(),
+            crop.left() - scene_rect.left(),
+            crop.height(),
+        )
+        right = QRectF(
+            crop.right(),
+            crop.top(),
+            scene_rect.right() - crop.right(),
+            crop.height(),
+        )
 
         self.crop_overlay_items[0].setRect(top)
         self.crop_overlay_items[1].setRect(bottom)
@@ -78,65 +101,74 @@ class CropOverlayController:
         self.crop_rect_item.setRect(crop)
 
         self.active_aspect_ratio = active_aspect_ratio
-        self._update_aspect_guides(crop)
+        self.caught_aspect_ratio = caught_aspect_ratio
+        self._update_aspect_guides(aspect_candidates or [])
 
         if self.handles:
             self.handles.update_handles(crop)
 
+    def _update_aspect_guides(self, candidates):
+        """Рисует несколько фиксированных целей соотношения сторон."""
+        self._ensure_aspect_items(len(candidates))
 
-    def _update_aspect_guides(self, rect):
-        """Показывает одну текущую цель соотношения сторон с фиксацией цели."""
-        ratios = (
-            (1, 1), (4, 5), (5, 4), (3, 4), (4, 3),
-            (2, 3), (3, 2), (10, 16), (16, 10), (9, 16),
-            (16, 9), (9, 21), (21, 9), (1, 2), (2, 1),
-            (1, 3), (3, 1),
-        )
-        crop = QRectF(rect).normalized()
-        if crop.width() < 20 or crop.height() < 20:
-            self._clear_aspect_guides()
-            self._displayed_aspect_ratio = None
-            self._last_caught_aspect_ratio = None
-            return
+        for index, item in enumerate(self.aspect_guide_items):
+            if index >= len(candidates):
+                item.setVisible(False)
+                if index < len(self.aspect_label_items):
+                    self.aspect_label_items[index].setVisible(False)
+                if index < len(self.aspect_label_bg_items):
+                    self.aspect_label_bg_items[index].setVisible(False)
+                continue
 
-        current_ratio = crop.width() / crop.height()
-        ordered = sorted(ratios, key=lambda pair: pair[0] / pair[1])
+            candidate = candidates[index]
+            rect = QRectF(candidate["rect"]).normalized()
+            ratio = candidate["ratio"]
+            is_caught = ratio == self.caught_aspect_ratio
 
-        if self.active_aspect_ratio is not None:
-            self._displayed_aspect_ratio = self.active_aspect_ratio
-            self._last_caught_aspect_ratio = self.active_aspect_ratio
-        elif self._displayed_aspect_ratio is None:
-            self._displayed_aspect_ratio = min(
-                ordered,
-                key=lambda pair: abs(current_ratio - pair[0] / pair[1]),
+            color = (
+                QColor(245, 190, 0, 225)
+                if is_caught
+                else QColor(0, 120, 215, 95)
             )
-        else:
-            displayed_value = (
-                self._displayed_aspect_ratio[0]
-                / self._displayed_aspect_ratio[1]
-            )
-            last_caught = self._last_caught_aspect_ratio
+            pen = QPen(color, 2 if is_caught else 1, Qt.SolidLine)
+            pen.setCosmetic(True)
+            item.setPen(pen)
+            item.setRect(rect)
+            item.setVisible(True)
 
-            # После ухода с пойманной цели не возвращаем её сразу:
-            # следующей целью становится ближайшее другое соотношение.
-            if last_caught is not None:
-                candidates = [
-                    pair for pair in ordered if pair != last_caught
-                ]
-                next_ratio = min(
-                    candidates,
-                    key=lambda pair: abs(current_ratio - pair[0] / pair[1]),
+            label = self.aspect_label_items[index]
+            label_bg = self.aspect_label_bg_items[index]
+            label.setText(candidate["label"])
+            label.setBrush(color)
+            label.setVisible(True)
+
+            label_rect = label.boundingRect()
+            label_x = rect.left() + 5
+            label_y = rect.top() + 5
+
+            visible_scene = self.view.mapToScene(
+                self.view.viewport().rect()
+            ).boundingRect()
+            if label_x + label_rect.width() > visible_scene.right():
+                label_x = rect.right() - label_rect.width() - 5
+            if label_y + label_rect.height() > visible_scene.bottom():
+                label_y = rect.bottom() - label_rect.height() - 5
+
+            label.setPos(label_x, label_y)
+            label_bg.setRect(
+                QRectF(
+                    -3,
+                    -2,
+                    label_rect.width() + 6,
+                    label_rect.height() + 4,
                 )
-                if abs(current_ratio - displayed_value) > 0.08 * displayed_value:
-                    self._displayed_aspect_ratio = next_ratio
-                    self._last_caught_aspect_ratio = None
+            )
+            label_bg.setPos(label_x, label_y)
+            label_bg.setVisible(True)
 
-        visible_ratio = self._displayed_aspect_ratio
-        if visible_ratio is None:
-            self._clear_aspect_guides()
-            return
-
-        while len(self.aspect_guide_items) < 1:
+    def _ensure_aspect_items(self, count):
+        """Создаёт необходимое число рамок и подписей целей."""
+        while len(self.aspect_guide_items) < count:
             item = QGraphicsRectItem()
             item.setBrush(QBrush(Qt.NoBrush))
             item.setAcceptedMouseButtons(Qt.NoButton)
@@ -144,43 +176,40 @@ class CropOverlayController:
             self.view.scene().addItem(item)
             self.aspect_guide_items.append(item)
 
-        for index, item in enumerate(self.aspect_guide_items):
-            if index > 0:
-                item.setVisible(False)
+            label_bg = QGraphicsRectItem()
+            label_bg.setBrush(QBrush(QColor(0, 0, 0, 145)))
+            label_bg.setPen(QPen(Qt.NoPen))
+            label_bg.setZValue(CROP_LABEL_Z)
+            label_bg.setAcceptedMouseButtons(Qt.NoButton)
+            label_bg.setFlag(QGraphicsItem.ItemIgnoresTransformations)
+            self.view.scene().addItem(label_bg)
+            self.aspect_label_bg_items.append(label_bg)
 
-        rw, rh = visible_ratio
-        target_ratio = rw / rh
-        if crop.width() / crop.height() >= target_ratio:
-            height = crop.height()
-            width = height * target_ratio
-        else:
-            width = crop.width()
-            height = width / target_ratio
-
-        target = QRectF(
-            crop.center().x() - width / 2,
-            crop.center().y() - height / 2,
-            width,
-            height,
-        )
-        is_active = self.active_aspect_ratio == visible_ratio
-        color = (
-            QColor(245, 190, 0, 225)
-            if is_active
-            else QColor(0, 120, 215, 65)
-        )
-        pen = QPen(color, 2 if is_active else 1, Qt.DashLine)
-        pen.setCosmetic(True)
-        self.aspect_guide_items[0].setPen(pen)
-        self.aspect_guide_items[0].setRect(target)
-        self.aspect_guide_items[0].setVisible(True)
+            label = QGraphicsSimpleTextItem()
+            label.setZValue(CROP_LABEL_Z + 1)
+            label.setAcceptedMouseButtons(Qt.NoButton)
+            label.setFlag(QGraphicsItem.ItemIgnoresTransformations)
+            font = QFont()
+            font.setPointSize(9)
+            font.setBold(True)
+            label.setFont(font)
+            self.view.scene().addItem(label)
+            self.aspect_label_items.append(label)
 
     def _clear_aspect_guides(self):
-        for item in self.aspect_guide_items:
+        items = (
+            list(self.aspect_guide_items)
+            + list(self.aspect_label_items)
+            + list(self.aspect_label_bg_items)
+        )
+        for item in items:
             if item is not None and not self._is_deleted(item):
                 if item.scene() is self.view.scene():
                     self.view.scene().removeItem(item)
         self.aspect_guide_items.clear()
+        self.aspect_label_items.clear()
+        self.aspect_label_bg_items.clear()
+        self.caught_aspect_ratio = None
 
     def hide_for_render(self):
         """Скрывает crop UI, не меняя состояние режима обрезки."""
