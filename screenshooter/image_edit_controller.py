@@ -198,28 +198,40 @@ class ImageEditController:
             x = max(image_rect.left(), min(image_rect.right(), new_scene_pos.x()))
             y = max(image_rect.top(), min(image_rect.bottom(), new_scene_pos.y()))
 
-        if handle_id == 'tl':
+        if handle_id == "tl":
             left = min(x, right - MIN_RECT_SIZE)
             top = min(y, bottom - MIN_RECT_SIZE)
-        elif handle_id == 'tr':
+        elif handle_id == "tr":
             right = max(x, left + MIN_RECT_SIZE)
             top = min(y, bottom - MIN_RECT_SIZE)
-        elif handle_id == 'bl':
+        elif handle_id == "bl":
             left = min(x, right - MIN_RECT_SIZE)
             bottom = max(y, top + MIN_RECT_SIZE)
-        elif handle_id == 'br':
+        elif handle_id == "br":
             right = max(x, left + MIN_RECT_SIZE)
             bottom = max(y, top + MIN_RECT_SIZE)
-        elif handle_id == 'tm':
+        elif handle_id == "tm":
             top = min(y, bottom - MIN_RECT_SIZE)
-        elif handle_id == 'bm':
+        elif handle_id == "bm":
             bottom = max(y, top + MIN_RECT_SIZE)
-        elif handle_id == 'lm':
+        elif handle_id == "lm":
             left = min(x, right - MIN_RECT_SIZE)
-        elif handle_id == 'rm':
+        elif handle_id == "rm":
             right = max(x, left + MIN_RECT_SIZE)
-        elif handle_id == 'rm':
-            right = max(x, left + MIN_RECT_SIZE)
+
+        raw_rect = QRectF(
+            left, top, right - left, bottom - top
+        ).normalized()
+
+        snapped = self._apply_aspect_candidate_snap(
+            raw_rect, handle_id, new_scene_pos
+        )
+        if snapped is not None:
+            self.active_aspect_ratio = snapped["ratio"]
+            return snapped["rect"]
+
+        self.active_aspect_ratio = None
+        return raw_rect
 
     @staticmethod
     def _ratio_error(current, target):
@@ -1009,7 +1021,9 @@ class ImageEditController:
         handle_id = self.overlay.hit_test_handle(QPointF(event.pos()))
         if handle_id:
             self.active_handle = handle_id
-            self._begin_aspect_drag(handle_id, self.view.mapToScene(event.pos()))
+            self._begin_aspect_drag(
+                handle_id, self.view.mapToScene(event.pos())
+            )
             self.overlay.update(
                 self.crop_rect,
                 self.active_aspect_ratio,
@@ -1020,13 +1034,21 @@ class ImageEditController:
 
         sp = self.view.mapToScene(event.pos())
         sp = self._clamp_to_target(sp)
-        self.temp_cr    def handle_mouse_move(self, event):
+        self.temp_crop_start = sp
+        self.crop_rect = QRectF(sp, sp)
+        self.active_aspect_ratio = None
+        self.overlay.update(self.crop_rect)
+        return True
+
+    def handle_mouse_move(self, event):
         if not self.crop_mode:
             return False
 
         if self.active_handle is not None:
             sp = self.view.mapToScene(event.pos())
-            self.crop_rect = self._apply_handle_drag(self.active_handle, sp)
+            self.crop_rect = self._apply_handle_drag(
+                self.active_handle, sp
+            )
             caught = self.active_aspect_ratio
             self.overlay.update(
                 self.crop_rect,
@@ -1042,7 +1064,9 @@ class ImageEditController:
         if self.temp_crop_start is not None:
             sp = self.view.mapToScene(event.pos())
             sp = self._clamp_to_target(sp)
-            raw_rect = QRectF(self.temp_crop_start, sp).normalized()
+            raw_rect = QRectF(
+                self.temp_crop_start, sp
+            ).normalized()
             self.crop_rect, self.active_aspect_ratio = self._snap_new_crop_rect(
                 raw_rect, self.temp_crop_start, sp
             )
@@ -1055,9 +1079,53 @@ class ImageEditController:
             return True
 
         handle_id = self.overlay.hit_test_handle(QPointF(event.pos()))
-     def handle_mouse_release(self, event):
+        return handle_id is not None
+
+    def handle_mouse_release(self, event):
         if not self.crop_mode or event.button() != Qt.LeftButton:
             return False
+
+        if self.active_handle is not None:
+            self.active_handle = None
+            self.active_aspect_ratio = None
+            self.aspect_drag_candidates = []
+            self.aspect_drag_caught_ratio = None
+            self.aspect_drag_used_ratios = set()
+            self.aspect_drag_handle = None
+            self.aspect_drag_last_mouse = None
+            return True
+
+        if self.temp_crop_start is not None:
+            sp = self.view.mapToScene(event.pos())
+            sp = self._clamp_to_target(sp)
+            self.crop_rect = QRectF(
+                self.temp_crop_start, sp
+            ).normalized()
+            self.crop_rect, self.active_aspect_ratio = self._snap_new_crop_rect(
+                self.crop_rect, self.temp_crop_start, sp
+            )
+
+            if (
+                self.crop_rect.width() < MIN_RECT_SIZE
+                or self.crop_rect.height() < MIN_RECT_SIZE
+            ):
+                if self.crop_target_item:
+                    self.crop_rect = self.crop_target_item.mapRectToScene(
+                        QRectF(self.crop_target_item.pixmap().rect())
+                    )
+                else:
+                    self.crop_rect = self.view.sceneRect()
+
+            self.overlay.remove_handles()
+            self.overlay.create_handles(self.crop_rect)
+            self.overlay.update(self.crop_rect)
+            self.overlay.update_resolution_text(
+                self.crop_rect, self.crop_target_item
+            )
+            self.temp_crop_start = None
+            return True
+
+        return False
 
         if self.active_handle is not None:
             self.active_handle = None
