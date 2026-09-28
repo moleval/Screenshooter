@@ -418,8 +418,13 @@ class ImageEditController:
     def _build_aspect_drag_candidates(
         self, rect, handle_id, mouse_pos, forward_scale=1.0
     ):
-        """Строит цели соотношений, разнесённые вдоль направления ручки."""
+        """Строит цели соотношений последовательно вдоль траектории ручки."""
         candidates = []
+        rect = QRectF(rect).normalized()
+        current_point = self._handle_point(rect, handle_id)
+        if current_point is None:
+            return []
+
         for ratio_pair in self.ASPECT_RATIOS:
             ratio = ratio_pair[0] / ratio_pair[1]
             candidate_rect = self._candidate_rect_for_ratio(
@@ -432,20 +437,16 @@ class ImageEditController:
             if handle_point is None:
                 continue
 
-            current_point = self._handle_point(rect, handle_id)
-            if (
-                current_point is not None
-                and math.hypot(
-                    handle_point.x() - current_point.x(),
-                    handle_point.y() - current_point.y(),
-                ) < 0.5
-            ):
-                continue
-
             distance = math.hypot(
                 handle_point.x() - mouse_pos.x(),
                 handle_point.y() - mouse_pos.y(),
             )
+            if math.hypot(
+                handle_point.x() - current_point.x(),
+                handle_point.y() - current_point.y(),
+            ) < 0.5:
+                continue
+
             candidates.append({
                 "ratio": ratio_pair,
                 "label": f"{ratio_pair[0]}:{ratio_pair[1]}",
@@ -456,13 +457,37 @@ class ImageEditController:
 
         candidates.sort(key=lambda item: item["distance"])
         visible = candidates[:self.ASPECT_VISIBLE_CANDIDATES]
+        if not visible:
+            return []
 
-        # Разносим видимые цели по траектории: каждая следующая цель
-        # находится дальше от неподвижного якоря, поэтому рамки не сливаются.
+        # Первая цель остаётся в естественной точке пересечения.
+        # Следующие цели сдвигаются дальше по лучу от неподвижного якоря,
+        # чтобы их контуры не накладывались друг на друга.
+        anchor = self._aspect_anchor(rect, handle_id)
+        if anchor is None:
+            return visible
+
         spaced = []
-        scales = (0.78, 1.0, 1.24)
+        previous_distance = None
         for index, candidate in enumerate(visible):
-            scale = scales[min(index, len(scales) - 1)]
+            point = candidate["handle_point"]
+            natural_distance = math.hypot(
+                point.x() - anchor.x(),
+                point.y() - anchor.y(),
+            )
+            if previous_distance is None:
+                target_distance = natural_distance
+            else:
+                target_distance = max(
+                    natural_distance,
+                    previous_distance + max(32.0, rect.width() * 0.12),
+                )
+
+            if natural_distance > 0.001:
+                scale = target_distance / natural_distance
+            else:
+                scale = 1.0
+
             spaced_rect = self._candidate_rect_for_ratio(
                 rect,
                 handle_id,
@@ -471,7 +496,10 @@ class ImageEditController:
                 forward_scale * scale,
             )
             if spaced_rect is None:
+                # Для вставленного изображения не выходим за границы:
+                # если следующая цель не помещается, оставляем естественную.
                 spaced_rect = candidate["rect"]
+
             candidate = dict(candidate)
             candidate["rect"] = spaced_rect
             candidate["handle_point"] = self._handle_point(
@@ -481,9 +509,22 @@ class ImageEditController:
                 candidate, mouse_pos
             )
             spaced.append(candidate)
+            previous_distance = math.hypot(
+                candidate["handle_point"].x() - anchor.x(),
+                candidate["handle_point"].y() - anchor.y(),
+            )
 
-        spaced.sort(key=lambda item: item["distance"])
         return spaced
+
+    def _aspect_anchor(self, rect, handle_id):
+        """Возвращает неподвижную точку для выбранной ручки."""
+        anchors = {
+            "tl": rect.bottomRight(),
+            "tr": rect.bottomLeft(),
+            "bl": rect.topRight(),
+            "br": rect.topLeft(),
+        }
+        return anchors.get(handle_id)
 
     def _begin_aspect_drag(self, handle_id, mouse_pos):
         """Фиксирует стартовый набор целей и очищает прошлое состояние."""
