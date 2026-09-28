@@ -230,6 +230,7 @@ class CropOverlayController:
         self.aspect_label_items.clear()
         self.aspect_label_bg_items.clear()
         self.caught_aspect_ratio = None
+        self._aspect_candidates_signature = ()
 
     def hide_for_render(self):
         """Скрывает crop UI, не меняя состояние режима обрезки."""
