@@ -265,8 +265,11 @@ def test_crop_overlay_draws_landscape_and_portrait_ratio_guides(setup_editor):
     rect = QRectF(10, 10, 80, 60)
     controller.overlay.update(rect)
 
-    assert len(controller.overlay.aspect_guide_items) == 17
-    assert any(item.isVisible() for item in controller.overlay.aspect_guide_items)
+    visible = [
+        item for item in controller.overlay.aspect_guide_items
+        if item.isVisible()
+    ]
+    assert len(visible) == 2
 
     controller.overlay.clear()
     assert not controller.overlay.aspect_guide_items
