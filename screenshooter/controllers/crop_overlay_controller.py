@@ -6,7 +6,7 @@
 
 from PyQt5 import sip
 from PyQt5.QtCore import Qt, QRectF, QPointF
-from PyQt5.QtGui import QPen, QBrush, QFont
+from PyQt5.QtGui import QPen, QBrush, QFont, QColor
 from PyQt5.QtWidgets import QGraphicsRectItem, QGraphicsSimpleTextItem, QGraphicsItem
 
 from ..constants import (
@@ -31,8 +31,10 @@ class CropOverlayController:
         self.crop_size_label = None
         self.crop_size_bg = None
         self.handles = None
+        self.aspect_guide_items = []
+        self.active_aspect_ratio = None
 
-    def update(self, rect):
+    def update(self, rect, active_aspect_ratio=None):
         crop = rect.normalized()
         scene_rect = self.view.sceneRect()
 
@@ -73,8 +75,91 @@ class CropOverlayController:
             self.view.scene().addItem(self.crop_rect_item)
         self.crop_rect_item.setRect(crop)
 
+        self.active_aspect_ratio = active_aspect_ratio
+        self._update_aspect_guides(crop)
+
         if self.handles:
             self.handles.update_handles(crop)
+
+
+    def _update_aspect_guides(self, rect):
+        """Показывает ненавязчивые контуры стандартных соотношений сторон."""
+        ratios = (
+            (1, 1), (4, 5), (5, 4), (3, 4), (4, 3),
+            (2, 3), (3, 2), (10, 16), (16, 10), (9, 16),
+            (16, 9), (9, 21), (21, 9), (1, 2), (2, 1),
+            (1, 3), (3, 1),
+        )
+        crop = QRectF(rect).normalized()
+        if crop.width() < 20 or crop.height() < 20:
+            self._clear_aspect_guides()
+            return
+
+        while len(self.aspect_guide_items) < len(ratios):
+            item = QGraphicsRectItem()
+            item.setBrush(QBrush(Qt.NoBrush))
+            item.setAcceptedMouseButtons(Qt.NoButton)
+            item.setZValue(CROP_RECT_Z - 1)
+            self.view.scene().addItem(item)
+            self.aspect_guide_items.append(item)
+
+        for index, (rw, rh) in enumerate(ratios):
+            target_ratio = rw / rh
+            if crop.width() / crop.height() >= target_ratio:
+                height = crop.height()
+                width = height * target_ratio
+            else:
+                width = crop.width()
+                height = width / target_ratio
+
+            target = QRectF(
+                crop.center().x() - width / 2,
+                crop.center().y() - height / 2,
+                width,
+                height,
+            )
+            item = self.aspect_guide_items[index]
+            is_active = self.active_aspect_ratio == (rw, rh)
+            color = QColor(245, 190, 0, 225) if is_active else QColor(0, 120, 215, 65)
+            pen = QPen(color, 1 if not is_active else 2, Qt.DashLine)
+            pen.setCosmetic(True)
+            item.setPen(pen)
+            item.setRect(target)
+            item.setVisible(True)
+
+    def _clear_aspect_guides(self):
+        for item in self.aspect_guide_items:
+            if item is not None and not self._is_deleted(item):
+                if item.scene() is self.view.scene():
+                    self.view.scene().removeItem(item)
+        self.aspect_guide_items.clear()
+
+    def hide_for_render(self):
+        """Скрывает crop UI, не меняя состояние режима обрезки."""
+        items = list(self.crop_overlay_items) + list(self.aspect_guide_items)
+        if self.crop_rect_item is not None:
+            items.append(self.crop_rect_item)
+        if self.crop_size_label is not None:
+            items.append(self.crop_size_label)
+        if self.crop_size_bg is not None:
+            items.append(self.crop_size_bg)
+        if self.handles:
+            items.extend(self.handles.handle_items.values())
+        states = []
+        for item in items:
+            if item is not None and not self._is_deleted(item):
+                states.append((item, item.isVisible()))
+                item.setVisible(False)
+        return states
+
+    @staticmethod
+    def show_after_render(states):
+        for item, visible in states:
+            try:
+                if not sip.isdeleted(item):
+                    item.setVisible(visible)
+            except RuntimeError:
+                pass
 
     def clear(self):
         if self.crop_rect_item is not None and not self._is_deleted(self.crop_rect_item):
@@ -92,6 +177,7 @@ class CropOverlayController:
                 self.view.scene().removeItem(self.crop_size_bg)
         self.crop_size_bg = None
 
+        self._clear_aspect_guides()
         for item in self.crop_overlay_items:
             if item is not None and not self._is_deleted(item):
                 if item.scene() is self.view.scene():
