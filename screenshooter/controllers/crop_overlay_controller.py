@@ -90,15 +90,27 @@ class CropOverlayController:
         self.crop_overlay_items[3].setRect(right)
 
         if not self.crop_rect_item:
-            rect_color = theme_manager.get_color('crop_rect')
             self.crop_rect_item = QGraphicsRectItem()
-            pen = QPen(rect_color, 2, Qt.DashLine)
-            pen.setCosmetic(True)
-            self.crop_rect_item.setPen(pen)
             self.crop_rect_item.setBrush(QBrush(Qt.NoBrush))
             self.crop_rect_item.setZValue(CROP_RECT_Z)
             self.crop_rect_item.setAcceptedMouseButtons(Qt.NoButton)
             self.view.scene().addItem(self.crop_rect_item)
+
+        # Основная рамка crop — главный индикатор примагничивания.
+        # В обычном состоянии она синяя штриховая, при захвате цели
+        # становится жёлтой, а сама геометрия уже соответствует цели.
+        rect_color = (
+            QColor(245, 190, 0, 235)
+            if caught_aspect_ratio is not None
+            else theme_manager.get_color('crop_rect')
+        )
+        pen = QPen(
+            rect_color,
+            3 if caught_aspect_ratio is not None else 2,
+            Qt.DashLine,
+        )
+        pen.setCosmetic(True)
+        self.crop_rect_item.setPen(pen)
         self.crop_rect_item.setRect(crop)
 
         self.active_aspect_ratio = active_aspect_ratio
@@ -145,13 +157,7 @@ class CropOverlayController:
             candidate = candidates[index]
             rect = QRectF(candidate["rect"]).normalized()
             ratio = candidate["ratio"]
-            is_caught = ratio == self.caught_aspect_ratio
-
-            color = (
-                QColor(245, 190, 0, 225)
-                if is_caught
-                else QColor(0, 120, 215, 95)
-            )
+            color = QColor(0, 120, 215, 95)
             pen = QPen(color, 2 if is_caught else 1, Qt.SolidLine)
             pen.setCosmetic(True)
             item.setPen(pen)
