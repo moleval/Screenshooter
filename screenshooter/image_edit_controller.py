@@ -569,6 +569,8 @@ class ImageEditController:
 
         if self.aspect_drag_skip_snap:
             self.aspect_drag_skip_snap = False
+            if self.aspect_drag_caught_ratio is not None:
+                self._consume_caught_aspect_candidate(mouse_pos, raw_rect)
             self.aspect_drag_last_mouse = QPointF(mouse_pos)
             return None
 
