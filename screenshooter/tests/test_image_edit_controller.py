@@ -240,3 +240,33 @@ def test_trim_white_fields_keeps_annotation_moved_outside_background(qapp):
     view.undo()
     assert view.background_item.pixmap().size() == pm.size()
     assert annotation.scene() is scene
+
+
+def test_crop_soft_snaps_to_standard_aspect_ratio(setup_editor):
+    view = setup_editor
+    controller = view.image_editor
+
+    view.start_crop_mode()
+    controller.crop_rect = QRectF(10, 10, 80, 99)
+    snapped, ratio = controller._snap_aspect_ratio(
+        controller.crop_rect, "br", QPointF(90, 109)
+    )
+
+    assert ratio == (4, 5)
+    assert snapped.width() == pytest.approx(80)
+    assert snapped.height() == pytest.approx(100)
+
+
+def test_crop_overlay_draws_landscape_and_portrait_ratio_guides(setup_editor):
+    view = setup_editor
+    controller = view.image_editor
+
+    view.start_crop_mode()
+    rect = QRectF(10, 10, 80, 60)
+    controller.overlay.update(rect)
+
+    assert len(controller.overlay.aspect_guide_items) == 16
+    assert any(item.isVisible() for item in controller.overlay.aspect_guide_items)
+
+    controller.overlay.clear()
+    assert not controller.overlay.aspect_guide_items
