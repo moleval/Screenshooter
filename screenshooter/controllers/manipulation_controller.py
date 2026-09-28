@@ -22,6 +22,7 @@ from ..history import (MoveItemsCommand, MoveBlurRegionCommand,
                        ResizePastedImageCommand)
 from ..tools import RectTool, EllipseTool, LineTool, ArrowTool, TextTool
 from ..constants import DRAG_OUTSIDE_DAMPING
+from .snap_guides_controller import SnapGuidesController
 
 
 class ManipulationController:
@@ -37,6 +38,7 @@ class ManipulationController:
         self._drag_items = []
         self._drag_old_positions = []
         self._drag_old_rects = []
+        self._drag_old_scene_rects = []
         self._drag_start_scene_pos = QPointF()
         self._drag_start_view_pos = QPoint()
         self._drag_start_scroll = QPoint()
@@ -80,6 +82,9 @@ class ManipulationController:
         self._right_click_from_tool = False
         self._right_click_had_selection = False
         self._right_click_press_pos = None
+
+        # Магнитное выравнивание и временные направляющие.
+        self.snap_guides = SnapGuidesController(view)
 
     # ==============================================================
     # Три главных метода — вызываются из view.py
@@ -454,8 +459,10 @@ class ManipulationController:
 
             self._drag_old_positions = []
             self._drag_old_rects = []
+            self._drag_old_scene_rects = []
             self._drag_blur_needs_recompute = False
             for it in self._drag_items:
+                self._drag_old_scene_rects.append(it.sceneBoundingRect())
                 if isinstance(it, BlurRegionItem):
                     self._drag_old_positions.append(None)
                     self._drag_old_rects.append(it.rect())
@@ -464,6 +471,7 @@ class ManipulationController:
                     self._drag_old_rects.append(None)
 
             self._drag_start_scene_pos = sp
+            self.snap_guides.begin_drag(self._drag_items, self.view.image_editor.background_item)
             self._drag_start_view_pos = QPoint(event.pos())
             self._drag_start_item_pos = (
                 li.pos() if not isinstance(li, BlurRegionItem)
@@ -699,6 +707,15 @@ class ManipulationController:
             else:
                 delta.setX(0.0)
 
+        # Snap после ограничения по Shift, чтобы выравнивание не меняло ось.
+        shift_locked_x = bool(event.modifiers() & Qt.ShiftModifier) and abs(delta.x()) > abs(delta.y())
+        shift_locked_y = bool(event.modifiers() & Qt.ShiftModifier) and abs(delta.y()) >= abs(delta.x())
+        delta = self.snap_guides.snap_delta(
+            delta,
+            snap_x=not shift_locked_y,
+            snap_y=not shift_locked_x,
+        )
+
         group_contains_blur = any(
             isinstance(it, BlurRegionItem) for it in self._drag_items
         )
@@ -807,6 +824,8 @@ class ManipulationController:
         if not self._drag_items:
             return False
 
+        self.snap_guides.clear_guides()
+
         normal_items = [it for it in self._drag_items
                         if not isinstance(it, BlurRegionItem)]
         old_positions = []
@@ -853,6 +872,7 @@ class ManipulationController:
         self._drag_items = []
         self._drag_old_positions = []
         self._drag_old_rects = []
+        self._drag_old_scene_rects = []
         self._drag_start_scene_pos = QPointF()
         self._drag_start_view_pos = QPoint()
         self._drag_start_scroll = QPoint()
