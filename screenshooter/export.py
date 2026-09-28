@@ -56,6 +56,10 @@ class Exporter:
 
         annotation_controller = getattr(
             self.view, "annotation_resize_controller", None)
+        annotation_handles_were_present = bool(
+            annotation_controller is not None
+            and annotation_controller.handles is not None
+        )
         crop_overlay = getattr(
             getattr(self.view, "image_editor", None), "overlay", None)
         snap_guides = getattr(
