@@ -1305,7 +1305,7 @@ class ImageEditController:
             self.view.setCursor(CropCursorFactory.get_cursor())
             return True
 
-        if self.temp_crop_start is not None
+        if self.temp_crop_start is not None:
             sp = self.view.mapToScene(event.pos())
             sp = self._clamp_to_target(sp)
 
