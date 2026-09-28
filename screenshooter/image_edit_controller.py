@@ -568,13 +568,9 @@ class ImageEditController:
         last_mouse = self.aspect_drag_last_mouse or QPointF(mouse_pos)
 
         if self.aspect_drag_skip_snap:
-            if math.hypot(
-                mouse_pos.x() - last_mouse.x(),
-                mouse_pos.y() - last_mouse.y(),
-            ) < self.ASPECT_SNAP_DISTANCE_PX:
-                self.aspect_drag_last_mouse = QPointF(mouse_pos)
-                return None
             self.aspect_drag_skip_snap = False
+            self.aspect_drag_last_mouse = QPointF(mouse_pos)
+            return None
 
         if self.aspect_drag_caught_ratio is not None:
             caught = next(
