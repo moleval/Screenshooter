@@ -467,7 +467,7 @@ class ImageEditController:
 
         return QRectF(left, top, right - left, bottom - top).normalized()
 
-    def _consume_caught_aspect_candidate(self, mouse_pos):
+    def _consume_caught_aspect_candidate(self, mouse_pos, rect):
         caught = None
         for candidate in self.aspect_drag_candidates:
             if tuple(candidate["ratio"]) == tuple(self.aspect_drag_caught_ratio or ()):
@@ -483,7 +483,7 @@ class ImageEditController:
         self.aspect_drag_caught_ratio = None
 
         replacements = self._build_aspect_drag_candidates(
-            self.crop_rect, self.aspect_drag_handle, mouse_pos
+            rect, self.aspect_drag_handle, mouse_pos
         )
         for candidate in replacements:
             if (
@@ -537,7 +537,7 @@ class ImageEditController:
                     and movement.x() * away.x()
                     + movement.y() * away.y() > 0
                 ):
-                    self._consume_caught_aspect_candidate(mouse_pos)
+                    self._consume_caught_aspect_candidate(mouse_pos, raw_rect)
                 else:
                     target_point = caught["handle_point"]
                     current_point = self._handle_point(raw_rect, handle_id)
