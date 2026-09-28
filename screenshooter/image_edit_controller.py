@@ -1082,6 +1082,76 @@ class ImageEditController:
         if not self.crop_mode:
             return False
 
+        if self.active_handle is not None:
+            sp = self.view.mapToScene(event.pos())
+            self.crop_rect = self._apply_handle_drag(
+                self.active_handle, sp
+            )
+            caught = self.active_aspect_ratio
+            self.overlay.update(
+                self.crop_rect,
+                caught,
+                self.aspect_drag_candidates,
+                caught,
+            )
+            self.overlay.update_resolution_text(
+                self.crop_rect, self.crop_target_item
+            )
+            return True
+
+        if self.temp_crop_start is not None:
+            sp = self.view.mapToScene(event.pos())
+            sp = self._clamp_to_target(sp)
+            raw_rect = QRectF(
+                self.temp_crop_start, sp
+            ).normalized()
+
+            if (
+                raw_rect.width() >= MIN_RECT_SIZE
+                and raw_rect.height() >= MIN_RECT_SIZE
+                and not self.aspect_drag_candidates
+            ):
+                handle_id = (
+                    ("r" if sp.x() >= self.temp_crop_start.x() else "l")
+                    + ("b" if sp.y() >= self.temp_crop_start.y() else "t")
+                )
+                handle_id = {
+                    "rb": "br", "rt": "tr",
+                    "lb": "bl", "lt": "tl",
+                }[handle_id]
+                self.crop_rect = raw_rect
+                self._begin_aspect_drag(handle_id, sp)
+
+            if self.aspect_drag_candidates:
+                handle_id = self.aspect_drag_handle
+                snapped = self._apply_aspect_candidate_snap(
+                    raw_rect, handle_id, sp
+                )
+                if snapped is not None:
+                    self.crop_rect = snapped["rect"]
+                    self.active_aspect_ratio = snapped["ratio"]
+                else:
+                    self.crop_rect = raw_rect
+                    self.active_aspect_ratio = None
+            else:
+                self.crop_rect, self.active_aspect_ratio = self._snap_new_crop_rect(
+                    raw_rect, self.temp_crop_start, sp
+                )
+
+            self.overlay.update(
+                self.crop_rect,
+                self.active_aspect_ratio,
+                self.aspect_drag_candidates,
+                self.aspect_drag_caught_ratio,
+            )
+            self.overlay.update_resolution_text(
+                self.crop_rect, self.crop_target_item
+            )
+            return True
+
+        handle_id = self.overlay.hit_test_handle(QPointF(event.pos()))
+        return handle_id is not None
+
     def handle_mouse_release(self, event):
         if not self.crop_mode or event.button() != Qt.LeftButton:
             return False
