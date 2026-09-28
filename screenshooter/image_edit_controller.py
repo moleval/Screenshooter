@@ -1279,6 +1279,13 @@ class ImageEditController:
         if not self.crop_mode or event.button() != Qt.LeftButton:
             return False
 
+        if self.active_crop_move:
+            self.active_crop_move = False
+            self.crop_move_start = None
+            self.crop_move_start_rect = None
+            self.view.setCursor(CropCursorFactory.get_cursor())
+            return True
+
         if self.active_handle is not None:
             self.active_handle = None
             self.active_aspect_ratio = None
@@ -1288,9 +1295,17 @@ class ImageEditController:
             self.aspect_drag_handle = None
             self.aspect_drag_last_mouse = None
             self.aspect_drag_skip_snap = False
+            self.aspect_drag_last_distance = None
+            self.overlay.update(
+                self.crop_rect,
+                None,
+                [],
+                None,
+            )
+            self.view.setCursor(CropCursorFactory.get_cursor())
             return True
 
-        if self.temp_crop_start is not None:
+        if self.temp_crop_start is not None
             sp = self.view.mapToScene(event.pos())
             sp = self._clamp_to_target(sp)
 
@@ -1329,6 +1344,7 @@ class ImageEditController:
             self.aspect_drag_handle = None
             self.aspect_drag_last_mouse = None
             self.aspect_drag_skip_snap = False
+            self.aspect_drag_last_distance = None
             return True
 
         return False
