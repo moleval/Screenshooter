@@ -453,3 +453,83 @@ def test_crop_pasted_image_ratio_snap_stays_inside_image(setup_editor):
         image_rect.contains(candidate["rect"])
         for candidate in controller.aspect_drag_candidates
     )
+
+
+def test_crop_arbitrary_selection_targets_follow_drag_path(setup_editor):
+    view = setup_editor
+    controller = view.image_editor
+
+    view.start_crop_mode()
+    start = QPointF(20, 20)
+    controller.temp_crop_start = start
+    controller.crop_rect = QRectF(start, start)
+
+    class Event:
+        def __init__(self, scene_pos):
+            self._pos = view.mapFromScene(scene_pos)
+
+        def pos(self):
+            return self._pos
+
+    first_pos = QPointF(55, 45)
+    controller.handle_mouse_move(Event(first_pos))
+    first_targets = {
+        tuple(candidate["ratio"]): candidate["handle_point"]
+        for candidate in controller.aspect_drag_candidates
+    }
+
+    second_pos = QPointF(90, 65)
+    controller.handle_mouse_move(Event(second_pos))
+    second_targets = {
+        tuple(candidate["ratio"]): candidate["handle_point"]
+        for candidate in controller.aspect_drag_candidates
+    }
+
+    assert first_targets
+    assert second_targets
+    assert any(
+        first_targets.get(ratio) != point
+        for ratio, point in second_targets.items()
+        if ratio in first_targets
+    )
+
+
+def test_crop_frame_move_snaps_to_image_bounds(setup_editor):
+    view = setup_editor
+    controller = view.image_editor
+
+    view.start_crop_mode()
+    controller.crop_rect = QRectF(20, 20, 40, 30)
+    controller.crop_rect_is_user_defined = True
+    controller.active_crop_move = True
+    controller.crop_move_start = QPointF(40, 35)
+    controller.crop_move_start_rect = QRectF(controller.crop_rect)
+
+    class Event:
+        def __init__(self, scene_pos):
+            self._pos = view.mapFromScene(scene_pos)
+
+        def pos(self):
+            return self._pos
+
+    controller.handle_mouse_move(Event(QPointF(22, 35)))
+
+    image_rect = controller._aspect_target_bounds()
+    assert controller.crop_rect.left() == pytest.approx(image_rect.left())
+    assert image_rect.contains(controller.crop_rect)
+
+
+def test_crop_handle_cursor_uses_resize_cursor(setup_editor):
+    view = setup_editor
+    controller = view.image_editor
+
+    view.start_crop_mode()
+    handle = controller.crop_rect.bottomRight()
+
+    class Event:
+        def pos(self):
+            return view.mapFromScene(handle)
+
+    controller.handle_mouse_move(Event())
+
+    assert view.cursor().shape() == controller.overlay.handles.get_cursor_for_handle("br")
