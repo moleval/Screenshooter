@@ -1270,15 +1270,6 @@ class ImageEditController:
         if not self.crop_mode or event.button() != Qt.LeftButton:
             return False
 
-"""
-Модуль: image_edit_controller.py
-Описание: Контроллер операций редактирования фонового изображения.
-          Управляет режимами обрезки и поворота.
-          Размытие вынесено в BlurController.
-    def handle_mouse_release(self, event):
-        if not self.crop_mode or event.button() != Qt.LeftButton:
-            return False
-
         if self.active_crop_move:
             self.active_crop_move = False
             self.crop_move_start = None
