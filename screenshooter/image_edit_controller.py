@@ -58,6 +58,7 @@ class ImageEditController:
         self.aspect_drag_handle = None
         self.aspect_drag_last_mouse = None
         self.aspect_drag_skip_snap = False
+        self.aspect_drag_last_distance = None
         self.active_crop_move = False
         self.crop_move_start = None
         self.crop_move_start_rect = None
@@ -532,6 +533,8 @@ class ImageEditController:
         self.aspect_drag_caught_ratio = None
         self.aspect_drag_used_ratios = set()
         self.aspect_drag_last_mouse = QPointF(mouse_pos)
+        anchor = self._aspect_anchor(self.crop_rect, handle_id)
+        self.aspect_drag_last_distance = (math.hypot(mouse_pos.x() - anchor.x(), mouse_pos.y() - anchor.y()) if anchor is not None else None)
         self.aspect_drag_candidates = self._build_aspect_drag_candidates(
             self.crop_rect, handle_id, mouse_pos
         )
@@ -615,12 +618,18 @@ class ImageEditController:
             return None
 
         last_mouse = self.aspect_drag_last_mouse or QPointF(mouse_pos)
+        anchor = self._aspect_anchor(raw_rect, handle_id)
+        current_distance = (math.hypot(mouse_pos.x() - anchor.x(), mouse_pos.y() - anchor.y()) if anchor is not None else None)
+        if (current_distance is not None and self.aspect_drag_last_distance is not None and current_distance < self.aspect_drag_last_distance - 1.0 and self.aspect_drag_caught_ratio is None):
+            self.aspect_drag_used_ratios.clear()
+            self.aspect_drag_candidates = self._build_aspect_drag_candidates(raw_rect, handle_id, mouse_pos)
 
         if self.aspect_drag_skip_snap:
             self.aspect_drag_skip_snap = False
             if self.aspect_drag_caught_ratio is not None:
                 self._consume_caught_aspect_candidate(mouse_pos, raw_rect)
             self.aspect_drag_last_mouse = QPointF(mouse_pos)
+            self.aspect_drag_last_distance = current_distance
             return None
 
         if self.aspect_drag_caught_ratio is not None:
@@ -651,9 +660,11 @@ class ImageEditController:
                     self._consume_caught_aspect_candidate(mouse_pos, raw_rect)
                     self.aspect_drag_skip_snap = True
                     self.aspect_drag_last_mouse = QPointF(mouse_pos)
+                    self.aspect_drag_last_distance = current_distance
                     return None
                 else:
                     self.aspect_drag_last_mouse = QPointF(mouse_pos)
+                    self.aspect_drag_last_distance = current_distance
                     return {
                         "ratio": caught["ratio"],
                         "rect": QRectF(caught["rect"]),
@@ -673,12 +684,14 @@ class ImageEditController:
         if caught is not None:
             self.aspect_drag_caught_ratio = tuple(caught["ratio"])
             self.aspect_drag_last_mouse = QPointF(mouse_pos)
+            self.aspect_drag_last_distance = current_distance
             return {
                 "ratio": caught["ratio"],
                 "rect": QRectF(caught["rect"]),
             }
 
         self.aspect_drag_last_mouse = QPointF(mouse_pos)
+        self.aspect_drag_last_distance = current_distance
         return None
 
     def _snap_aspect_ratio(self, rect, handle_id, mouse_pos):
