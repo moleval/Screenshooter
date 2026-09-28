@@ -217,16 +217,9 @@ class ImageEditController:
         elif handle_id == 'lm':
             left = min(x, right - MIN_RECT_SIZE)
         elif handle_id == 'rm':
-            right = max(x, left + MIN_RECT_SI    ASPECT_RATIOS = (
-        (1, 1), (4, 5), (5, 4), (3, 4), (4, 3),
-        (2, 3), (3, 2), (10, 16), (16, 10), (9, 16),
-        (16, 9), (9, 21), (21, 9), (1, 2), (2, 1),
-        (1, 3), (3, 1),
-    )
-    ASPECT_SNAP_DISTANCE_PX = 8.0
-    ASPECT_RELEASE_DISTANCE_PX = 18.0
-    ASPECT_VISIBLE_CANDIDATES = 3
-    ASPECT_SOFT_SNAP_STRENGTH = 0.65
+            right = max(x, left + MIN_RECT_SIZE)
+        elif handle_id == 'rm':
+            right = max(x, left + MIN_RECT_SIZE)
 
     @staticmethod
     def _ratio_error(current, target):
