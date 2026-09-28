@@ -164,9 +164,9 @@ class AnnotationResizeController:
         start, end = self._scene_line_geometry(item)
         return {'start': start, 'end': end}
 
-    def sync_handles(self):
+    def sync_handles(self, force=False):
         """Показывает ручки для единственной выбранной поддерживаемой аннотации."""
-        if self._blocked_by_mode():
+        if self._blocked_by_mode() and not force:
             self.remove_handles()
             return
 
