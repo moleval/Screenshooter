@@ -308,9 +308,15 @@ def test_crop_aspect_candidate_turns_yellow_and_softly_snaps(setup_editor):
     candidate = controller.aspect_drag_candidates[0]
     target = candidate["handle_point"]
 
-    raw = controller._apply_handle_drag("br", target)
+    probe = QPointF(target.x() + 4, target.y() + 3)
+    raw = controller._apply_handle_drag("br", probe)
     assert controller.active_aspect_ratio == candidate["ratio"]
-    assert raw != candidate["rect"]
+    assert raw != controller._handle_point(
+        controller._rect_with_handle_point(
+            controller.crop_rect, "br", probe
+        ),
+        "br",
+    )
 
     controller.overlay.update(
         controller.crop_rect,
