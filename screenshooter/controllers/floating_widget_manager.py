@@ -15,7 +15,7 @@ from ..items import (RectangleItem, EllipseItem, FilledRectItem, CloudItem,
                      LineItem, WavyLineItem, ArrowItem, CurvedArrowItem,
                      DimensionItem, TextItem)
 from ..items.pasted_image_item import PastedImageItem
-from ..history import ChangePenCommand, ChangeImageOpacityCommand
+from ..history import ChangePenCommand, ChangeBrushCommand, ChangeImageOpacityCommand
 from ..theme import theme_manager
 
 
@@ -336,8 +336,10 @@ class FloatingWidgetManager:
                 continue
             if isinstance(item, FilledRectItem):
                 if pen_color:
-                    item.setBrush(QColor(pen_color.red(), pen_color.green(),
-                                         pen_color.blue(), 80))
+                    old_brush = item.brush()
+                    new_brush = QColor(pen_color.red(), pen_color.green(),
+                                       pen_color.blue(), 80)
+                    view.history.push(ChangeBrushCommand(item, old_brush, new_brush))
                 continue
             if isinstance(item, (RectangleItem, EllipseItem, ArrowItem,
                                  CurvedArrowItem, CloudItem, LineItem, WavyLineItem)):

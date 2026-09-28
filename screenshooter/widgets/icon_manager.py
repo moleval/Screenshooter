@@ -1,0 +1,133 @@
+"""Локальный менеджер SVG-иконок интерфейса.
+
+SVG-файлы используют stroke="currentColor". Цвет задаётся при построении
+QIcon, поэтому один и тот же набор SVG работает для светлой/тёмной темы.
+"""
+
+from pathlib import Path
+
+from PyQt5.QtCore import QByteArray, QSize, Qt
+from PyQt5.QtGui import QColor, QIcon, QImage, QPainter, QPixmap
+from PyQt5.QtSvg import QSvgRenderer
+
+from ..theme import theme_manager
+
+
+class IconManager:
+    """Загружает локальные Lucide SVG и применяет семантический цвет."""
+
+    ICON_SIZE = 28
+    DISABLED_OPACITY = 0.4
+
+    SELECTION = "selection"
+    ANNOTATION = "annotation"
+    EDITING = "editing"
+
+    _ROOT = Path(__file__).resolve().parents[1] / "resources" / "icons"
+
+    _ICONS = {
+        "pointer": (SELECTION, "mouse-pointer-2.svg"),
+        "line": (ANNOTATION, "slash.svg"),
+        "rect": (ANNOTATION, "square.svg"),
+        "ellipse": (ANNOTATION, "circle.svg"),
+        "arrow": (ANNOTATION, "move-up-right.svg"),
+        "text": (ANNOTATION, "type.svg"),
+        "crop": (EDITING, "crop.svg"),
+        "blur": (EDITING, "scan-eye.svg"),
+        "trim": (EDITING, "scan.svg"),
+        "rotate-cw": (EDITING, "rotate-cw.svg"),
+        "rotate-ccw": (EDITING, "rotate-cw.svg"),
+        "undo": (EDITING, "undo-2.svg"),
+        "redo": (EDITING, "redo-2.svg"),
+        "screen-1": (EDITING, "screen-share.svg"),
+        "screen-2": (EDITING, "screen-share.svg"),
+        "clear": (EDITING, "brush-cleaning.svg"),
+        "clipboard-copy": (EDITING, "clipboard-copy.svg"),
+        "clipboard-copy-mirrored": (EDITING, "clipboard-copy.svg"),
+        "image-plus": (EDITING, "image-plus.svg"),
+        "clipboard-paste": (EDITING, "clipboard-paste.svg"),
+        "save-all": (EDITING, "save-all.svg"),
+        "save": (EDITING, "save.svg"),
+        "help": (SELECTION, "circle-question-mark.svg"),
+        "pipette": (EDITING, "pipette.svg"),
+        "palette": (EDITING, "palette.svg"),
+        "rotate-handle": (EDITING, "rotate-ccw.svg"),
+    }
+
+    @classmethod
+    def _color_for_category(cls, category):
+        if category == cls.SELECTION:
+            return QColor(theme_manager.get_color("text"))
+        if category == cls.ANNOTATION:
+            return QColor("#D25145")
+        if category == cls.EDITING:
+            color = "#D7F5FF" if theme_manager.effective_theme == "dark" else "#005A9E"
+            return QColor(color)
+        raise ValueError(f"Unknown icon category: {category}")
+
+    @classmethod
+    def _color_for_icon(cls, name, category):
+        if name in {"pipette", "palette", "rotate-handle"}:
+            return QColor("#FFFFFF" if theme_manager.effective_theme == "dark" else "#333333")
+        # Иконки верхней панели команд используют нейтральный цвет.
+        if name in {
+            "undo", "redo", "screen-1", "screen-2", "clear",
+            "clipboard-copy", "clipboard-copy-mirrored", "image-plus", "clipboard-paste",
+            "save-all", "save", "help",
+        }:
+            return QColor("#FFFFFF" if theme_manager.effective_theme == "dark" else "#333333")
+        return cls._color_for_category(category)
+
+    @classmethod
+    def _render(cls, path, color, size=None):
+        svg = path.read_text(encoding="utf-8")
+        opacity = color.alphaF()
+        render_color = QColor(color)
+        render_color.setAlpha(255)
+        svg = svg.replace("currentColor", render_color.name(QColor.HexRgb))
+
+        renderer = QSvgRenderer(QByteArray(svg.encode("utf-8")))
+        if not renderer.isValid():
+            raise FileNotFoundError(f"Invalid SVG icon: {path}")
+
+        size = QSize(size or cls.ICON_SIZE, size or cls.ICON_SIZE)
+        image = QImage(size, QImage.Format_ARGB32)
+        image.fill(Qt.transparent)
+
+        painter = QPainter(image)
+        renderer.render(painter)
+        painter.end()
+
+        if opacity < 1.0:
+            for y in range(image.height()):
+                for x in range(image.width()):
+                    pixel = image.pixelColor(x, y)
+                    alpha = round(pixel.alpha() * opacity)
+                    pixel.setAlpha(alpha)
+                    image.setPixelColor(x, y, pixel)
+
+        return QPixmap.fromImage(image)
+
+    @classmethod
+    def icon(cls, name, size=None, color=None):
+        try:
+            category, filename = cls._ICONS[name]
+        except KeyError as exc:
+            raise KeyError(f"Unknown icon: {name}") from exc
+
+        path = cls._ROOT / category / filename
+        color = QColor(color) if color is not None else cls._color_for_icon(name, category)
+
+        normal = cls._render(path, color, size)
+        disabled_color = QColor(color)
+        disabled_color.setAlpha(round(255 * cls.DISABLED_OPACITY))
+        disabled = cls._render(path, disabled_color, size)
+
+        if name in {"rotate-ccw", "screen-2", "clipboard-copy-mirrored"}:
+            normal = QPixmap.fromImage(normal.toImage().mirrored(True, False))
+            disabled = QPixmap.fromImage(disabled.toImage().mirrored(True, False))
+
+        icon = QIcon()
+        icon.addPixmap(normal, QIcon.Normal, QIcon.Off)
+        icon.addPixmap(disabled, QIcon.Disabled, QIcon.Off)
+        return icon

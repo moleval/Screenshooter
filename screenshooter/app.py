@@ -12,7 +12,7 @@ import time
 import ctypes
 import ctypes.wintypes
 from PyQt5 import sip
-from PyQt5.QtCore import Qt, QRectF, QTimer, pyqtSignal, QDir, QSettings, QEvent
+from PyQt5.QtCore import Qt, QRectF, QTimer, pyqtSignal, QDir, QSettings, QEvent, QSize
 from PyQt5.QtGui import QPixmap, QPainter, QImage, QColor, QIcon, QKeySequence, QGuiApplication
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                              QGraphicsScene, QGraphicsPixmapItem, QActionGroup,
@@ -24,12 +24,7 @@ from .export import Exporter
 from .view import EditorView
 from .widgets.thickness import ThicknessWidget
 from .widgets.color_palette import ColorPaletteWidget
-from .widgets.tool_icons import (
-    create_tool_icon,
-    create_crop_icon,
-    create_rotate_icon,
-    create_blur_icon
-)
+from .widgets.icon_manager import IconManager
 from .settings import AppSettings
 from .utils import load_app_icon
 from .theme import theme_manager
@@ -42,6 +37,7 @@ from .ui.layout_metrics import (
     WINDOW_INITIAL_WIDTH,
     WINDOW_INITIAL_HEIGHT,
     TOOLBAR_CONTROL_HEIGHT,
+    MAIN_ACTION_ICON_SIZE,
 )
 from .ui.annotation_toolbar import AnnotationToolbar
 from .ui.image_toolbar import ImageToolbar
@@ -95,30 +91,35 @@ class ScreenshotApp(QMainWindow):
         left_group_layout.setSpacing(6)
 
         self.undo_btn = QPushButton()
-        self.undo_btn.setIcon(self.style().standardIcon(QStyle.SP_ArrowBack))
+        self.undo_btn.setIcon(IconManager.icon("undo", size=MAIN_ACTION_ICON_SIZE))
         self.undo_btn.setToolTip("Отменить")
         self.undo_btn.clicked.connect(self.undo_action)
         left_group_layout.addWidget(self.undo_btn)
 
         self.redo_btn = QPushButton()
-        self.redo_btn.setIcon(self.style().standardIcon(QStyle.SP_ArrowForward))
+        self.redo_btn.setIcon(IconManager.icon("redo", size=MAIN_ACTION_ICON_SIZE))
         self.redo_btn.setToolTip("Повторить")
         self.redo_btn.clicked.connect(self.redo_action)
         left_group_layout.addWidget(self.redo_btn)
 
         self.capture_buttons = []
         screens = QGuiApplication.screens()
-        capture_label = "Экран" if len(screens) == 1 else None
         for index, screen in enumerate(screens):
-            label = capture_label or f"Экран {index + 1}"
-            button = QPushButton(label)
+            icon_name = "screen-1" if index == 0 else "screen-2"
+            button = QPushButton()
+            button.setIcon(IconManager.icon(icon_name, size=MAIN_ACTION_ICON_SIZE))
+            button.setToolTip(f"Экран {index + 1}")
             button.clicked.connect(
                 lambda checked=False, current_screen=screen:
                 self.capture_screen(current_screen))
             self.capture_buttons.append(button)
             left_group_layout.addWidget(button)
 
-        self.clear_btn = QPushButton("Очистить")
+        self.clear_btn = QPushButton()
+        self.clear_btn.setIcon(
+            IconManager.icon("clear", size=MAIN_ACTION_ICON_SIZE)
+        )
+        self.clear_btn.setToolTip("Очистить")
         self.clear_btn.clicked.connect(self.clear_scene_action)
         left_group_layout.addWidget(self.clear_btn)
 
@@ -177,31 +178,41 @@ class ScreenshotApp(QMainWindow):
         right_group_layout.setContentsMargins(0, 0, 0, 0)
         right_group_layout.setSpacing(6)
 
-        self.copy_btn = QPushButton("В буфер")
+        self.copy_btn = QPushButton()
+        self.copy_btn.setIcon(IconManager.icon("clipboard-paste", size=MAIN_ACTION_ICON_SIZE))
+        self.copy_btn.setToolTip("В буфер")
         self.copy_btn.clicked.connect(self.copy_to_clipboard)
         right_group_layout.addWidget(self.copy_btn)
 
-        self.insert_file_btn = QPushButton("Вставить файл")
+        self.insert_file_btn = QPushButton()
+        self.insert_file_btn.setIcon(IconManager.icon("image-plus", size=MAIN_ACTION_ICON_SIZE))
+        self.insert_file_btn.setToolTip("Вставить файл")
         self.insert_file_btn.clicked.connect(self.insert_image_from_file)
         right_group_layout.addWidget(self.insert_file_btn)
 
-        self.insert_clipboard_btn = QPushButton("Из буфера")
+        self.insert_clipboard_btn = QPushButton()
+        self.insert_clipboard_btn.setIcon(IconManager.icon("clipboard-copy", size=MAIN_ACTION_ICON_SIZE))
+        self.insert_clipboard_btn.setToolTip("Из буфера")
         self.insert_clipboard_btn.clicked.connect(self.insert_image_from_clipboard)
         right_group_layout.addWidget(self.insert_clipboard_btn)
 
-        self.save_as_btn = QPushButton("Сохранить как")
+        self.save_as_btn = QPushButton()
+        self.save_as_btn.setIcon(IconManager.icon("save-all", size=MAIN_ACTION_ICON_SIZE))
+        self.save_as_btn.setToolTip("Сохранить как")
         self.save_as_btn.clicked.connect(self.save_image)
         right_group_layout.addWidget(self.save_as_btn)
 
-        self.quick_save_btn = QPushButton("Сохранить")
+        self.quick_save_btn = QPushButton()
+        self.quick_save_btn.setIcon(IconManager.icon("save", size=MAIN_ACTION_ICON_SIZE))
+        self.quick_save_btn.setToolTip("Сохранить")
         self.quick_save_btn.clicked.connect(self.quick_save)
         self.quick_save_btn.setContextMenuPolicy(Qt.CustomContextMenu)
         self.quick_save_btn.customContextMenuRequested.connect(self.show_quick_save_menu)
         right_group_layout.addWidget(self.quick_save_btn)
 
         # Кнопка справки
-        self.help_btn = QPushButton("?")
-        self.help_btn.setFixedSize(32, TOOLBAR_CONTROL_HEIGHT)
+        self.help_btn = QPushButton()
+        self.help_btn.setIcon(IconManager.icon("help", size=MAIN_ACTION_ICON_SIZE))
         self.help_btn.setToolTip("Справка (F1)")
         self.help_btn.clicked.connect(self.show_help)
         right_group_layout.addWidget(self.help_btn)
@@ -223,7 +234,8 @@ class ScreenshotApp(QMainWindow):
             self.help_btn,
         )
         for btn in main_action_buttons:
-            btn.setFixedHeight(TOOLBAR_CONTROL_HEIGHT)
+            btn.setFixedSize(TOOLBAR_CONTROL_HEIGHT, TOOLBAR_CONTROL_HEIGHT)
+            btn.setIconSize(QSize(MAIN_ACTION_ICON_SIZE, MAIN_ACTION_ICON_SIZE))
 
         # Кнопки crop тоже высотой 26
         self.apply_crop_btn.setFixedHeight(TOOLBAR_CONTROL_HEIGHT)
@@ -247,27 +259,27 @@ class ScreenshotApp(QMainWindow):
 
         pointer_action = self._create_tool_action(
             "Выбор", None, action_group,
-            icon=create_tool_icon('pointer', QColor(30, 30, 30)),
+            icon=IconManager.icon("pointer"),
             tooltip="Выделение")
         line_action = self._create_tool_action(
             "Линия", 'line', action_group,
-            icon=create_tool_icon('line', QColor(220, 30, 30)),
+            icon=IconManager.icon("line"),
             tooltip="Линия")
         rect_action = self._create_tool_action(
             "Контур", 'rect', action_group,
-            icon=create_tool_icon('rect', QColor(220, 30, 30)),
+            icon=IconManager.icon("rect"),
             tooltip="Контур")
         ellipse_action = self._create_tool_action(
             "Эллипс", 'ellipse', action_group,
-            icon=create_tool_icon('ellipse', QColor(220, 30, 30)),
+            icon=IconManager.icon("ellipse"),
             tooltip="Эллипс")
         arrow_action = self._create_tool_action(
             "Стрелка", 'arrow', action_group,
-            icon=create_tool_icon('arrow', QColor(220, 30, 30)),
+            icon=IconManager.icon("arrow"),
             tooltip="Стрелка")
         text_action = self._create_tool_action(
             "Текст", 'text', action_group,
-            icon=create_tool_icon('text', QColor(220, 30, 30)),
+            icon=IconManager.icon("text"),
             tooltip="Текст")
 
         self.pointer_action = pointer_action
@@ -284,32 +296,38 @@ class ScreenshotApp(QMainWindow):
 
         crop_action = QAction("Обрезать", self)
         crop_action.setCheckable(True)
-        crop_action.setIcon(create_crop_icon())
+        crop_action.setIcon(IconManager.icon("crop"))
         crop_action.setToolTip("Обрезать изображение")
         crop_action.triggered.connect(self._on_crop_action_triggered)
 
         rotate_cw_action = QAction("Повернуть", self)
-        rotate_cw_action.setIcon(create_rotate_icon(clockwise=True))
+        rotate_cw_action.setIcon(IconManager.icon("rotate-cw"))
         rotate_cw_action.setToolTip("Повернуть на 90° по часовой")
         rotate_cw_action.triggered.connect(lambda: self._rotate_image(90))
 
         rotate_ccw_action = QAction("Повернуть", self)
-        rotate_ccw_action.setIcon(create_rotate_icon(clockwise=False))
+        rotate_ccw_action.setIcon(IconManager.icon("rotate-ccw"))
         rotate_ccw_action.setToolTip("Повернуть на 90° против часовой")
         rotate_ccw_action.triggered.connect(lambda: self._rotate_image(-90))
 
         blur_action = QAction("Размыть", self)
         blur_action.setCheckable(True)
-        blur_action.setIcon(create_blur_icon())
+        blur_action.setIcon(IconManager.icon("blur"))
         blur_action.setToolTip("Размыть область")
         blur_action.triggered.connect(self._on_blur_action_triggered)
+
+        trim_action = QAction("Убрать поля", self)
+        trim_action.setIcon(IconManager.icon("trim"))
+        trim_action.setToolTip("Убрать лишние белые поля")
+        trim_action.triggered.connect(self._on_trim_action_triggered)
 
         self.crop_action = crop_action
         self.rotate_cw_action = rotate_cw_action
         self.rotate_ccw_action = rotate_ccw_action
         self.blur_action = blur_action
+        self.trim_action = trim_action
 
-        image_actions = [crop_action, rotate_cw_action, rotate_ccw_action, blur_action]
+        image_actions = [blur_action, crop_action, rotate_cw_action, rotate_ccw_action]
 
         annotation_toolbar = AnnotationToolbar(annotation_actions)
         image_toolbar = ImageToolbar(image_actions)
@@ -319,6 +337,7 @@ class ScreenshotApp(QMainWindow):
             annotation_toolbar,
             image_toolbar,
             options_toolbar,
+            trim_action=trim_action,
             parent=cw
         )
 
@@ -525,9 +544,51 @@ class ScreenshotApp(QMainWindow):
     # --------------------------------------------------------------
     # Применение темы
     # --------------------------------------------------------------
+    def _refresh_theme_icons(self):
+        icon_names = {
+            "pointer_action": "pointer",
+            "line_action": "line",
+            "rect_action": "rect",
+            "ellipse_action": "ellipse",
+            "arrow_action": "arrow",
+            "text_action": "text",
+            "crop_action": "crop",
+            "rotate_cw_action": "rotate-cw",
+            "rotate_ccw_action": "rotate-ccw",
+            "blur_action": "blur",
+            "trim_action": "trim",
+        }
+        for attr_name, icon_name in icon_names.items():
+            action = getattr(self, attr_name, None)
+            if action is not None:
+                action.setIcon(IconManager.icon(icon_name))
+
+        for button, icon_name in (
+            (self.undo_btn, "undo"),
+            (self.redo_btn, "redo"),
+            *[(button, "screen-1" if index == 0 else "screen-2")
+              for index, button in enumerate(self.capture_buttons)],
+            (self.clear_btn, "clear"),
+            (self.copy_btn, "clipboard-paste"),
+            (self.insert_file_btn, "image-plus"),
+            (self.insert_clipboard_btn, "clipboard-copy"),
+            (self.save_as_btn, "save-all"),
+            (self.quick_save_btn, "save"),
+            (self.help_btn, "help"),
+        ):
+            button.setIcon(IconManager.icon(icon_name, size=MAIN_ACTION_ICON_SIZE))
+
+        self.color_palette.palette_btn.setIcon(
+            IconManager.icon("palette", size=18)
+        )
+        self.color_palette.eyedropper_btn.setIcon(
+            IconManager.icon("pipette", size=18)
+        )
+
     def apply_theme(self, theme_key: str):
         theme_manager.set_theme(theme_key)
         theme_manager.apply(QApplication.instance())
+        self._refresh_theme_icons()
         self.view.update_theme_colors()
         self.settings.set_theme(theme_key)
 
@@ -646,6 +707,7 @@ class ScreenshotApp(QMainWindow):
         self.rotate_cw_action.setEnabled(has_bg)
         self.rotate_ccw_action.setEnabled(has_bg)
         self.blur_action.setEnabled(has_bg)
+        self.trim_action.setEnabled(has_bg)
 
     # --------------------------------------------------------------
     # Обработчики режимов изображения
@@ -658,6 +720,15 @@ class ScreenshotApp(QMainWindow):
         else:
             self.view.start_crop_mode()
             self.pointer_action.setChecked(True)
+
+    def _on_trim_action_triggered(self):
+        if self.view.blur_mode:
+            self.view.cancel_blur_mode()
+        if self.view.crop_mode:
+            self.view.cancel_crop_mode()
+        self.pointer_action.setChecked(True)
+        self.view.trim_white_fields()
+        self.view.viewport().update()
 
     def _on_blur_action_triggered(self):
         if self.view.crop_mode:
@@ -779,7 +850,7 @@ class ScreenshotApp(QMainWindow):
         if self.view.background_item is None or sip.isdeleted(self.view.background_item):
             self.view.set_background_from_pixmap(pixmap)
         else:
-            self.view.add_pasted_image(pixmap)
+            self.view.add_pasted_image(pixmap, screen_capture=True)
 
     def capture_monitor(self):
         if self.capture.is_capturing():
@@ -888,10 +959,16 @@ class ScreenshotApp(QMainWindow):
         p = max(10.0, min(400.0, float(p)))
         scale = p / 100.0
 
-        # При масштабировании от Shift+колёсика сохраняем точку под курсором.
-        # Для кнопок/ползунка anchor_pos=None — сохраняется центр вида.
+        # Shift+колёсико должно масштабировать относительно центра подложки,
+        # а не относительно курсора. Иначе при прокрутке у края окна подложка
+        # визуально "уезжает" в сторону. Для кнопок/ползунка без anchor_pos
+        # сохраняем текущий центр вида.
         if anchor_pos is not None:
-            anchor_scene_pos = self.view.mapToScene(anchor_pos)
+            background = self.view.image_editor.background_item
+            if background is not None and not sip.isdeleted(background):
+                anchor_scene_pos = background.sceneBoundingRect().center()
+            else:
+                anchor_scene_pos = self.view.mapToScene(anchor_pos)
         else:
             anchor_scene_pos = self.view.mapToScene(
                 self.view.viewport().rect().center())
@@ -920,7 +997,7 @@ class ScreenshotApp(QMainWindow):
         """Переключает полноэкранный режим без артефактов."""
         if self.isFullScreen():
             # Выход из полноэкранного режима
-            was_maximized = bool(self._window_state_before_fullscreen & Qt.WindowMaximized)
+            was_maximized = bool(int(self._window_state_before_fullscreen) & int(Qt.WindowMaximized))
             self._window_state_before_fullscreen = None
 
             # Отключаем обновление окна, чтобы скрыть промежуточные состояния

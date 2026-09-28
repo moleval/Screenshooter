@@ -26,6 +26,7 @@ class CropCommand(QUndoCommand):
         self.new_pixmap = new_pixmap
         self.items_to_remove = items_to_remove
         self.removed_items = []
+        self._removed_pasted_images = []
         self.blur_controller = blur_controller
         self.crop_rect = crop_rect
 
@@ -47,6 +48,20 @@ class CropCommand(QUndoCommand):
     def redo(self):
         for item in self.items_to_remove:
             if item.scene() is self.scene:
+                # Ручки PastedImageItem — отдельные QGraphicsItem в сцене.
+                # Перед удалением самой картинки их нужно убрать, иначе
+                # trim_white_fields() может повторно показать ручки уже
+                # удалённого объекта, а expand_background_to_content()
+                # воспримет их как реальный контент и расширит canvas.
+                if hasattr(item, 'hide_handles'):
+                    item.hide_handles()
+
+                if (self.blur_controller is not None
+                        and item in getattr(
+                            self.blur_controller.view, 'pasted_images', [])):
+                    self._removed_pasted_images.append(item)
+                    self.blur_controller.view.pasted_images.remove(item)
+
                 self.scene.removeItem(item)
                 self.removed_items.append(item)
 
@@ -77,6 +92,15 @@ class CropCommand(QUndoCommand):
         for item in self.removed_items:
             if item.scene() is not self.scene:
                 self.scene.addItem(item)
+
+        if self.blur_controller is not None:
+            pasted_images = self.blur_controller.view.pasted_images
+            for item in self._removed_pasted_images:
+                if item not in pasted_images:
+                    pasted_images.append(item)
+            self._removed_pasted_images.clear()
+            self.blur_controller.view._update_pasted_image_handles()
+
         self.removed_items.clear()
 
         if self.blur_controller is not None and self.blur_state is not None:

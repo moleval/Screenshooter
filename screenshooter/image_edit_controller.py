@@ -17,7 +17,8 @@ from .controllers.crop_overlay_controller import CropOverlayController
 from .controllers.status_bar_manager import StatusBarManager
 from .history import (CropCommand, RotateCommand,
                       CropPastedImageCommand, RotatePastedImageCommand)
-from .image_processing import crop_pixmap, crop_pixmap_with_padding, rotate_pixmap
+from .image_processing import (crop_pixmap, crop_pixmap_with_padding,
+                                      rotate_pixmap, trim_white_border)
 from .items.pasted_image_item import PastedImageItem
 from .items.blur_region_item import BlurRegionItem
 
@@ -282,6 +283,23 @@ class ImageEditController:
 
         self._finish_crop_operation()
 
+    @staticmethod
+    def _scene_shape_bounds(item):
+        """Возвращает фактические границы shape() в координатах сцены.
+
+        Для crop важно учитывать не только геометрию boundingRect(),
+        но и переопределённый shape() аннотации. Иначе элемент,
+        визуально/интерактивно выходящий за границу crop, может ошибочно
+        считаться полностью помещённым внутрь.
+        """
+        try:
+            path = item.mapToScene(item.shape())
+            if not path.isEmpty():
+                return path.boundingRect()
+        except (AttributeError, RuntimeError):
+            pass
+        return item.sceneBoundingRect()
+
     def _collect_items_for_crop(self, crop):
         items_to_remove = []
         items_to_shift = []
@@ -299,7 +317,7 @@ class ImageEditController:
             if isinstance(item, BlurRegionItem):
                 continue
 
-            br = item.sceneBoundingRect()
+            br = self._scene_shape_bounds(item)
             if not crop.contains(br):
                 items_to_remove.append(item)
             else:
@@ -327,6 +345,50 @@ class ImageEditController:
         self.status_bar_manager.reset_to_normal()
 
     # --------------------------------------------------------------
+    # Удаление лишних белых полей
+    # --------------------------------------------------------------
+    def trim_white_fields(self):
+        """Убирает белое поле, оставшееся после расширения подложки."""
+        bg = self.background_item
+        if (bg is None or self._is_deleted(bg)
+                or bg.scene() is not self.view.scene()):
+            return False
+        if self.crop_mode or self.view.blur_controller.blur_mode:
+            return False
+
+        annotation_controller = getattr(
+            self.view, "annotation_resize_controller", None)
+        if annotation_controller is not None:
+            annotation_controller.remove_handles()
+        self.view.hide_pasted_image_handles_for_render()
+
+        try:
+            local_content = trim_white_border(bg.pixmap())
+            if local_content.isEmpty():
+                return False
+
+            crop = bg.mapRectToScene(local_content)
+
+            # Границы определяются только реальным содержимым подложки.
+            # Аннотации и вставленные объекты не должны расширять crop обратно
+            # в белое поле: если объект пересекает новую границу, существующий
+            # CropCommand обработает его по обычным правилам crop.
+            crop = crop.normalized()
+            old_rect = bg.sceneBoundingRect()
+            if (abs(crop.left() - old_rect.left()) < 0.5
+                    and abs(crop.top() - old_rect.top()) < 0.5
+                    and abs(crop.right() - old_rect.right()) < 0.5
+                    and abs(crop.bottom() - old_rect.bottom()) < 0.5):
+                return False
+
+            self._apply_crop_to_background(crop)
+            return True
+        finally:
+            self.view.show_pasted_image_handles_after_render()
+            if annotation_controller is not None:
+                annotation_controller.sync_handles()
+
+    # --------------------------------------------------------------
     # Поворот
     # --------------------------------------------------------------
     def rotate_image(self, angle: float):
@@ -346,6 +408,15 @@ class ImageEditController:
 
         if not self.background_item:
             return
+
+        # Ручки аннотаций — отдельные служебные QGraphicsItem. Перед
+        # растеризацией поворота их нужно удалить из сцены: иначе RotateCommand
+        # сохранит их как часть поворачиваемого содержимого, а затем undo()
+        # сможет вернуть их как независимые устаревшие маркеры.
+        annotation_controller = getattr(
+            self.view, "annotation_resize_controller", None)
+        if annotation_controller is not None:
+            annotation_controller.remove_handles()
 
         items_to_remove = []
         for item in self.view.scene().items():
@@ -393,6 +464,8 @@ class ImageEditController:
             new_background_pos=new_background_pos,
         )
         self.view.history.push(command)
+        if annotation_controller is not None:
+            self.view.annotation_resize_controller.sync_handles()
 
     # --------------------------------------------------------------
     # Обработчики мыши — только режим обрезки

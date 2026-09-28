@@ -1,0 +1,147 @@
+import pytest
+from PyQt5.QtGui import QColor, QIcon
+from PyQt5.QtWidgets import QApplication
+from screenshooter.theme import theme_manager
+
+from screenshooter.widgets.icon_manager import IconManager
+
+
+@pytest.fixture
+def qapp():
+    app = QApplication.instance() or QApplication([])
+    return app
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "pointer",
+        "line",
+        "rect",
+        "ellipse",
+        "arrow",
+        "text",
+        "crop",
+        "blur", "trim",
+        "rotate-cw",
+        "undo",
+        "redo",
+        "palette",
+        "rotate-handle",
+        "pipette",
+    ],
+)
+def test_icon_manager_loads_all_local_icons(qapp, name):
+    icon = IconManager.icon(name)
+
+    assert not icon.isNull()
+    normal = icon.pixmap(IconManager.ICON_SIZE, QIcon.Normal, QIcon.Off)
+    disabled = icon.pixmap(IconManager.ICON_SIZE, QIcon.Disabled, QIcon.Off)
+
+    assert not normal.isNull()
+    assert not disabled.isNull()
+
+
+def _nontransparent_pixels(pixmap):
+    image = pixmap.toImage()
+    return [
+        image.pixelColor(x, y)
+        for y in range(image.height())
+        for x in range(image.width())
+        if image.pixelColor(x, y).alpha() > 0
+    ]
+
+
+def _has_color_close_to(pixmap, expected, tolerance=8):
+    return any(
+        abs(c.red() - expected[0]) <= tolerance
+        and abs(c.green() - expected[1]) <= tolerance
+        and abs(c.blue() - expected[2]) <= tolerance
+        for c in _nontransparent_pixels(pixmap)
+    )
+
+
+def test_icon_manager_restores_toolbar_colors(qapp):
+    assert IconManager._color_for_category(IconManager.ANNOTATION).name() == "#d25145"
+    assert IconManager._color_for_category(IconManager.EDITING).name() == "#005a9e"
+
+
+def test_icon_manager_keeps_service_icons_neutral(qapp):
+    expected = theme_manager.get_color("text")
+    for name in ("pipette", "palette", "undo", "save", "help"):
+        assert IconManager._color_for_icon(name, IconManager.EDITING) == expected
+
+
+def test_icon_manager_keeps_toolbar_colors_in_dark_theme(qapp):
+    previous = theme_manager.current_theme
+    try:
+        theme_manager.set_theme("dark")
+        assert IconManager._color_for_category(IconManager.ANNOTATION).name() == "#d25145"
+        assert IconManager._color_for_category(IconManager.EDITING).name() == "#d7f5ff"
+        assert IconManager._color_for_icon("pipette", IconManager.EDITING) == QColor("#ffffff")
+        assert IconManager._color_for_icon("palette", IconManager.EDITING) == QColor("#ffffff")
+        for name in ("undo", "redo", "screen-1", "screen-2", "clear", "save", "help"):
+            assert IconManager._color_for_icon(name, IconManager.EDITING) == QColor("#ffffff")
+    finally:
+        theme_manager.set_theme(previous)
+
+
+def test_icon_manager_uses_bright_editing_color_in_dark_theme(qapp):
+    previous = theme_manager.current_theme
+    try:
+        theme_manager.set_theme("dark")
+        editing = IconManager._render(
+            IconManager._ROOT / "editing" / "crop.svg",
+            IconManager._color_for_category(IconManager.EDITING),
+        )
+        assert _has_color_close_to(editing, (215, 245, 255))
+    finally:
+        theme_manager.set_theme(previous)
+
+
+def test_icon_manager_disabled_icon_is_transparent(qapp):
+    color = IconManager._color_for_category(IconManager.ANNOTATION)
+    normal = IconManager._render(
+        IconManager._ROOT / "annotation" / "square.svg", color
+    ).toImage()
+
+    disabled_color = QColor(color)
+    disabled_color.setAlpha(round(255 * IconManager.DISABLED_OPACITY))
+    disabled = IconManager._render(
+        IconManager._ROOT / "annotation" / "square.svg", disabled_color
+    ).toImage()
+
+    normal_alpha = max(
+        normal.pixelColor(x, y).alpha()
+        for y in range(normal.height())
+        for x in range(normal.width())
+    )
+    disabled_alpha = max(
+        disabled.pixelColor(x, y).alpha()
+        for y in range(disabled.height())
+        for x in range(disabled.width())
+    )
+
+    assert normal_alpha == 255
+    assert disabled_alpha == round(255 * IconManager.DISABLED_OPACITY)
+
+
+def test_app_theme_switch_refreshes_existing_editing_icon(qapp):
+    from screenshooter.app import ScreenshotApp
+
+    app = ScreenshotApp()
+    try:
+        app.apply_theme("dark")
+        dark = app.crop_action.icon().pixmap(
+            IconManager.ICON_SIZE, QIcon.Normal, QIcon.Off
+        )
+        assert _has_color_close_to(dark, (215, 245, 255))
+
+        app.apply_theme("light")
+        light = app.crop_action.icon().pixmap(
+            IconManager.ICON_SIZE, QIcon.Normal, QIcon.Off
+        )
+        assert _has_color_close_to(light, (0, 90, 158))
+    finally:
+        app.close()
+

@@ -21,6 +21,7 @@ from ..items.blur_region_item import BlurRegionItem
 from ..history import (MoveItemsCommand, MoveBlurRegionCommand,
                        ResizePastedImageCommand)
 from ..tools import RectTool, EllipseTool, LineTool, ArrowTool, TextTool
+from ..constants import DRAG_OUTSIDE_DAMPING
 
 
 class ManipulationController:
@@ -44,6 +45,8 @@ class ManipulationController:
         self._drag_blur_needs_recompute = False
         self._drag_old_background = None
         self._drag_old_blur_state = None
+        self._drag_selection_snapshot = []
+        self._drag_selected_blur_indices = set()
 
         # Изменение размера вставленных изображений
         self._resizing_pasted_item = None
@@ -149,7 +152,16 @@ class ManipulationController:
             self._last_cursor_pos = pos
             self._last_cursor_item = item
 
-        # 1. Маркеры вставленных изображений
+        # 1. Маркеры изменения размера аннотаций
+        annotation = getattr(view, 'annotation_resize_controller', None)
+        if annotation is not None and annotation.handles:
+            handle_id = annotation.handles.hit_test(pos)
+            if handle_id:
+                view.viewport().setCursor(
+                    annotation.handles.get_cursor_for_handle(handle_id))
+                return
+
+        # 2. Маркеры вставленных изображений
         for pasted in view.pasted_images:
             if pasted.isSelected() and pasted.handles:
                 handle_id = pasted.handles.hit_test(pos)
@@ -158,7 +170,7 @@ class ManipulationController:
                         pasted.handles.get_cursor_for_handle(handle_id))
                     return
 
-        # 2. Маркеры активной зоны размытия
+        # 3. Маркеры активной зоны размытия
         if (view.blur_controller.active_blur_index is not None and
                 view.blur_controller.active_blur_index < len(
                     view.blur_controller.blur_region_items)):
@@ -171,30 +183,30 @@ class ManipulationController:
                         active_blur.handles.get_cursor_for_handle(handle_id))
                     return
 
-        # 3. Текст в режиме редактирования
+        # 4. Текст в режиме редактирования
         if (view.active_text_item and item is view.active_text_item
                 and view.active_text_item._editable):
             view.viewport().setCursor(Qt.IBeamCursor)
             return
 
-        # 4. Зона размытия
+        # 5. Зона размытия
         if item and isinstance(item, BlurRegionItem):
             view.viewport().setCursor(Qt.SizeAllCursor)
             return
 
-        # 5. Элемент, который можно перемещать
+        # 6. Элемент, который можно перемещать
         if item and not view._is_background_item(item):
             li = view._item_for_manipulation(item)
             if li is not None and li.flags() & QGraphicsItem.ItemIsMovable:
                 view.viewport().setCursor(Qt.SizeAllCursor)
                 return
 
-        # 6. Вставленное изображение
+        # 7. Вставленное изображение
         if item and isinstance(item, PastedImageItem):
             view.viewport().setCursor(Qt.SizeAllCursor)
             return
 
-        # 7. Инструменты рисования — используем контрастный курсор
+        # 8. Инструменты рисования — используем контрастный курсор
         if view.current_tool in ('rect', 'ellipse', 'arrow', 'line', 'text'):
             from ..controllers.crop_cursor_factory import CropCursorFactory
             view.viewport().setCursor(CropCursorFactory.get_cursor())
@@ -248,8 +260,16 @@ class ManipulationController:
         if is_ctrl or is_shift:
             skip_blur_handler = True
         elif li is not None and isinstance(li, BlurRegionItem):
+            # При уже существующем множественном выделении клик по blur
+            # должен продолжать групповое перетаскивание, а не переключать
+            # управление на саму зону размытия. Иначе blur_controller
+            # снимает выделение с остальных объектов.
             selected_items = self.view.scene().selectedItems()
-            if li.isSelected() and len(selected_items) > 1:
+            non_bg_selected = [
+                item for item in selected_items
+                if not self.view._is_background_item(item)
+            ]
+            if len(non_bg_selected) > 1:
                 skip_blur_handler = True
 
         if not skip_blur_handler:
@@ -374,20 +394,62 @@ class ManipulationController:
             is_ctrl = bool(modifiers & Qt.ControlModifier)
             is_shift = bool(modifiers & Qt.ShiftModifier)
 
-            if li.isSelected():
-                if is_ctrl:
-                    li.setSelected(False)
-                    return True
-            else:
-                if not (is_ctrl or is_shift):
-                    self.view.scene().clearSelection()
+            selected_before_click = self.view.scene().selectedItems()
+            non_bg_selected_before_click = [
+                selected_item for selected_item in selected_before_click
+                if not self.view._is_background_item(selected_item)
+            ]
+            preserve_multi_selection_on_blur = (
+                isinstance(li, BlurRegionItem)
+                and len(non_bg_selected_before_click) > 1
+                and not (is_ctrl or is_shift)
+            )
+
+            if preserve_multi_selection_on_blur:
+                # Клик по blur при существующей группе означает включение
+                # самой зоны в группу. Раньше blur оставался вне selection,
+                # поэтому после первого drag следующий клик по нему мог
+                # переключить обработчик blur и визуально "уронить" группу.
                 li.setSelected(True)
+            else:
+                if li.isSelected():
+                    if is_ctrl:
+                        li.setSelected(False)
+                        return True
+                else:
+                    if not (is_ctrl or is_shift):
+                        self.view.scene().clearSelection()
+                    li.setSelected(True)
 
             selected = self.view.scene().selectedItems()
-            self._drag_items = [it for it in selected
-                                if not self.view._is_background_item(it)]
+            # Снимок выделения фиксируем на весь drag. BlurRegionItem является
+            # полноценным участником группы и не должен исчезать из selection
+            # из-за промежуточного пересчёта blur/подложки.
+            self._drag_selection_snapshot = [
+                it for it in selected
+                if not self.view._is_background_item(it)
+                and not sip.isdeleted(it)
+            ]
+            self._drag_selected_blur_indices = {
+                index for index, blur_item in enumerate(
+                    self.view.blur_controller.blur_region_items
+                )
+                if blur_item in self._drag_selection_snapshot
+                and not sip.isdeleted(blur_item)
+            }
+            self._drag_items = list(self._drag_selection_snapshot)
+
+            # Если группа содержит blur, на время группового drag фиксируем
+            # уже рассчитанное размытие. Пересчёт blur одновременно с
+            # изменением rect самой BlurRegionItem может временно заменить
+            # её pixmap и визуально "погасить" blur; кроме того, таймер может
+            # отработать уже после отпускания мыши. Финальный пересчёт будет
+            # выполнен в _handle_drag_release().
+            if any(isinstance(it, BlurRegionItem) for it in self._drag_items):
+                self.view.blur_controller._force_blur_recompute()
 
             if not self._drag_items:
+                self._drag_selection_snapshot = []
                 return True
 
             self._drag_old_positions = []
@@ -521,6 +583,33 @@ class ManipulationController:
                 int(self._pan_start_scroll.y() - dy / scale))
         return True
 
+    @staticmethod
+    def _dampen_point_outside_background(point, background_rect, damping=DRAG_OUTSIDE_DAMPING):
+        """Мягко замедляет координаты точки за пределами подложки.
+
+        Внутри подложки координата не меняется. За каждой границей ось
+        замедляется независимо: это позволяет, например, продолжать
+        свободно двигать объект по Y, даже если курсор вышел за подложку
+        только справа. Чем дальше курсор уходит наружу, тем меньше
+        дополнительное перемещение объекта.
+        """
+        if damping <= 0:
+            return QPointF(point)
+
+        def damp_axis(value, low, high):
+            if value < low:
+                excess = value - low
+                return low + excess / (1.0 + abs(excess) / damping)
+            if value > high:
+                excess = value - high
+                return high + excess / (1.0 + abs(excess) / damping)
+            return value
+
+        return QPointF(
+            damp_axis(point.x(), background_rect.left(), background_rect.right()),
+            damp_axis(point.y(), background_rect.top(), background_rect.bottom()),
+        )
+
     def _handle_drag_move(self, event) -> bool:
         """Групповое перетаскивание элементов."""
         if not self._drag_items:
@@ -532,8 +621,8 @@ class ManipulationController:
         #
         # Временная рабочая область нужна только когда курсор действительно
         # подошёл к краю viewport и пользователь пытается выйти за подложку.
-        edge = 24
-        speed = 24
+        edge = 32
+        speed = 4
         vp = self.view.viewport().rect()
         hbar = self.view.horizontalScrollBar()
         vbar = self.view.verticalScrollBar()
@@ -555,28 +644,53 @@ class ManipulationController:
             self.view._interaction_dragging = True
 
             if near_edge:
+                # prepare_drag_scene_rect() расширяет sceneRect и может из-за
+                # целочисленных scrollbar дать микросдвиг точки под курсором.
+                # Сохраняем исходный drag baseline, компенсируя только этот
+                # микросдвиг. Нельзя заменять baseline текущей точкой:
+                # это добавляет весь накопленный delta повторно и даёт
+                # скачок объекта к другой части сцены.
+                cursor_scene_before = self.view.mapToScene(event.pos())
                 self.view.prepare_drag_scene_rect(event.pos())
-                # После изменения sceneRect заново фиксируем точку старта
-                # в координатах сцены. Точка под курсором не скачет.
-                self._drag_start_scene_pos = self.view.mapToScene(event.pos())
+                cursor_scene_after = self.view.mapToScene(event.pos())
+                self._drag_start_scene_pos += (
+                    cursor_scene_after - cursor_scene_before
+                )
                 self._drag_scene_prepared = True
 
         if self._drag_scene_prepared:
             # Автопрокрутка работает только после подготовки расширенной
             # рабочей области.
+            # Автопрокрутка намеренно медленная: 24 px на каждый
+            # mouseMove при 100%+ масштабе давали резкие скачки.
             if event.pos().x() <= vp.left() + edge:
-                hbar.setValue(hbar.value() - speed)
+                distance = vp.left() + edge - event.pos().x()
+                hbar.setValue(hbar.value() - min(speed, max(1, distance // 4)))
             elif event.pos().x() >= vp.right() - edge:
-                hbar.setValue(hbar.value() + speed)
+                distance = event.pos().x() - (vp.right() - edge)
+                hbar.setValue(hbar.value() + min(speed, max(1, distance // 4)))
 
             if event.pos().y() <= vp.top() + edge:
-                vbar.setValue(vbar.value() - speed)
+                distance = vp.top() + edge - event.pos().y()
+                vbar.setValue(vbar.value() - min(speed, max(1, distance // 4)))
             elif event.pos().y() >= vp.bottom() - edge:
-                vbar.setValue(vbar.value() + speed)
+                distance = event.pos().y() - (vp.bottom() - edge)
+                vbar.setValue(vbar.value() + min(speed, max(1, distance // 4)))
 
         # Берём обе точки через mapToScene. Он автоматически учитывает
         # текущее положение scrollbar.
         current_scene_pos = self.view.mapToScene(event.pos())
+
+        # За пределами подложки не запрещаем перемещение полностью, но
+        # постепенно уменьшаем его. Это предотвращает случайный уход объекта
+        # на сотни/тысячи пикселей и последующее создание огромных белых полей
+        # при expand_background_to_content(). По X и Y торможение независимое.
+        bg = self.view.image_editor.background_item
+        if bg is not None and not sip.isdeleted(bg):
+            bg_rect = bg.sceneBoundingRect()
+            current_scene_pos = self._dampen_point_outside_background(
+                current_scene_pos, bg_rect)
+
         delta = current_scene_pos - self._drag_start_scene_pos
 
         if event.modifiers() & Qt.ShiftModifier:
@@ -584,6 +698,10 @@ class ManipulationController:
                 delta.setY(0.0)
             else:
                 delta.setX(0.0)
+
+        group_contains_blur = any(
+            isinstance(it, BlurRegionItem) for it in self._drag_items
+        )
 
         for idx, drag_item in enumerate(self._drag_items):
             if isinstance(drag_item, BlurRegionItem):
@@ -594,7 +712,10 @@ class ManipulationController:
                     idx_blur = self.view.blur_controller.blur_region_items.index(drag_item)
                     self.view.blur_controller.blur_regions[idx_blur] = new_rect
                     self._drag_blur_needs_recompute = True
-                    self.view.blur_controller._schedule_blur_recompute(moving_index=idx_blur)
+                    # При наличии blur в самой группе не запускаем
+                    # асинхронный preview-recompute во время drag.
+                    # Геометрию зоны обновляем сразу, а pixmap пересчитаем
+                    # один раз после release.
                 except ValueError:
                     pass
                 if drag_item.handles:
@@ -605,12 +726,38 @@ class ManipulationController:
                 drag_item.setPos(new_pos)
                 if isinstance(drag_item, PastedImageItem):
                     drag_item.show_handles()
-                    if self.view.blur_controller.blur_regions:
+                    if self.view.blur_controller.blur_regions and not group_contains_blur:
                         self._drag_blur_needs_recompute = True
                         self.view.blur_controller._schedule_blur_recompute()
 
         self.view.scene().update()
         self.view._update_pasted_image_handles()
+
+        # Ручки аннотаций принадлежат геометрии фигуры и должны следовать
+        # за ней во время обычного перетаскивания.
+        annotation = getattr(self.view, 'annotation_resize_controller', None)
+        if annotation is not None:
+            annotation.sync_handles()
+
+        # Во время drag снимок группы является источником истины. Blur
+        # и связанные с ним обновления могут косвенно менять selection;
+        # восстанавливаем группу уже на каждом move, а не только на release.
+        # Это исключает состояние "после первого движения группа потеряла
+        # фокус", когда следующий press начинает работать как одиночный.
+        selection_snapshot = [
+            it for it in self._drag_selection_snapshot
+            if not sip.isdeleted(it) and it.scene() is self.view.scene()
+        ]
+        current_selection = [
+            it for it in self.view.scene().selectedItems()
+            if not self.view._is_background_item(it)
+            and not sip.isdeleted(it)
+        ]
+        if set(current_selection) != set(selection_snapshot):
+            self.view.scene().clearSelection()
+            for it in selection_snapshot:
+                it.setSelected(True)
+
         return True
 
     def _handle_rubber_band_move(self, event) -> bool:
@@ -713,8 +860,37 @@ class ManipulationController:
         self._drag_start_item_pos = QPointF()
         self._drag_old_background = None
         self._drag_old_blur_state = None
+
+        # Внутренние операции завершения drag (пересчёт blur, расширение
+        # подложки, обновление ручек) могут менять active blur. Selection же
+        # должно остаться тем же самым набором объектов, с которого начался
+        # drag. Восстанавливаем его последним — перед следующим кликом.
+        selection_snapshot = [
+            it for it in self._drag_selection_snapshot
+            if not sip.isdeleted(it) and it.scene() is self.view.scene()
+        ]
+        self.view.scene().clearSelection()
+        for it in selection_snapshot:
+            it.setSelected(True)
+
+        # MoveItemsCommand может восстановить blur-state через redo() и
+        # заменить BlurRegionItem новыми экземплярами. Старые blur из
+        # _drag_selection_snapshot после этого уже удалены, поэтому
+        # восстанавливаем их selection по стабильному индексу состояния.
+        for index in self._drag_selected_blur_indices:
+            blur_items = self.view.blur_controller.blur_region_items
+            if 0 <= index < len(blur_items):
+                blur_item = blur_items[index]
+                if not sip.isdeleted(blur_item):
+                    blur_item.setSelected(True)
+
+        self._drag_selection_snapshot = []
+        self._drag_selected_blur_indices = set()
+
         self.view._update_pasted_image_handles()
         self.view._update_blur_region_handles()
+        # _update_blur_region_handles управляет только визуальным active
+        # состоянием blur и не должен менять восстановленное выделение.
         self.invalidate_cursor_cache()
         return True
 

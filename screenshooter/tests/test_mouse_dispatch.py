@@ -18,9 +18,10 @@
 import pytest
 from PyQt5.QtCore import Qt, QPointF, QEvent, QRectF
 from PyQt5.QtGui import QMouseEvent, QPixmap, QColor
-from PyQt5.QtWidgets import QGraphicsScene, QGraphicsRectItem
+from PyQt5.QtWidgets import QGraphicsScene, QGraphicsRectItem, QApplication
 
 from screenshooter.view import EditorView
+from screenshooter.items.blur_region_item import BlurRegionItem
 
 
 @pytest.fixture
@@ -295,6 +296,130 @@ def test_crop_press_move_release_cycle(view_and_scene, monkeypatch):
     assert crop_moved
     assert crop_released
     assert not manip_any
+
+
+def test_multi_selection_drag_started_on_blur_keeps_all_selected_items(view_and_scene):
+    view, scene = view_and_scene
+
+    first = QGraphicsRectItem(20, 20, 20, 20)
+    second = QGraphicsRectItem(120, 120, 20, 20)
+    for item in (first, second):
+        item.setFlag(QGraphicsRectItem.ItemIsSelectable, True)
+        scene.addItem(item)
+        item.setSelected(True)
+
+    blur = BlurRegionItem(QRectF(70, 70, 60, 60), view, mode='inactive')
+    scene.addItem(blur)
+
+    assert len(scene.selectedItems()) == 2
+
+    press_pos = view.mapFromScene(QPointF(80, 80))
+    view.mousePressEvent(make_mouse_event(
+        view, QEvent.MouseButtonPress, pos=press_pos))
+
+    # Клик по blur включает его в уже существующую группу, не сбрасывая
+    # ранее выбранные объекты.
+    assert set(view.scene().selectedItems()) == {first, second, blur}
+    assert set(view.manipulation_controller._drag_items) == {first, second, blur}
+
+    first_old = first.pos()
+    second_old = second.pos()
+    blur_old = blur.rect()
+    move_pos = view.mapFromScene(QPointF(100, 100))
+    view.mouseMoveEvent(make_mouse_event(
+        view, QEvent.MouseMove, pos=move_pos))
+
+    assert first.pos() != first_old
+    assert second.pos() != second_old
+    assert blur.rect() != blur_old
+    assert set(view.scene().selectedItems()) == {first, second, blur}
+
+    view.mouseReleaseEvent(make_mouse_event(
+        view, QEvent.MouseButtonRelease, pos=move_pos))
+    assert set(view.scene().selectedItems()) == {first, second, blur}
+
+def test_multi_selection_drag_with_blur_survives_repeated_drags(view_and_scene):
+    view, scene = view_and_scene
+
+    first = QGraphicsRectItem(20, 20, 20, 20)
+    second = QGraphicsRectItem(120, 120, 20, 20)
+    for item in (first, second):
+        item.setFlag(QGraphicsRectItem.ItemIsSelectable, True)
+        scene.addItem(item)
+
+    blur = BlurRegionItem(QRectF(70, 70, 60, 60), view, mode='inactive')
+    scene.addItem(blur)
+
+    for item in (first, second, blur):
+        item.setSelected(True)
+
+    def drag_from(scene_pos, delta):
+        start = view.mapFromScene(scene_pos)
+        end = view.mapFromScene(scene_pos + delta)
+        view.mousePressEvent(make_mouse_event(
+            view, QEvent.MouseButtonPress, pos=start))
+        view.mouseMoveEvent(make_mouse_event(
+            view, QEvent.MouseMove, pos=end))
+        view.mouseReleaseEvent(make_mouse_event(
+            view, QEvent.MouseButtonRelease, pos=end))
+
+    drag_from(first.sceneBoundingRect().center(), QPointF(10, 10))
+    assert set(view.scene().selectedItems()) == {first, second, blur}
+
+    drag_from(blur.sceneBoundingRect().center(), QPointF(10, 10))
+    assert set(view.scene().selectedItems()) == {first, second, blur}
+
+
+def test_group_drag_with_blur_keeps_render_and_selection_stable(view_and_scene):
+    view, scene = view_and_scene
+
+    first = QGraphicsRectItem(20, 20, 20, 20)
+    first.setFlag(QGraphicsRectItem.ItemIsSelectable, True)
+    scene.addItem(first)
+
+    blur = BlurRegionItem(QRectF(70, 70, 60, 60), view, mode='inactive')
+    scene.addItem(blur)
+
+    # Создаём реальное состояние blur, включая рассчитанный pixmap.
+    view.blur_controller.blur_base_pixmap = view.background_item.pixmap().copy()
+    view.blur_controller.blur_regions = [QRectF(70, 70, 60, 60)]
+    view.blur_controller.blur_region_items = [blur]
+    view.blur_controller._force_blur_recompute()
+    assert not blur.blurred_pixmap.isNull()
+
+    first.setSelected(True)
+    blur.setSelected(True)
+
+    def drag_from(scene_pos, delta):
+        start = view.mapFromScene(scene_pos)
+        end = view.mapFromScene(scene_pos + delta)
+        view.mousePressEvent(make_mouse_event(
+            view, QEvent.MouseButtonPress, pos=start))
+        view.mouseMoveEvent(make_mouse_event(
+            view, QEvent.MouseMove, pos=end))
+        QApplication.processEvents()
+        view.mouseReleaseEvent(make_mouse_event(
+            view, QEvent.MouseButtonRelease, pos=end))
+        QApplication.processEvents()
+
+    drag_from(first.sceneBoundingRect().center(), QPointF(10, 10))
+
+    current_blur = view.blur_controller.blur_region_items[0]
+    assert not view.blur_controller._blur_recompute_timer.isActive()
+    assert not current_blur.blurred_pixmap.isNull()
+    assert current_blur.isSelected()
+    assert first.isSelected()
+
+    # History restore создаёт новый BlurRegionItem, поэтому следующий drag
+    # должен работать уже через актуальный экземпляр, не теряя selection.
+    drag_from(current_blur.sceneBoundingRect().center(), QPointF(10, 10))
+
+    current_blur = view.blur_controller.blur_region_items[0]
+    assert not view.blur_controller._blur_recompute_timer.isActive()
+    assert not current_blur.blurred_pixmap.isNull()
+    assert current_blur.isSelected()
+    assert first.isSelected()
+
 
 
 def test_manipulation_press_move_release_cycle(view_and_scene, monkeypatch):

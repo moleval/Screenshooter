@@ -43,24 +43,33 @@ class Exporter:
         if bg_pixmap.isNull():
             return None
 
-        # Скрываем служебные элементы перед рендером
+        # Все служебные элементы должны быть скрыты на время рендера.
+        # Annotation handles являются обычными QGraphicsItem, поэтому без
+        # этого они физически попадают в экспортируемое изображение.
+        annotation_controller = getattr(
+            self.view, "annotation_resize_controller", None)
         self.view.blur_controller.hide_blur_regions_for_render()
         self.view.hide_pasted_image_handles_for_render()
+        if annotation_controller is not None:
+            annotation_controller.remove_handles()
 
-        target = bg.sceneBoundingRect()
-        target_rect = target.toAlignedRect()
-        img = QImage(target_rect.size(), QImage.Format_ARGB32)
-        img.fill(Qt.transparent)
-        p = QPainter(img)
-        p.setRenderHint(QPainter.Antialiasing)
-        p.setRenderHint(QPainter.SmoothPixmapTransform)
-        self.scene.render(p, QRectF(img.rect()), QRectF(target_rect))
-        p.end()
-
-        # Возвращаем служебные элементы после рендера
-        self.view.blur_controller.show_blur_regions_after_render()
-        self.view.show_pasted_image_handles_after_render()
-        return img
+        try:
+            target = bg.sceneBoundingRect()
+            target_rect = target.toAlignedRect()
+            img = QImage(target_rect.size(), QImage.Format_ARGB32)
+            img.fill(Qt.transparent)
+            p = QPainter(img)
+            p.setRenderHint(QPainter.Antialiasing)
+            p.setRenderHint(QPainter.SmoothPixmapTransform)
+            self.scene.render(p, QRectF(img.rect()), QRectF(target_rect))
+            p.end()
+            return img
+        finally:
+            # Восстанавливаем служебные элементы даже при ошибке рендера.
+            self.view.blur_controller.show_blur_regions_after_render()
+            self.view.show_pasted_image_handles_after_render()
+            if annotation_controller is not None:
+                annotation_controller.sync_handles()
 
     def save_image(self):
         """Сохраняет изображение в файл через диалог выбора."""

@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import QUndoStack
 from .item_commands import (AddItemCommand, RemoveItemCommand,
                             MoveItemCommand, MoveItemsCommand,
                             ResizeItemCommand, ChangePenCommand,
-                            ChangeTextCommand)
+                            ChangeBrushCommand, ChangeTextCommand)
 from .background_commands import CropCommand, RotateCommand, BlurCommand
 from .blur_commands import (AddBlurRegionCommand, RemoveBlurRegionCommand,
                             MoveBlurRegionCommand, ResizeBlurRegionCommand)
@@ -19,13 +19,14 @@ from .image_commands import (AddPastedImageCommand, RemovePastedImageCommand,
                              RotatePastedImageCommand, ChangeImageOpacityCommand)
 from .composite_commands import RemoveSelectedItemsCommand, PasteItemsCommand
 from .layer_commands import ChangeLayerCommand
+from .annotation_commands import ResizeAnnotationCommand
 
 __all__ = [
     'HistoryManager',
     # Команды элементов
     'AddItemCommand', 'RemoveItemCommand',
     'MoveItemCommand', 'MoveItemsCommand',
-    'ResizeItemCommand', 'ChangePenCommand', 'ChangeTextCommand',
+    'ResizeItemCommand', 'ChangePenCommand', 'ChangeBrushCommand', 'ChangeTextCommand',
     # Команды фона
     'CropCommand', 'RotateCommand', 'BlurCommand',
     # Команды зон размытия
@@ -37,7 +38,7 @@ __all__ = [
     'RotatePastedImageCommand', 'ChangeImageOpacityCommand',
     # Составные команды
     'RemoveSelectedItemsCommand', 'PasteItemsCommand',
-    'ChangeLayerCommand',
+    'ChangeLayerCommand', 'ResizeAnnotationCommand',
 ]
 
 
