@@ -7,6 +7,8 @@
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPen, QPixmap, QPainter, QCursor
 
+from ..widgets.icon_manager import IconManager
+
 from ..constants import (
     CROP_CURSOR_SIZE,
     CROP_CURSOR_OUTLINE_WIDTH,
@@ -28,11 +30,7 @@ class CropCursorFactory:
 
         size = CROP_CURSOR_SIZE
         center = size // 2
-        source = __import__(
-            "screenshooter.widgets.icon_manager",
-            fromlist=["IconManager"],
-        ).IconManager
-        pixmap = source.icon(
+        pixmap = IconManager.icon(
             "crop",
             size=size,
             color=theme_manager.get_color("crop_cursor_line"),
