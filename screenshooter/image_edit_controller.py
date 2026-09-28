@@ -1108,6 +1108,9 @@ class ImageEditController:
         handle_id = self.overlay.hit_test_handle(QPointF(event.pos()))
         if handle_id:
             self.active_handle = handle_id
+            self.view.setCursor(
+                self.overlay.handles.get_cursor_for_handle(handle_id)
+            )
             self._begin_aspect_drag(
                 handle_id, self.view.mapToScene(event.pos())
             )
@@ -1184,6 +1187,9 @@ class ImageEditController:
             self.overlay.update_resolution_text(
                 self.crop_rect, self.crop_target_item
             )
+            self.view.setCursor(
+                self.overlay.handles.get_cursor_for_handle(self.active_handle)
+            )
             return True
 
         if self.temp_crop_start is not None:
@@ -1234,9 +1240,16 @@ class ImageEditController:
             self.overlay.update_resolution_text(
                 self.crop_rect, self.crop_target_item
             )
+            self.view.setCursor(CropCursorFactory.get_cursor())
             return True
 
         handle_id = self.overlay.hit_test_handle(QPointF(event.pos()))
+        if handle_id is not None:
+            self.view.setCursor(
+                self.overlay.handles.get_cursor_for_handle(handle_id)
+            )
+        else:
+            self.view.setCursor(CropCursorFactory.get_cursor())
         return handle_id is not None
 
     def handle_mouse_release(self, event):
