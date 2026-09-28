@@ -36,6 +36,7 @@ def make_fixture(qapp):
 
     view = FakeView(scene, background)
     view.show()
+    view.resetTransform()
     qapp.processEvents()
     return view, background
 
@@ -102,7 +103,9 @@ def test_no_snap_when_outside_threshold(qapp):
 
     snapped = controller.snap_delta(QPointF(80, 0))
 
-    assert snapped == QPointF(90, 0)
+    # 80 px leaves the item's center outside the 8 px snap threshold.
+    assert snapped.x() == pytest.approx(80.0)
+    assert snapped.y() == pytest.approx(0.0)
     assert not controller.guides
 
     controller.clear_guides()
