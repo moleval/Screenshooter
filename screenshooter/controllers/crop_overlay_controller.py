@@ -36,6 +36,7 @@ class CropOverlayController:
         self.aspect_label_bg_items = []
         self.active_aspect_ratio = None
         self.caught_aspect_ratio = None
+        self._aspect_candidates_signature = ()
 
     def update(
         self,
@@ -101,11 +102,32 @@ class CropOverlayController:
         self.crop_rect_item.setRect(crop)
 
         self.active_aspect_ratio = active_aspect_ratio
+        previous_caught = self.caught_aspect_ratio
         self.caught_aspect_ratio = caught_aspect_ratio
-        self._update_aspect_guides(aspect_candidates or [])
+        candidates = aspect_candidates or []
+        if (
+            previous_caught != caught_aspect_ratio
+            or self._aspect_candidates_signature != self._make_aspect_candidates_signature(candidates)
+        ):
+            self._aspect_candidates_signature = self._make_aspect_candidates_signature(candidates)
+            self._update_aspect_guides(candidates)
 
         if self.handles:
             self.handles.update_handles(crop)
+
+    @staticmethod
+    def _make_aspect_candidates_signature(candidates):
+        return tuple(
+            (
+                tuple(candidate["ratio"]),
+                candidate["label"],
+                round(candidate["rect"].left(), 3),
+                round(candidate["rect"].top(), 3),
+                round(candidate["rect"].width(), 3),
+                round(candidate["rect"].height(), 3),
+            )
+            for candidate in candidates
+        )
 
     def _update_aspect_guides(self, candidates):
         """Рисует несколько фиксированных целей соотношения сторон."""
@@ -146,9 +168,7 @@ class CropOverlayController:
             label_x = rect.left() + 5
             label_y = rect.top() + 5
 
-            visible_scene = self.view.mapToScene(
-                self.view.viewport().rect()
-            ).boundingRect()
+            visible_scene = self.view.sceneRect()
             if label_x + label_rect.width() > visible_scene.right():
                 label_x = rect.right() - label_rect.width() - 5
             if label_y + label_rect.height() > visible_scene.bottom():
