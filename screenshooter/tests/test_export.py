@@ -21,6 +21,7 @@ class SpyScene(QGraphicsScene):
         self.visible_items_during_render = [
             item for item in self.items() if item.isVisible()
         ]
+        self.selected_items_during_render = self.selectedItems()
         return super().render(painter, target, source)
 
 
@@ -60,10 +61,12 @@ def test_export_hides_annotation_and_crop_ui(qapp):
         item.zValue() == 2000
         for item in visible
     )
+    assert scene.selected_items_during_render == []
 
-    # После экспорта состояние UI восстанавливается.
+    # После экспорта состояние UI и selection восстанавливаются.
     assert view.image_editor.overlay.crop_rect_item.isVisible()
     assert all(
         item.isVisible()
         for item in view.image_editor.overlay.aspect_guide_items
     )
+    assert annotation.isSelected()
