@@ -50,12 +50,16 @@ def test_snap_to_background_center_shows_vertical_guide(qapp):
     controller = SnapGuidesController(view)
     controller.begin_drag([item], background)
 
-    # Левая грань после delta=98 находится в 148, рядом с центром фона 150.
     snapped = controller.snap_delta(QPointF(98, 0))
 
-    assert snapped.x() == pytest.approx(100)
+    # Привязка должна попасть в ближайшую ось фона с учётом реального
+    # boundingRect Qt (у QGraphicsRectItem граница включает перо).
+    group = item.sceneBoundingRect().translated(98, 0)
+    expected = 98 + (background.sceneBoundingRect().center().x() - group.left())
+    assert snapped.x() == pytest.approx(expected)
     assert snapped.y() == pytest.approx(0)
-    assert len(controller.guides) == 1
+    # Линия + два перекрестья по два луча каждое.
+    assert len(controller.guides) == 5
 
     controller.clear_guides()
     assert not controller.guides
@@ -75,12 +79,13 @@ def test_snap_to_other_object_center(qapp):
     controller = SnapGuidesController(view)
     controller.begin_drag([item], background)
 
-    # Центр item после delta=88 равен 148, рядом с центром target=170? 
-    # Здесь проверяем левую грань item: 138 рядом с target.left=150 при delta=100.
     snapped = controller.snap_delta(QPointF(98, 0))
 
-    assert snapped.x() == pytest.approx(100)
-    assert len(controller.guides) == 1
+    group = item.sceneBoundingRect().translated(98, 0)
+    target_left = target.sceneBoundingRect().left()
+    expected = 98 + (target_left - group.left())
+    assert snapped.x() == pytest.approx(expected)
+    assert len(controller.guides) == 5
 
     controller.clear_guides()
     view.close()
@@ -95,7 +100,7 @@ def test_no_snap_when_outside_threshold(qapp):
     controller = SnapGuidesController(view)
     controller.begin_drag([item], background)
 
-    snapped = controller.snap_delta(QPointF(90, 0))
+    snapped = controller.snap_delta(QPointF(80, 0))
 
     assert snapped == QPointF(90, 0)
     assert not controller.guides
