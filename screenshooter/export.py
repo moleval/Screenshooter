@@ -57,6 +57,16 @@ class Exporter:
         annotation_controller = getattr(
             self.view, "annotation_resize_controller", None
         )
+        annotation_item = getattr(annotation_controller, "_item", None)
+        if (
+            annotation_item is not None
+            and (
+                sip.isdeleted(annotation_item)
+                or annotation_item.scene() is not self.scene
+            )
+        ):
+            annotation_item = None
+
         crop_overlay = getattr(
             getattr(self.view, "image_editor", None), "overlay", None)
         snap_guides = getattr(
@@ -94,13 +104,21 @@ class Exporter:
                 crop_overlay.show_after_render(crop_states)
             # Сначала восстанавливаем исходное состояние выделения.
             self.scene.clearSelection()
+            restored_annotation = False
             for item, selected in selection_states:
                 try:
                     if selected and not sip.isdeleted(item) and item.scene() is self.scene:
                         item.setSelected(True)
+                        restored_annotation = restored_annotation or item is annotation_item
                 except RuntimeError:
                     pass
+
             if annotation_controller is not None:
+                if annotation_item is not None and not restored_annotation:
+                    try:
+                        annotation_item.setSelected(True)
+                    except RuntimeError:
+                        annotation_item = None
                 annotation_controller.sync_handles(force=True)
 
     def save_image(self):
