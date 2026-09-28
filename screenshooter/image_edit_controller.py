@@ -83,6 +83,7 @@ class ImageEditController:
         self.overlay.clear()
         self.overlay.remove_handles()
         self.crop_rect = None
+        self.crop_rect_is_user_defined = False
         self.temp_crop_start = None
         self.active_handle = None
         self.active_aspect_ratio = None
@@ -181,6 +182,7 @@ class ImageEditController:
         self.overlay.clear()
         self.overlay.remove_handles()
         self.crop_rect = None
+        self.crop_rect_is_user_defined = False
         self.temp_crop_start = None
         self.active_handle = None
         self.active_aspect_ratio = None
