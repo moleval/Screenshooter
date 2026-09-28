@@ -85,8 +85,9 @@ class ImageEditController:
             return scene_pos
         if self.crop_target_item is self.background_item:
             return scene_pos
+        pixmap = self.crop_target_item.pixmap()
         image_rect = self.crop_target_item.mapRectToScene(
-            QRectF(self.crop_target_item.pixmap().rect()))
+            QRectF(0, 0, pixmap.width(), pixmap.height()))
         x = max(image_rect.left(), min(image_rect.right(), scene_pos.x()))
         y = max(image_rect.top(), min(image_rect.bottom(), scene_pos.y()))
         return QPointF(x, y)
@@ -277,18 +278,19 @@ class ImageEditController:
         zoom = abs(self.view.transform().m11())
         if zoom < 1e-6:
             zoom = 1.0
-        max_distance = self.ASPECT_SNAP_DISTANCE_PX / zoom
+        max_distance = max(self.ASPECT_SNAP_DISTANCE_PX / zoom, 4.0)
         if math.hypot(point.x() - mouse_pos.x(), point.y() - mouse_pos.y()) > max_distance:
             return rect, None
 
         target_item = self.crop_target_item
         if target_item is not None and target_item is not self.background_item:
+            pixmap = target_item.pixmap()
             image_rect = target_item.mapRectToScene(
-                QRectF(target_item.pixmap().rect())
+                QRectF(0, 0, pixmap.width(), pixmap.height())
             ).normalized()
-            # Do not discard a valid ratio snap merely because the ratio
-            # correction would cross an image edge. Fit the snapped crop
-            # back into the pasted image while preserving the dragged anchor.
+            # Не отбрасываем подходящее соотношение из-за выхода
+            # корректирующей рамки за границу картинки: сначала вписываем
+            # её внутрь изображения, сохраняя фиксированную точку.
             snapped = self._fit_ratio_rect_to_bounds(
                 snapped, handle_id, target, image_rect
             )
