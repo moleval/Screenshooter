@@ -42,7 +42,7 @@ class ImageEditController:
         self.active_handle = None
         self.active_aspect_ratio = None
         self.aspect_drag_candidates = []
-        self.aspect_drag_passed = set()
+        self.aspect_drag_caught_ratio = None
         self.aspect_drag_used_ratios = set()
         self.aspect_drag_handle = None
         self.aspect_drag_last_mouse = None
@@ -151,7 +151,7 @@ class ImageEditController:
         self.active_handle = None
         self.active_aspect_ratio = None
         self.aspect_drag_candidates = []
-        self.aspect_drag_passed = set()
+        self.aspect_drag_caught_ratio = None
         self.aspect_drag_used_ratios = set()
         self.aspect_drag_handle = None
         self.aspect_drag_last_mouse = None
@@ -408,7 +408,7 @@ class ImageEditController:
     def _begin_aspect_drag(self, handle_id, mouse_pos):
         """Фиксирует стартовый набор целей и очищает прошлое состояние."""
         self.aspect_drag_handle = handle_id
-        self.aspect_drag_passed = set()
+        self.aspect_drag_caught_ratio = None
         self.aspect_drag_used_ratios = set()
         self.aspect_drag_last_mouse = QPointF(mouse_pos)
         self.aspect_drag_candidates = self._build_aspect_drag_candidates(
@@ -454,7 +454,7 @@ class ImageEditController:
     def _consume_caught_aspect_candidate(self, mouse_pos):
         caught = None
         for candidate in self.aspect_drag_candidates:
-            if candidate["ratio"] == self.aspect_drag_passed:
+            if tuple(candidate["ratio"]) == tuple(self.aspect_drag_caught_ratio or ()):
                 caught = candidate
                 break
         if caught is None:
@@ -463,8 +463,8 @@ class ImageEditController:
         self.aspect_drag_candidates = [
             item for item in self.aspect_drag_candidates if item is not caught
         ]
-        self.aspect_drag_passed = set(caught["ratio"])
         self.aspect_drag_used_ratios.add(tuple(caught["ratio"]))
+        self.aspect_drag_caught_ratio = None
 
         replacements = self._build_aspect_drag_candidates(
             self.crop_rect, self.aspect_drag_handle, mouse_pos
@@ -504,7 +504,7 @@ class ImageEditController:
                     caught = candidate
 
         if caught is not None:
-            self.aspect_drag_passed = set(caught["ratio"])
+            self.aspect_drag_caught_ratio = tuple(caught["ratio"])
             target_point = caught["handle_point"]
             current_point = self._handle_point(raw_rect, handle_id)
             strength = self.ASPECT_SOFT_SNAP_STRENGTH
@@ -524,7 +524,7 @@ class ImageEditController:
             }
 
         for candidate in self.aspect_drag_candidates:
-            if candidate["ratio"] != self.aspect_drag_passed:
+            if tuple(candidate["ratio"]) != tuple(self.aspect_drag_caught_ratio or ()):
                 continue
             point = candidate["handle_point"]
             distance = self._distance_to_candidate(candidate, mouse_pos)
@@ -1027,7 +1027,7 @@ class ImageEditController:
             self.active_handle = None
             self.active_aspect_ratio = None
             self.aspect_drag_candidates = []
-            self.aspect_drag_passed = set()
+            self.aspect_drag_caught_ratio = None
             self.aspect_drag_used_ratios = set()
             self.aspect_drag_handle = None
             self.aspect_drag_last_mouse = None
