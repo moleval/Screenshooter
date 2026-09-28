@@ -213,7 +213,12 @@ class CropOverlayController:
 
     def hide_for_render(self):
         """Скрывает crop UI, не меняя состояние режима обрезки."""
-        items = list(self.crop_overlay_items) + list(self.aspect_guide_items)
+        items = (
+            list(self.crop_overlay_items)
+            + list(self.aspect_guide_items)
+            + list(self.aspect_label_items)
+            + list(self.aspect_label_bg_items)
+        )
         if self.crop_rect_item is not None:
             items.append(self.crop_rect_item)
         if self.crop_size_label is not None:
@@ -386,6 +391,9 @@ class CropOverlayController:
     def get_all_overlay_items(self):
         items = []
         items.extend(self.crop_overlay_items)
+        items.extend(self.aspect_guide_items)
+        items.extend(self.aspect_label_items)
+        items.extend(self.aspect_label_bg_items)
         if self.crop_rect_item is not None:
             items.append(self.crop_rect_item)
         if self.crop_size_label is not None:
