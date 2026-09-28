@@ -1173,9 +1173,10 @@ class ImageEditController:
             self.crop_rect = QRectF(
                 self.temp_crop_start, sp
             ).normalized()
-            self.crop_rect, self.active_aspect_ratio = self._snap_new_crop_rect(
-                self.crop_rect, self.temp_crop_start, sp
-            )
+            if self.aspect_drag_handle is None:
+                self.crop_rect, self.active_aspect_ratio = self._snap_new_crop_rect(
+                    self.crop_rect, self.temp_crop_start, sp
+                )
 
             if (
                 self.crop_rect.width() < MIN_RECT_SIZE
@@ -1205,44 +1206,3 @@ class ImageEditController:
 
         return False
 
-        if self.active_handle is not None:
-            self.active_handle = None
-            self.active_aspect_ratio = None
-            self.aspect_drag_candidates = []
-            self.aspect_drag_caught_ratio = None
-            self.aspect_drag_used_ratios = set()
-            self.aspect_drag_handle = None
-            self.aspect_drag_last_mouse = None
-            return True
-
-        if self.temp_crop_start is not None:
-            sp = self.view.mapToScene(event.pos())
-            sp = self._clamp_to_target(sp)
-            self.crop_rect = QRectF(
-                self.temp_crop_start, sp
-            ).normalized()
-            self.crop_rect, self.active_aspect_ratio = self._snap_new_crop_rect(
-                self.crop_rect, self.temp_crop_start, sp
-            )
-
-            if (
-                self.crop_rect.width() < MIN_RECT_SIZE
-                or self.crop_rect.height() < MIN_RECT_SIZE
-            ):
-                if self.crop_target_item:
-                    self.crop_rect = self.crop_target_item.mapRectToScene(
-                        QRectF(self.crop_target_item.pixmap().rect())
-                    )
-                else:
-                    self.crop_rect = self.view.sceneRect()
-
-            self.overlay.remove_handles()
-            self.overlay.create_handles(self.crop_rect)
-            self.overlay.update(self.crop_rect)
-            self.overlay.update_resolution_text(
-                self.crop_rect, self.crop_target_item
-            )
-            self.temp_crop_start = None
-            return True
-
-        return False
