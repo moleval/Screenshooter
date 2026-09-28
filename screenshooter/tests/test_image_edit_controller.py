@@ -312,6 +312,7 @@ def test_crop_aspect_candidate_turns_yellow_and_softly_snaps(setup_editor):
     raw = controller._apply_handle_drag("br", probe)
     assert controller.active_aspect_ratio == candidate["ratio"]
     snapped_point = controller._handle_point(raw, "br")
+    assert snapped_point == candidate["handle_point"]
     assert snapped_point != probe
     assert snapped_point.x() > controller.crop_rect.left()
     assert snapped_point.y() > controller.crop_rect.top()
@@ -329,6 +330,51 @@ def test_crop_aspect_candidate_turns_yellow_and_softly_snaps(setup_editor):
         and item.pen().color().alpha() == 225
     ]
     assert caught
+
+
+def test_crop_new_selection_shows_aspect_candidates(setup_editor):
+    view = setup_editor
+    controller = view.image_editor
+
+    view.start_crop_mode()
+    start = QPointF(10, 10)
+    current = QPointF(70, 60)
+
+    controller.temp_crop_start = start
+    controller.crop_rect = QRectF(start, start)
+
+    class Event:
+        def pos(self):
+            return view.mapFromScene(current)
+
+    assert controller.handle_mouse_move(Event()) is True
+    assert controller.aspect_drag_candidates
+    assert controller.aspect_drag_handle == "br"
+    assert len(controller.overlay.aspect_guide_items) == (
+        controller.ASPECT_VISIBLE_CANDIDATES
+    )
+
+
+def test_crop_new_selection_can_choose_aspect_candidate(setup_editor):
+    view = setup_editor
+    controller = view.image_editor
+
+    view.start_crop_mode()
+    start = QPointF(10, 10)
+    current = QPointF(90, 70)
+    raw = QRectF(start, current).normalized()
+
+    controller.crop_rect = raw
+    controller._begin_aspect_drag("br", current)
+    candidate = controller.aspect_drag_candidates[0]
+
+    result = controller._apply_aspect_candidate_snap(
+        raw, "br", candidate["handle_point"]
+    )
+
+    assert result is not None
+    assert result["ratio"] == candidate["ratio"]
+    assert result["rect"] == candidate["rect"]
 
 
 def test_crop_aspect_candidate_is_replaced_after_passing_it(setup_editor):
