@@ -257,23 +257,106 @@ def test_crop_soft_snaps_to_standard_aspect_ratio(setup_editor):
     assert snapped.height() == pytest.approx(100)
 
 
-def test_crop_overlay_draws_landscape_and_portrait_ratio_guides(setup_editor):
+def test_crop_overlay_draws_handle_specific_ratio_candidates_with_labels(setup_editor):
     view = setup_editor
     controller = view.image_editor
 
     view.start_crop_mode()
     rect = QRectF(10, 10, 80, 60)
-    controller.overlay.update(rect)
+    mouse_pos = rect.bottomRight()
+
+    controller.crop_rect = rect
+    controller._begin_aspect_drag("br", mouse_pos)
+    controller.overlay.update(
+        rect,
+        None,
+        controller.aspect_drag_candidates,
+        None,
+    )
 
     visible = [
         item for item in controller.overlay.aspect_guide_items
         if item.isVisible()
     ]
-    assert len(visible) == 1
-    assert visible[0].pen().color().alpha() == 65
+    labels = [
+        item for item in controller.overlay.aspect_label_items
+        if item.isVisible()
+    ]
+
+    assert len(visible) == controller.ASPECT_VISIBLE_CANDIDATES
+    assert len(labels) == controller.ASPECT_VISIBLE_CANDIDATES
+    assert all(label.text() for label in labels)
+    assert all(
+        candidate["handle_point"] == candidate["rect"].bottomRight()
+        for candidate in controller.aspect_drag_candidates
+    )
 
     controller.overlay.clear()
     assert not controller.overlay.aspect_guide_items
+    assert not controller.overlay.aspect_label_items
+
+
+def test_crop_aspect_candidate_turns_yellow_and_softly_snaps(setup_editor):
+    view = setup_editor
+    controller = view.image_editor
+
+    view.start_crop_mode()
+    controller.crop_rect = QRectF(10, 10, 80, 60)
+    mouse_pos = controller.crop_rect.bottomRight()
+    controller._begin_aspect_drag("br", mouse_pos)
+
+    candidate = controller.aspect_drag_candidates[0]
+    target = candidate["handle_point"]
+
+    raw = controller._apply_handle_drag("br", target)
+    assert controller.active_aspect_ratio == candidate["ratio"]
+    assert raw != candidate["rect"]
+
+    controller.overlay.update(
+        controller.crop_rect,
+        controller.active_aspect_ratio,
+        controller.aspect_drag_candidates,
+        controller.active_aspect_ratio,
+    )
+
+    caught = [
+        item for item in controller.overlay.aspect_guide_items
+        if item.isVisible()
+        and item.pen().color().alpha() == 225
+    ]
+    assert caught
+
+
+def test_crop_aspect_candidate_is_replaced_after_passing_it(setup_editor):
+    view = setup_editor
+    controller = view.image_editor
+
+    view.start_crop_mode()
+    controller.crop_rect = QRectF(10, 10, 80, 60)
+    mouse_pos = controller.crop_rect.bottomRight()
+    controller._begin_aspect_drag("br", mouse_pos)
+
+    first = controller.aspect_drag_candidates[0]
+    first_ratio = tuple(first["ratio"])
+    target = first["handle_point"]
+
+    controller.crop_rect = controller._apply_handle_drag("br", target)
+    controller._apply_handle_drag(
+        "br",
+        QPointF(
+            target.x() + (target.x() - controller.crop_rect.left()) * 0.5,
+            target.y() + (target.y() - controller.crop_rect.top()) * 0.5,
+        ),
+    )
+
+    assert controller.aspect_drag_caught_ratio is None
+    assert first_ratio in controller.aspect_drag_used_ratios
+    assert first_ratio not in {
+        tuple(candidate["ratio"])
+        for candidate in controller.aspect_drag_candidates
+    }
+    assert controller.aspect_drag_candidates
+
 
 def test_crop_new_rectangle_soft_snaps_during_drag(setup_editor):
     view = setup_editor
