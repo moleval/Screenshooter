@@ -126,8 +126,18 @@ class CropOverlayController:
                 visible_ratios.append(lower)
             if higher is not None:
                 visible_ratios.append(higher)
+            if lower is None:
+                visible_ratios.extend(ordered[:2])
+            elif higher is None:
+                visible_ratios.extend(ordered[-2:])
 
-        visible_ratios = visible_ratios[:3]
+        # Не показываем больше трёх рамок: активная + ближайшая слева
+        # + ближайшая справа.
+        unique = []
+        for pair in visible_ratios:
+            if pair not in unique:
+                unique.append(pair)
+        visible_ratios = unique[:3]
 
         while len(self.aspect_guide_items) < len(visible_ratios):
             item = QGraphicsRectItem()
