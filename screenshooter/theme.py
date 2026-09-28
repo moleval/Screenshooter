@@ -298,6 +298,18 @@ class ThemeManager:
             padding: 2px;
         }}
 
+        /* ===== QColorDialog numeric values ===== */
+        QSpinBox, QDoubleSpinBox {{
+            background-color: {c['btn_bg']};
+            color: {c['text']};
+            border: 1px solid {c['border']};
+            border-radius: 2px;
+        }}
+        QSpinBox QLineEdit, QDoubleSpinBox QLineEdit {{
+            background-color: transparent;
+            color: {c['text']};
+        }}
+
         /* ===== QSlider ===== */
         QSlider::groove:horizontal {{
             background: {selection_bg.name()};
