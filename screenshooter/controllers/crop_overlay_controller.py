@@ -83,7 +83,7 @@ class CropOverlayController:
 
 
     def _update_aspect_guides(self, rect):
-        """Показывает ненавязчивые контуры стандартных соотношений сторон."""
+        """Показывает только ближайшие стандартные соотношения сторон."""
         ratios = (
             (1, 1), (4, 5), (5, 4), (3, 4), (4, 3),
             (2, 3), (3, 2), (10, 16), (16, 10), (9, 16),
@@ -95,7 +95,41 @@ class CropOverlayController:
             self._clear_aspect_guides()
             return
 
-        while len(self.aspect_guide_items) < len(ratios):
+        current_ratio = crop.width() / crop.height()
+        ordered = sorted(
+            ratios,
+            key=lambda pair: pair[0] / pair[1],
+        )
+
+        lower = None
+        higher = None
+        active = None
+
+        for pair in ordered:
+            value = pair[0] / pair[1]
+            if value < current_ratio:
+                lower = pair
+            elif value > current_ratio and higher is None:
+                higher = pair
+            elif abs(value - current_ratio) < 1e-9:
+                active = pair
+
+        visible_ratios = []
+        if active is not None:
+            visible_ratios.append(active)
+            if lower is not None:
+                visible_ratios.append(lower)
+            if higher is not None:
+                visible_ratios.append(higher)
+        else:
+            if lower is not None:
+                visible_ratios.append(lower)
+            if higher is not None:
+                visible_ratios.append(higher)
+
+        visible_ratios = visible_ratios[:3]
+
+        while len(self.aspect_guide_items) < len(visible_ratios):
             item = QGraphicsRectItem()
             item.setBrush(QBrush(Qt.NoBrush))
             item.setAcceptedMouseButtons(Qt.NoButton)
@@ -103,7 +137,12 @@ class CropOverlayController:
             self.view.scene().addItem(item)
             self.aspect_guide_items.append(item)
 
-        for index, (rw, rh) in enumerate(ratios):
+        for index, item in enumerate(self.aspect_guide_items):
+            if index >= len(visible_ratios):
+                item.setVisible(False)
+                continue
+
+            rw, rh = visible_ratios[index]
             target_ratio = rw / rh
             if crop.width() / crop.height() >= target_ratio:
                 height = crop.height()
@@ -118,10 +157,13 @@ class CropOverlayController:
                 width,
                 height,
             )
-            item = self.aspect_guide_items[index]
-            is_active = self.active_aspect_ratio == (rw, rh)
-            color = QColor(245, 190, 0, 225) if is_active else QColor(0, 120, 215, 65)
-            pen = QPen(color, 1 if not is_active else 2, Qt.DashLine)
+            is_active = active == (rw, rh)
+            color = (
+                QColor(245, 190, 0, 225)
+                if is_active
+                else QColor(0, 120, 215, 65)
+            )
+            pen = QPen(color, 2 if is_active else 1, Qt.DashLine)
             pen.setCosmetic(True)
             item.setPen(pen)
             item.setRect(target)
