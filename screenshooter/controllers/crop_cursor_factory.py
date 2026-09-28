@@ -1,19 +1,15 @@
 """
 Модуль: controllers/crop_cursor_factory.py
 Описание: Фабрика курсоров для режима обрезки.
-          Создаёт и кэширует контрастный курсор-перекрестие.
+          Создаёт и кэширует курсор с иконкой обрезки.
 """
 
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QPen, QPixmap, QPainter, QCursor
+from PyQt5.QtGui import QCursor
 
 from ..widgets.icon_manager import IconManager
 
-from ..constants import (
-    CROP_CURSOR_SIZE,
-    CROP_CURSOR_OUTLINE_WIDTH,
-    CROP_CURSOR_LINE_WIDTH,
-)
+from ..constants import CROP_CURSOR_SIZE
 from ..theme import theme_manager
 
 
