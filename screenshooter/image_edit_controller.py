@@ -281,6 +281,14 @@ class ImageEditController:
         if math.hypot(point.x() - mouse_pos.x(), point.y() - mouse_pos.y()) > max_distance:
             return rect, None
 
+        target_item = self.crop_target_item
+        if target_item is not None and target_item is not self.background_item:
+            image_rect = target_item.mapRectToScene(
+                QRectF(target_item.pixmap().rect())
+            ).normalized()
+            if not image_rect.contains(snapped):
+                return rect, None
+
         return snapped, best
 
     def _snap_new_crop_rect(self, rect, start_pos, current_pos):
