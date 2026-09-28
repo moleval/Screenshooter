@@ -48,8 +48,18 @@ class Exporter:
         # этого они физически попадают в экспортируемое изображение.
         annotation_controller = getattr(
             self.view, "annotation_resize_controller", None)
+        crop_overlay = getattr(
+            getattr(self.view, "image_editor", None), "overlay", None)
+        snap_guides = getattr(
+            getattr(self.view, "manipulation_controller", None),
+            "snap_guides", None,
+        )
+
         self.view.blur_controller.hide_blur_regions_for_render()
         self.view.hide_pasted_image_handles_for_render()
+        crop_states = crop_overlay.hide_for_render() if crop_overlay is not None else []
+        if snap_guides is not None:
+            snap_guides.clear_guides()
         if annotation_controller is not None:
             annotation_controller.remove_handles()
 
@@ -68,6 +78,8 @@ class Exporter:
             # Восстанавливаем служебные элементы даже при ошибке рендера.
             self.view.blur_controller.show_blur_regions_after_render()
             self.view.show_pasted_image_handles_after_render()
+            if crop_overlay is not None:
+                crop_overlay.show_after_render(crop_states)
             if annotation_controller is not None:
                 annotation_controller.sync_handles()
 
