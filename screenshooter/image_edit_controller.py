@@ -326,13 +326,52 @@ class ImageEditController:
     def _aspect_target_bounds(self):
         if self.crop_target_item is None:
             return None
-        if self.crop_target_item is self.background_item:
-            return None
 
         pixmap = self.crop_target_item.pixmap()
         return self.crop_target_item.mapRectToScene(
             QRectF(0, 0, pixmap.width(), pixmap.height())
         ).normalized()
+
+    def _snap_crop_move_to_target(self, rect):
+        """Примагничивает перемещаемую рамку к границам изображения."""
+        bounds = self._aspect_target_bounds()
+        if bounds is None:
+            return rect
+
+        rect = QRectF(rect).normalized()
+        if rect.width() > bounds.width() or rect.height() > bounds.height():
+            return rect
+
+        threshold = self.ASPECT_SNAP_DISTANCE_PX
+        dx = 0.0
+        dy = 0.0
+
+        candidates_x = (
+            (abs(rect.left() - bounds.left()), bounds.left() - rect.left()),
+            (abs(rect.right() - bounds.right()), bounds.right() - rect.right()),
+        )
+        candidates_y = (
+            (abs(rect.top() - bounds.top()), bounds.top() - rect.top()),
+            (abs(rect.bottom() - bounds.bottom()), bounds.bottom() - rect.bottom()),
+        )
+
+        near_x = min(candidates_x, key=lambda item: item[0])
+        near_y = min(candidates_y, key=lambda item: item[0])
+        if near_x[0] <= threshold:
+            dx = near_x[1]
+        if near_y[0] <= threshold:
+            dy = near_y[1]
+
+        snapped = QRectF(rect).translated(dx, dy)
+        if snapped.left() < bounds.left():
+            snapped.translate(bounds.left() - snapped.left(), 0)
+        if snapped.right() > bounds.right():
+            snapped.translate(bounds.right() - snapped.right(), 0)
+        if snapped.top() < bounds.top():
+            snapped.translate(0, bounds.top() - snapped.top())
+        if snapped.bottom() > bounds.bottom():
+            snapped.translate(0, bounds.bottom() - snapped.bottom())
+        return snapped
 
     def _candidate_rect_for_ratio(
         self, rect, handle_id, ratio, mouse_pos, scale=1.0
@@ -635,6 +674,16 @@ class ImageEditController:
             self.aspect_drag_last_mouse = QPointF(mouse_pos)
             self.aspect_drag_last_distance = current_distance
             return None
+
+        if self.aspect_drag_caught_ratio is None:
+            refreshed = self._build_aspect_drag_candidates(
+                raw_rect, handle_id, mouse_pos
+            )
+            self.aspect_drag_candidates = [
+                candidate
+                for candidate in refreshed
+                if tuple(candidate["ratio"]) not in self.aspect_drag_used_ratios
+            ][:self.ASPECT_VISIBLE_CANDIDATES]
 
         if self.aspect_drag_caught_ratio is not None:
             caught = next(
@@ -1181,7 +1230,7 @@ class ImageEditController:
                     new_rect.translate(0, bounds.top() - new_rect.top())
                 if new_rect.bottom() > bounds.bottom():
                     new_rect.translate(0, bounds.bottom() - new_rect.bottom())
-            self.crop_rect = new_rect
+            self.crop_rect = self._snap_crop_move_to_target(new_rect)
             self.overlay.update(self.crop_rect, self.active_aspect_ratio)
             self.overlay.update_resolution_text(
                 self.crop_rect, self.crop_target_item
@@ -1216,11 +1265,7 @@ class ImageEditController:
                 self.temp_crop_start, sp
             ).normalized()
 
-            if (
-                raw_rect.width() >= MIN_RECT_SIZE
-                and raw_rect.height() >= MIN_RECT_SIZE
-                and not self.aspect_drag_candidates
-            ):
+            if raw_rect.width() >= MIN_RECT_SIZE and raw_rect.height() >= MIN_RECT_SIZE:
                 handle_id = (
                     ("r" if sp.x() >= self.temp_crop_start.x() else "l")
                     + ("b" if sp.y() >= self.temp_crop_start.y() else "t")
@@ -1229,8 +1274,9 @@ class ImageEditController:
                     "rb": "br", "rt": "tr",
                     "lb": "bl", "lt": "tl",
                 }[handle_id]
+                if self.aspect_drag_handle != handle_id:
+                    self._begin_aspect_drag(handle_id, sp)
                 self.crop_rect = raw_rect
-                self._begin_aspect_drag(handle_id, sp)
 
             if self.aspect_drag_candidates:
                 handle_id = self.aspect_drag_handle
