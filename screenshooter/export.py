@@ -104,10 +104,7 @@ class Exporter:
                 except RuntimeError:
                     pass
             if annotation_controller is not None:
-                if annotation_handles_were_present:
-                    annotation_controller.sync_handles(force=True)
-                else:
-                    annotation_controller.remove_handles()
+                annotation_controller.sync_handles(force=True)
 
     def save_image(self):
         """Сохраняет изображение в файл через диалог выбора."""
