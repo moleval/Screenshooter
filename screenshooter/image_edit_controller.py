@@ -41,6 +41,11 @@ class ImageEditController:
         self.temp_crop_start = None
         self.active_handle = None
         self.active_aspect_ratio = None
+        self.aspect_drag_candidates = []
+        self.aspect_drag_passed = set()
+        self.aspect_drag_used_ratios = set()
+        self.aspect_drag_handle = None
+        self.aspect_drag_last_mouse = None
 
         # Менеджер статусной строки
         self.status_bar_manager = StatusBarManager(self.view)
@@ -145,6 +150,11 @@ class ImageEditController:
         self.temp_crop_start = None
         self.active_handle = None
         self.active_aspect_ratio = None
+        self.aspect_drag_candidates = []
+        self.aspect_drag_passed = set()
+        self.aspect_drag_used_ratios = set()
+        self.aspect_drag_handle = None
+        self.aspect_drag_last_mouse = None
 
         self.view.setCursor(Qt.CrossCursor)
         self.view.setBackgroundBrush(self.view.normal_background_color)
@@ -160,9 +170,20 @@ class ImageEditController:
 
     def _apply_handle_drag(self, handle_id, new_scene_pos):
         rect = self.crop_rect.normalized()
-        left, top, right, bottom = rect.left(), rect.top(), rect.right(), rect.bottom()
+        left, top, right, bottom = (
+            rect.left(),
+            rect.top(),
+            rect.right(),
+            rect.bottom(),
+        )
         image_rect = self.crop_target_item.mapRectToScene(
-            QRectF(self.crop_target_item.pixmap().rect()))
+            QRectF(
+                0,
+                0,
+                self.crop_target_item.pixmap().width(),
+                self.crop_target_item.pixmap().height(),
+            )
+        ).normalized()
 
         if self.crop_target_item is self.background_item:
             x = new_scene_pos.x()
@@ -190,20 +211,16 @@ class ImageEditController:
         elif handle_id == 'lm':
             left = min(x, right - MIN_RECT_SIZE)
         elif handle_id == 'rm':
-            right = max(x, left + MIN_RECT_SIZE)
-
-        rect = QRectF(left, top, right - left, bottom - top).normalized()
-        rect, self.active_aspect_ratio = self._snap_aspect_ratio(
-            rect, handle_id, new_scene_pos)
-        return rect
-
-    ASPECT_RATIOS = (
+            right = max(x, left + MIN_RECT_SI    ASPECT_RATIOS = (
         (1, 1), (4, 5), (5, 4), (3, 4), (4, 3),
         (2, 3), (3, 2), (10, 16), (16, 10), (9, 16),
         (16, 9), (9, 21), (21, 9), (1, 2), (2, 1),
         (1, 3), (3, 1),
     )
     ASPECT_SNAP_DISTANCE_PX = 8.0
+    ASPECT_RELEASE_DISTANCE_PX = 18.0
+    ASPECT_VISIBLE_CANDIDATES = 3
+    ASPECT_SOFT_SNAP_STRENGTH = 0.65
 
     @staticmethod
     def _ratio_error(current, target):
@@ -247,6 +264,288 @@ class ImageEditController:
 
         return QRectF(left, top, right - left, bottom - top).normalized()
 
+    @staticmethod
+    def _handle_point(rect, handle_id):
+        points = {
+            "tl": rect.topLeft(),
+            "tr": rect.topRight(),
+            "bl": rect.bottomLeft(),
+            "br": rect.bottomRight(),
+            "tm": QPointF(rect.center().x(), rect.top()),
+            "bm": QPointF(rect.center().x(), rect.bottom()),
+            "lm": QPointF(rect.left(), rect.center().y()),
+            "rm": QPointF(rect.right(), rect.center().y()),
+        }
+        return points.get(handle_id)
+
+    def _aspect_target_bounds(self):
+        if self.crop_target_item is None:
+            return None
+        if self.crop_target_item is self.background_item:
+            return None
+
+        pixmap = self.crop_target_item.pixmap()
+        return self.crop_target_item.mapRectToScene(
+            QRectF(0, 0, pixmap.width(), pixmap.height())
+        ).normalized()
+
+    def _candidate_rect_for_ratio(
+        self, rect, handle_id, ratio, mouse_pos
+    ):
+        """Вычисляет фиксированную цель для одной ручки и одного соотношения."""
+        rect = QRectF(rect).normalized()
+        ratio = float(ratio)
+        if ratio <= 0:
+            return None
+
+        bounds = self._aspect_target_bounds()
+
+        if handle_id in ("tl", "tr", "bl", "br"):
+            anchors = {
+                "tl": (rect.right(), rect.bottom(), -1, -1),
+                "tr": (rect.left(), rect.bottom(), 1, -1),
+                "bl": (rect.right(), rect.top(), -1, 1),
+                "br": (rect.left(), rect.top(), 1, 1),
+            }
+            ax, ay, sx, sy = anchors[handle_id]
+            dx = mouse_pos.x() - ax
+            dy = mouse_pos.y() - ay
+            inv_ratio = 1.0 / ratio
+            width = (
+                sx * dx + sy * dy * inv_ratio
+            ) / (1.0 + inv_ratio * inv_ratio)
+
+            if bounds is not None:
+                max_w_x = (
+                    bounds.right() - ax if sx > 0 else ax - bounds.left()
+                )
+                max_h = (
+                    bounds.bottom() - ay if sy > 0 else ay - bounds.top()
+                )
+                max_w = min(max_w_x, max_h * ratio)
+                if max_w < MIN_RECT_SIZE:
+                    return None
+                width = min(width, max_w)
+
+            width = max(width, float(MIN_RECT_SIZE))
+            height = width / ratio
+            if bounds is not None:
+                if height < MIN_RECT_SIZE:
+                    return None
+                max_w_x = (
+                    bounds.right() - ax if sx > 0 else ax - bounds.left()
+                )
+                max_h = (
+                    bounds.bottom() - ay if sy > 0 else ay - bounds.top()
+                )
+                if width > max_w_x + 1e-6 or height > max_h + 1e-6:
+                    return None
+
+            x = ax + sx * width
+            y = ay + sy * height
+            return QRectF(
+                min(ax, x),
+                min(ay, y),
+                abs(x - ax),
+                abs(y - ay),
+            ).normalized()
+
+        if handle_id in ("tm", "bm"):
+            width = rect.width()
+            height = width / ratio
+            anchor_y = rect.bottom() if handle_id == "tm" else rect.top()
+            top = anchor_y - height if handle_id == "tm" else anchor_y
+            candidate = QRectF(
+                rect.left(), top, width, height
+            ).normalized()
+        elif handle_id in ("lm", "rm"):
+            height = rect.height()
+            width = height * ratio
+            anchor_x = rect.right() if handle_id == "lm" else rect.left()
+            left = anchor_x - width if handle_id == "lm" else anchor_x
+            candidate = QRectF(
+                left, rect.top(), width, height
+            ).normalized()
+        else:
+            return None
+
+        if bounds is not None and not bounds.contains(candidate):
+            return None
+        if candidate.width() < MIN_RECT_SIZE or candidate.height() < MIN_RECT_SIZE:
+            return None
+        return candidate
+
+    def _build_aspect_drag_candidates(self, rect, handle_id, mouse_pos):
+        """Строит три ближайшие фиксированные цели для захваченной ручки."""
+        candidates = []
+        for ratio_pair in self.ASPECT_RATIOS:
+            ratio = ratio_pair[0] / ratio_pair[1]
+            candidate_rect = self._candidate_rect_for_ratio(
+                rect, handle_id, ratio, mouse_pos
+            )
+            if candidate_rect is None:
+                continue
+
+            handle_point = self._handle_point(candidate_rect, handle_id)
+            if handle_point is None:
+                continue
+
+            distance = math.hypot(
+                handle_point.x() - mouse_pos.x(),
+                handle_point.y() - mouse_pos.y(),
+            )
+            candidates.append({
+                "ratio": ratio_pair,
+                "label": f"{ratio_pair[0]}:{ratio_pair[1]}",
+                "rect": candidate_rect,
+                "handle_point": handle_point,
+                "distance": distance,
+            })
+
+        candidates.sort(key=lambda item: item["distance"])
+        return candidates[:self.ASPECT_VISIBLE_CANDIDATES]
+
+    def _begin_aspect_drag(self, handle_id, mouse_pos):
+        """Фиксирует стартовый набор целей и очищает прошлое состояние."""
+        self.aspect_drag_handle = handle_id
+        self.aspect_drag_passed = set()
+        self.aspect_drag_used_ratios = set()
+        self.aspect_drag_last_mouse = QPointF(mouse_pos)
+        self.aspect_drag_candidates = self._build_aspect_drag_candidates(
+            self.crop_rect, handle_id, mouse_pos
+        )
+
+    def _distance_to_candidate(self, candidate, mouse_pos):
+        point = candidate["handle_point"]
+        zoom = abs(self.view.transform().m11())
+        if zoom < 1e-6:
+            zoom = 1.0
+        return math.hypot(
+            point.x() - mouse_pos.x(),
+            point.y() - mouse_pos.y(),
+        ) * zoom
+
+    def _rect_with_handle_point(self, rect, handle_id, point):
+        """Возвращает рамку с перемещённой ручкой и фиксированным якорем."""
+        rect = QRectF(rect).normalized()
+        left, top, right, bottom = (
+            rect.left(), rect.top(), rect.right(), rect.bottom()
+        )
+
+        if handle_id == "tl":
+            left, top = point.x(), point.y()
+        elif handle_id == "tr":
+            right, top = point.x(), point.y()
+        elif handle_id == "bl":
+            left, bottom = point.x(), point.y()
+        elif handle_id == "br":
+            right, bottom = point.x(), point.y()
+        elif handle_id == "tm":
+            top = point.y()
+        elif handle_id == "bm":
+            bottom = point.y()
+        elif handle_id == "lm":
+            left = point.x()
+        elif handle_id == "rm":
+            right = point.x()
+
+        return QRectF(left, top, right - left, bottom - top).normalized()
+
+    def _consume_caught_aspect_candidate(self, mouse_pos):
+        caught = None
+        for candidate in self.aspect_drag_candidates:
+            if candidate["ratio"] == self.aspect_drag_passed:
+                caught = candidate
+                break
+        if caught is None:
+            return
+
+        self.aspect_drag_candidates = [
+            item for item in self.aspect_drag_candidates if item is not caught
+        ]
+        self.aspect_drag_passed = set(caught["ratio"])
+        self.aspect_drag_used_ratios.add(tuple(caught["ratio"]))
+
+        replacements = self._build_aspect_drag_candidates(
+            self.crop_rect, self.aspect_drag_handle, mouse_pos
+        )
+        for candidate in replacements:
+            if (
+                tuple(candidate["ratio"]) not in self.aspect_drag_used_ratios
+                and candidate["ratio"] not in {
+                    tuple(item["ratio"])
+                    for item in self.aspect_drag_candidates
+                }
+            ):
+                self.aspect_drag_candidates.append(candidate)
+                break
+
+        self.aspect_drag_candidates.sort(
+            key=lambda item: self._distance_to_candidate(item, mouse_pos)
+        )
+        self.aspect_drag_candidates = self.aspect_drag_candidates[
+            :self.ASPECT_VISIBLE_CANDIDATES
+        ]
+
+    def _apply_aspect_candidate_snap(self, raw_rect, handle_id, mouse_pos):
+        """Возвращает мягко притянутую цель или None."""
+        if self.aspect_drag_handle != handle_id:
+            return None
+
+        if not self.aspect_drag_candidates:
+            return None
+
+        last_mouse = self.aspect_drag_last_mouse or QPointF(mouse_pos)
+
+        caught = None
+        for candidate in self.aspect_drag_candidates:
+            if self._distance_to_candidate(candidate, mouse_pos) <= self.ASPECT_SNAP_DISTANCE_PX:
+                if caught is None or candidate["distance"] < caught["distance"]:
+                    caught = candidate
+
+        if caught is not None:
+            self.aspect_drag_passed = set(caught["ratio"])
+            target_point = caught["handle_point"]
+            current_point = self._handle_point(raw_rect, handle_id)
+            strength = self.ASPECT_SOFT_SNAP_STRENGTH
+            soft_point = QPointF(
+                current_point.x()
+                + (target_point.x() - current_point.x()) * strength,
+                current_point.y()
+                + (target_point.y() - current_point.y()) * strength,
+            )
+            result_rect = self._rect_with_handle_point(
+                raw_rect, handle_id, soft_point
+            )
+            self.aspect_drag_last_mouse = QPointF(mouse_pos)
+            return {
+                "ratio": caught["ratio"],
+                "rect": result_rect,
+            }
+
+        for candidate in self.aspect_drag_candidates:
+            if candidate["ratio"] != self.aspect_drag_passed:
+                continue
+            point = candidate["handle_point"]
+            distance = self._distance_to_candidate(candidate, mouse_pos)
+            movement = QPointF(
+                mouse_pos.x() - last_mouse.x(),
+                mouse_pos.y() - last_mouse.y(),
+            )
+            away = QPointF(
+                mouse_pos.x() - point.x(),
+                mouse_pos.y() - point.y(),
+            )
+            if (
+                distance > self.ASPECT_RELEASE_DISTANCE_PX
+                and movement.x() * away.x() + movement.y() * away.y() > 0
+            ):
+                self._consume_caught_aspect_candidate(mouse_pos)
+                break
+
+        self.aspect_drag_last_mouse = QPointF(mouse_pos)
+        return None
+
     def _snap_aspect_ratio(self, rect, handle_id, mouse_pos):
         if rect.width() < MIN_RECT_SIZE or rect.height() < MIN_RECT_SIZE:
             return rect, None
@@ -288,24 +587,21 @@ class ImageEditController:
             image_rect = target_item.mapRectToScene(
                 QRectF(0, 0, pixmap.width(), pixmap.height())
             ).normalized()
-            # Не отбрасываем подходящее соотношение из-за выхода
-            # корректирующей рамки за границу картинки: сначала вписываем
-            # её внутрь изображения, сохраняя фиксированную точку.
             snapped = self._fit_ratio_rect_to_bounds(
                 snapped, handle_id, target, image_rect
             )
-            if snapped.isEmpty() or snapped.width() < MIN_RECT_SIZE or snapped.height() < MIN_RECT_SIZE:
+            if (
+                snapped.isEmpty()
+                or snapped.width() < MIN_RECT_SIZE
+                or snapped.height() < MIN_RECT_SIZE
+            ):
                 return rect, None
 
         return snapped, best
 
     @staticmethod
     def _fit_ratio_rect_to_bounds(rect, handle_id, ratio, bounds):
-        """Fits a ratio-constrained crop inside pasted-image bounds.
-
-        The opposite corner/edge remains the anchor, so snapping never makes
-        the crop jump outside the image being edited.
-        """
+        """Вписывает рамку заданного соотношения в границы вставленного изображения."""
         rect = QRectF(rect).normalized()
         bounds = QRectF(bounds).normalized()
         ratio = float(ratio)
@@ -349,7 +645,10 @@ class ImageEditController:
             if height > bounds.height():
                 height = bounds.height()
                 width = height * ratio
-            left = max(bounds.left(), min(rect.center().x() - width / 2, bounds.right() - width))
+            left = max(
+                bounds.left(),
+                min(rect.center().x() - width / 2, bounds.right() - width),
+            )
             if handle_id == "tm":
                 top = anchor_y - height
                 top = max(bounds.top(), min(top, bounds.bottom() - height))
@@ -365,7 +664,10 @@ class ImageEditController:
             if width > bounds.width():
                 width = bounds.width()
                 height = width / ratio
-            top = max(bounds.top(), min(rect.center().y() - height / 2, bounds.bottom() - height))
+            top = max(
+                bounds.top(),
+                min(rect.center().y() - height / 2, bounds.bottom() - height),
+            )
             if handle_id == "lm":
                 left = anchor_x - width
                 left = max(bounds.left(), min(left, bounds.right() - width))
@@ -671,28 +973,34 @@ class ImageEditController:
         handle_id = self.overlay.hit_test_handle(QPointF(event.pos()))
         if handle_id:
             self.active_handle = handle_id
+            self._begin_aspect_drag(handle_id, self.view.mapToScene(event.pos()))
+            self.overlay.update(
+                self.crop_rect,
+                self.active_aspect_ratio,
+                self.aspect_drag_candidates,
+                None,
+            )
             return True
 
         sp = self.view.mapToScene(event.pos())
         sp = self._clamp_to_target(sp)
-        self.temp_crop_start = sp
-        self.crop_rect = QRectF(sp, sp)
-
-        self.overlay.clear()
-        self.overlay.remove_handles()
-        self.overlay.update(self.crop_rect)
-        self.overlay.update_resolution_text(self.crop_rect, self.crop_target_item)
-        return True
-
-    def handle_mouse_move(self, event):
+        self.temp_cr    def handle_mouse_move(self, event):
         if not self.crop_mode:
             return False
 
         if self.active_handle is not None:
             sp = self.view.mapToScene(event.pos())
             self.crop_rect = self._apply_handle_drag(self.active_handle, sp)
-            self.overlay.update(self.crop_rect, self.active_aspect_ratio)
-            self.overlay.update_resolution_text(self.crop_rect, self.crop_target_item)
+            caught = self.active_aspect_ratio
+            self.overlay.update(
+                self.crop_rect,
+                caught,
+                self.aspect_drag_candidates,
+                caught,
+            )
+            self.overlay.update_resolution_text(
+                self.crop_rect, self.crop_target_item
+            )
             return True
 
         if self.temp_crop_start is not None:
@@ -702,45 +1010,56 @@ class ImageEditController:
             self.crop_rect, self.active_aspect_ratio = self._snap_new_crop_rect(
                 raw_rect, self.temp_crop_start, sp
             )
-            self.overlay.update(self.crop_rect, self.active_aspect_ratio)
-            self.overlay.update_resolution_text(self.crop_rect, self.crop_target_item)
+            self.overlay.update(
+                self.crop_rect, self.active_aspect_ratio
+            )
+            self.overlay.update_resolution_text(
+                self.crop_rect, self.crop_target_item
+            )
             return True
 
         handle_id = self.overlay.hit_test_handle(QPointF(event.pos()))
-        if handle_id:
-            self.view.viewport().setCursor(
-                self.overlay.get_handle_cursor(handle_id))
-        else:
-            self.view.viewport().setCursor(CropCursorFactory.get_cursor())
-        return True
-
-    def handle_mouse_release(self, event):
+     def handle_mouse_release(self, event):
         if not self.crop_mode or event.button() != Qt.LeftButton:
             return False
 
         if self.active_handle is not None:
             self.active_handle = None
+            self.active_aspect_ratio = None
+            self.aspect_drag_candidates = []
+            self.aspect_drag_passed = set()
+            self.aspect_drag_used_ratios = set()
+            self.aspect_drag_handle = None
+            self.aspect_drag_last_mouse = None
             return True
 
         if self.temp_crop_start is not None:
             sp = self.view.mapToScene(event.pos())
             sp = self._clamp_to_target(sp)
-            self.crop_rect = QRectF(self.temp_crop_start, sp).normalized()
+            self.crop_rect = QRectF(
+                self.temp_crop_start, sp
+            ).normalized()
             self.crop_rect, self.active_aspect_ratio = self._snap_new_crop_rect(
-                self.crop_rect, self.temp_crop_start, sp)
+                self.crop_rect, self.temp_crop_start, sp
+            )
 
-            if (self.crop_rect.width() < MIN_RECT_SIZE or
-                    self.crop_rect.height() < MIN_RECT_SIZE):
+            if (
+                self.crop_rect.width() < MIN_RECT_SIZE
+                or self.crop_rect.height() < MIN_RECT_SIZE
+            ):
                 if self.crop_target_item:
                     self.crop_rect = self.crop_target_item.mapRectToScene(
-                        QRectF(self.crop_target_item.pixmap().rect()))
+                        QRectF(self.crop_target_item.pixmap().rect())
+                    )
                 else:
                     self.crop_rect = self.view.sceneRect()
 
             self.overlay.remove_handles()
             self.overlay.create_handles(self.crop_rect)
             self.overlay.update(self.crop_rect)
-            self.overlay.update_resolution_text(self.crop_rect, self.crop_target_item)
+            self.overlay.update_resolution_text(
+                self.crop_rect, self.crop_target_item
+            )
             self.temp_crop_start = None
             return True
 
