@@ -22,31 +22,21 @@ class CropCursorFactory:
 
     @classmethod
     def get_cursor(cls):
+        """Возвращает курсор с иконкой обрезки."""
         if cls._cursor is not None:
             return cls._cursor
 
         size = CROP_CURSOR_SIZE
         center = size // 2
-        pixmap = QPixmap(size, size)
-        pixmap.fill(Qt.transparent)
-
-        painter = QPainter(pixmap)
-        painter.setRenderHint(QPainter.Antialiasing)
-
-        outline_color = theme_manager.get_color('crop_cursor_outline')
-        line_color = theme_manager.get_color('crop_cursor_line')
-
-        pen_outline = QPen(outline_color, CROP_CURSOR_OUTLINE_WIDTH)
-        painter.setPen(pen_outline)
-        painter.drawLine(center, 0, center, size)
-        painter.drawLine(0, center, size, center)
-
-        pen_main = QPen(line_color, CROP_CURSOR_LINE_WIDTH)
-        painter.setPen(pen_main)
-        painter.drawLine(center, 0, center, size)
-        painter.drawLine(0, center, size, center)
-
-        painter.end()
+        source = __import__(
+            "screenshooter.widgets.icon_manager",
+            fromlist=["IconManager"],
+        ).IconManager
+        pixmap = source.icon(
+            "crop",
+            size=size,
+            color=theme_manager.get_color("crop_cursor_line"),
+        ).pixmap(size, size)
 
         cls._cursor = QCursor(pixmap, center, center)
         return cls._cursor
