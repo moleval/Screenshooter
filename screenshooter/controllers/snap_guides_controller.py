@@ -15,6 +15,7 @@ class SnapGuidesController:
     SNAP_DISTANCE_PX = 8.0
     GUIDE_Z_VALUE = 9998
     GUIDE_COLOR = QColor(0, 120, 215, 210)
+    MULTI_SNAP_COLOR = QColor(245, 190, 0, 235)
     GUIDE_WIDTH = 2
     CROSS_SIZE_PX = 7
     CROSS_WIDTH = 2
@@ -107,7 +108,12 @@ class SnapGuidesController:
                 dy = y_guide[0] - y_guide[1]
 
         result = QPointF(delta.x() + dx, delta.y() + dy)
-        self._show_guides(x_guide=x_guide, y_guide=y_guide, group_rect=group_rect)
+        self._show_guides(
+            x_guide=x_guide,
+            y_guide=y_guide,
+            group_rect=group_rect,
+            multi_snap=(x_guide is not None and y_guide is not None),
+        )
         return result
 
     @staticmethod
@@ -120,7 +126,8 @@ class SnapGuidesController:
                     best = (candidate, value, distance)
         return best
 
-    def _show_guides(self, x_guide=None, y_guide=None, group_rect=None):
+    def _show_guides(self, x_guide=None, y_guide=None, group_rect=None,
+                     multi_snap=False):
         self.clear_guides()
         bg = getattr(self.view.image_editor, "background_item", None)
         if bg is not None and bg.scene() is self._scene:
@@ -131,7 +138,8 @@ class SnapGuidesController:
         if rect.isEmpty():
             return
 
-        pen = QPen(self.GUIDE_COLOR, self.GUIDE_WIDTH, Qt.DashLine)
+        color = self.MULTI_SNAP_COLOR if multi_snap else self.GUIDE_COLOR
+        pen = QPen(color, self.GUIDE_WIDTH, Qt.DashLine)
         pen.setCosmetic(True)
 
         if x_guide is not None:
@@ -144,8 +152,8 @@ class SnapGuidesController:
             self._guides.append(line)
 
             center_y = group_rect.center().y()
-            self._add_cross(x_value, center_y)
-            self._add_cross(x_target, center_y)
+            self._add_cross(x_value, center_y, color)
+            self._add_cross(x_target, center_y, color)
 
         if y_guide is not None:
             y_target, y_value, _ = y_guide
@@ -157,15 +165,15 @@ class SnapGuidesController:
             self._guides.append(line)
 
             center_x = group_rect.center().x()
-            self._add_cross(center_x, y_value)
-            self._add_cross(center_x, y_target)
+            self._add_cross(center_x, y_value, color)
+            self._add_cross(center_x, y_target, color)
 
-    def _add_cross(self, x, y):
+    def _add_cross(self, x, y, color):
         zoom = abs(self.view.transform().m11())
         if zoom < 1e-6:
             zoom = 1.0
         size = self.CROSS_SIZE_PX / zoom
-        pen = QPen(self.GUIDE_COLOR, self.CROSS_WIDTH)
+        pen = QPen(color, self.CROSS_WIDTH)
         pen.setCosmetic(True)
 
         horizontal = QGraphicsLineItem(x - size, y, x + size, y)
