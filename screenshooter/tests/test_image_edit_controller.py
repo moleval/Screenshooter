@@ -269,7 +269,8 @@ def test_crop_overlay_draws_landscape_and_portrait_ratio_guides(setup_editor):
         item for item in controller.overlay.aspect_guide_items
         if item.isVisible()
     ]
-    assert len(visible) == 2
+    assert len(visible) == 1
+    assert visible[0].pen().color().alpha() == 65
 
     controller.overlay.clear()
     assert not controller.overlay.aspect_guide_items
