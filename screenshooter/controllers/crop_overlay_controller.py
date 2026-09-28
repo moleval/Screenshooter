@@ -157,7 +157,12 @@ class CropOverlayController:
             candidate = candidates[index]
             rect = QRectF(candidate["rect"]).normalized()
             ratio = candidate["ratio"]
-            color = QColor(0, 120, 215, 95)
+            is_caught = tuple(ratio) == tuple(self.caught_aspect_ratio or ())
+            color = (
+                QColor(245, 190, 0, 225)
+                if is_caught
+                else QColor(0, 120, 215, 95)
+            )
             pen = QPen(color, 2 if is_caught else 1, Qt.SolidLine)
             pen.setCosmetic(True)
             item.setPen(pen)
