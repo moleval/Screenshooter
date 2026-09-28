@@ -49,6 +49,7 @@ class ImageEditController:
         self.crop_target_item = None
         self.crop_mode = False
         self.crop_rect = None
+        self.crop_rect_is_user_defined = False
         self.temp_crop_start = None
         self.active_handle = None
         self.active_aspect_ratio = None
@@ -1137,7 +1138,7 @@ class ImageEditController:
             return True
 
         sp = self.view.mapToScene(event.pos())
-        if self.crop_rect is not None and self.crop_rect.contains(sp):
+        if self.crop_rect_is_user_defined and self.crop_rect is not None and self.crop_rect.contains(sp):
             self.active_crop_move = True
             self.crop_move_start = QPointF(sp)
             self.crop_move_start_rect = QRectF(self.crop_rect)
@@ -1280,6 +1281,7 @@ class ImageEditController:
         if self.active_handle is not None:
             self.active_handle = None
             self.active_aspect_ratio = None
+            self.crop_rect_is_user_defined = True
             self.aspect_drag_candidates = []
             self.aspect_drag_caught_ratio = None
             self.aspect_drag_used_ratios = set()
@@ -1329,6 +1331,7 @@ class ImageEditController:
                 self.crop_rect, self.crop_target_item
             )
             self.temp_crop_start = None
+            self.crop_rect_is_user_defined = True
             self.aspect_drag_candidates = []
             self.aspect_drag_caught_ratio = None
             self.aspect_drag_used_ratios = set()
