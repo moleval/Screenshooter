@@ -45,7 +45,7 @@ class SnapGuidesController:
             if item.scene() is not self._scene:
                 continue
             # Направляющие и служебные scene-items не являются целями.
-            if isinstance(item, QGraphicsLineItem) and item.zValue() >= self.GUIDE_Z_VALUE:
+            if item.zValue() >= 2000:
                 continue
             self._add_rect_candidates(item.sceneBoundingRect())
 
