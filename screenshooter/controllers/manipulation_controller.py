@@ -38,7 +38,6 @@ class ManipulationController:
         self._drag_items = []
         self._drag_old_positions = []
         self._drag_old_rects = []
-        self._drag_old_scene_rects = []
         self._drag_start_scene_pos = QPointF()
         self._drag_start_view_pos = QPoint()
         self._drag_start_scroll = QPoint()
@@ -459,10 +458,8 @@ class ManipulationController:
 
             self._drag_old_positions = []
             self._drag_old_rects = []
-            self._drag_old_scene_rects = []
             self._drag_blur_needs_recompute = False
             for it in self._drag_items:
-                self._drag_old_scene_rects.append(it.sceneBoundingRect())
                 if isinstance(it, BlurRegionItem):
                     self._drag_old_positions.append(None)
                     self._drag_old_rects.append(it.rect())
@@ -872,7 +869,6 @@ class ManipulationController:
         self._drag_items = []
         self._drag_old_positions = []
         self._drag_old_rects = []
-        self._drag_old_scene_rects = []
         self._drag_start_scene_pos = QPointF()
         self._drag_start_view_pos = QPoint()
         self._drag_start_scroll = QPoint()
