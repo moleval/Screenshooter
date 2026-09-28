@@ -76,7 +76,7 @@ class SnapGuidesController:
         threshold = self.SNAP_DISTANCE_PX / zoom
 
         group_rect = self._union_rects(
-            [QRectF(rect).translated(delta) for rect in self._drag_rects]
+            [QRectF(rect).translated(delta.x(), delta.y()) for rect in self._drag_rects]
         )
 
         dx = 0.0
