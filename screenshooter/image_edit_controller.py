@@ -57,6 +57,7 @@ class ImageEditController:
         self.aspect_drag_used_ratios = set()
         self.aspect_drag_handle = None
         self.aspect_drag_last_mouse = None
+        self.aspect_drag_skip_snap = False
 
         # Менеджер статусной строки
         self.status_bar_manager = StatusBarManager(self.view)
@@ -85,6 +86,7 @@ class ImageEditController:
         self.aspect_drag_used_ratios = set()
         self.aspect_drag_handle = None
         self.aspect_drag_last_mouse = None
+        self.aspect_drag_skip_snap = False
 
         # Сброс размытия делегирован в blur_controller
         self.view.blur_controller.reset_state()
@@ -178,6 +180,7 @@ class ImageEditController:
         self.aspect_drag_used_ratios = set()
         self.aspect_drag_handle = None
         self.aspect_drag_last_mouse = None
+        self.aspect_drag_skip_snap = False
 
         self.view.setCursor(Qt.CrossCursor)
         self.view.setBackgroundBrush(self.view.normal_background_color)
@@ -318,12 +321,12 @@ class ImageEditController:
         ).normalized()
 
     def _candidate_rect_for_ratio(
-        self, rect, handle_id, ratio, mouse_pos
+        self, rect, handle_id, ratio, mouse_pos, scale=1.0
     ):
-        """Вычисляет фиксированную цель для одной ручки и одного соотношения."""
+        """Вычисляет цель соотношения для ручки с заданным удалением от якоря."""
         rect = QRectF(rect).normalized()
         ratio = float(ratio)
-        if ratio <= 0:
+        if ratio <= 0 or scale <= 0:
             return None
 
         bounds = self._aspect_target_bounds()
@@ -342,6 +345,7 @@ class ImageEditController:
             width = (
                 sx * dx + sy * dy * inv_ratio
             ) / (1.0 + inv_ratio * inv_ratio)
+            width = max(width * scale, float(MIN_RECT_SIZE))
 
             if bounds is not None:
                 max_w_x = (
@@ -355,7 +359,6 @@ class ImageEditController:
                     return None
                 width = min(width, max_w)
 
-            width = max(width, float(MIN_RECT_SIZE))
             height = width / ratio
             if bounds is not None:
                 if height < MIN_RECT_SIZE:
@@ -379,7 +382,7 @@ class ImageEditController:
             ).normalized()
 
         if handle_id in ("tm", "bm"):
-            width = rect.width()
+            width = rect.width() * scale
             height = width / ratio
             anchor_y = rect.bottom() if handle_id == "tm" else rect.top()
             top = anchor_y - height if handle_id == "tm" else anchor_y
@@ -387,7 +390,7 @@ class ImageEditController:
                 rect.left(), top, width, height
             ).normalized()
         elif handle_id in ("lm", "rm"):
-            height = rect.height()
+            height = rect.height() * scale
             width = height * ratio
             anchor_x = rect.right() if handle_id == "lm" else rect.left()
             left = anchor_x - width if handle_id == "lm" else anchor_x
@@ -403,13 +406,15 @@ class ImageEditController:
             return None
         return candidate
 
-    def _build_aspect_drag_candidates(self, rect, handle_id, mouse_pos):
-        """Строит три ближайшие фиксированные цели для захваченной ручки."""
+    def _build_aspect_drag_candidates(
+        self, rect, handle_id, mouse_pos, forward_scale=1.0
+    ):
+        """Строит цели соотношений, разнесённые вдоль направления ручки."""
         candidates = []
         for ratio_pair in self.ASPECT_RATIOS:
             ratio = ratio_pair[0] / ratio_pair[1]
             candidate_rect = self._candidate_rect_for_ratio(
-                rect, handle_id, ratio, mouse_pos
+                rect, handle_id, ratio, mouse_pos, forward_scale
             )
             if candidate_rect is None:
                 continue
@@ -441,7 +446,35 @@ class ImageEditController:
             })
 
         candidates.sort(key=lambda item: item["distance"])
-        return candidates[:self.ASPECT_VISIBLE_CANDIDATES]
+        visible = candidates[:self.ASPECT_VISIBLE_CANDIDATES]
+
+        # Разносим видимые цели по траектории: каждая следующая цель
+        # находится дальше от неподвижного якоря, поэтому рамки не сливаются.
+        spaced = []
+        scales = (0.78, 1.0, 1.24)
+        for index, candidate in enumerate(visible):
+            scale = scales[min(index, len(scales) - 1)]
+            spaced_rect = self._candidate_rect_for_ratio(
+                rect,
+                handle_id,
+                candidate["ratio"][0] / candidate["ratio"][1],
+                mouse_pos,
+                forward_scale * scale,
+            )
+            if spaced_rect is None:
+                spaced_rect = candidate["rect"]
+            candidate = dict(candidate)
+            candidate["rect"] = spaced_rect
+            candidate["handle_point"] = self._handle_point(
+                spaced_rect, handle_id
+            )
+            candidate["distance"] = self._distance_to_candidate(
+                candidate, mouse_pos
+            )
+            spaced.append(candidate)
+
+        spaced.sort(key=lambda item: item["distance"])
+        return spaced
 
     def _begin_aspect_drag(self, handle_id, mouse_pos):
         """Фиксирует стартовый набор целей и очищает прошлое состояние."""
@@ -452,6 +485,7 @@ class ImageEditController:
         self.aspect_drag_candidates = self._build_aspect_drag_candidates(
             self.crop_rect, handle_id, mouse_pos
         )
+        self.aspect_drag_skip_snap = False
 
     def _distance_to_candidate(self, candidate, mouse_pos):
         """Возвращает расстояние от курсора до ручки цели в координатах сцены."""
@@ -501,9 +535,10 @@ class ImageEditController:
         ]
         self.aspect_drag_used_ratios.add(tuple(caught["ratio"]))
         self.aspect_drag_caught_ratio = None
+        self.aspect_drag_skip_snap = True
 
         replacements = self._build_aspect_drag_candidates(
-            rect, self.aspect_drag_handle, mouse_pos
+            rect, self.aspect_drag_handle, mouse_pos, forward_scale=1.35
         )
         for candidate in replacements:
             if (
@@ -532,6 +567,15 @@ class ImageEditController:
 
         last_mouse = self.aspect_drag_last_mouse or QPointF(mouse_pos)
 
+        if self.aspect_drag_skip_snap:
+            if math.hypot(
+                mouse_pos.x() - last_mouse.x(),
+                mouse_pos.y() - last_mouse.y(),
+            ) < self.ASPECT_SNAP_DISTANCE_PX:
+                self.aspect_drag_last_mouse = QPointF(mouse_pos)
+                return None
+            self.aspect_drag_skip_snap = False
+
         if self.aspect_drag_caught_ratio is not None:
             caught = next(
                 (
@@ -559,21 +603,10 @@ class ImageEditController:
                 ):
                     self._consume_caught_aspect_candidate(mouse_pos, raw_rect)
                 else:
-                    target_point = caught["handle_point"]
-                    current_point = self._handle_point(raw_rect, handle_id)
-                    strength = self.ASPECT_SOFT_SNAP_STRENGTH
-                    soft_point = QPointF(
-                        current_point.x()
-                        + (target_point.x() - current_point.x()) * strength,
-                        current_point.y()
-                        + (target_point.y() - current_point.y()) * strength,
-                    )
                     self.aspect_drag_last_mouse = QPointF(mouse_pos)
                     return {
                         "ratio": caught["ratio"],
-                        "rect": self._rect_with_handle_point(
-                            raw_rect, handle_id, soft_point
-                        ),
+                        "rect": QRectF(caught["rect"]),
                     }
 
         caught = None
@@ -589,21 +622,10 @@ class ImageEditController:
 
         if caught is not None:
             self.aspect_drag_caught_ratio = tuple(caught["ratio"])
-            target_point = caught["handle_point"]
-            current_point = self._handle_point(raw_rect, handle_id)
-            strength = self.ASPECT_SOFT_SNAP_STRENGTH
-            soft_point = QPointF(
-                current_point.x()
-                + (target_point.x() - current_point.x()) * strength,
-                current_point.y()
-                + (target_point.y() - current_point.y()) * strength,
-            )
             self.aspect_drag_last_mouse = QPointF(mouse_pos)
             return {
                 "ratio": caught["ratio"],
-                "rect": self._rect_with_handle_point(
-                    raw_rect, handle_id, soft_point
-                ),
+                "rect": QRectF(caught["rect"]),
             }
 
         self.aspect_drag_last_mouse = QPointF(mouse_pos)
@@ -1052,6 +1074,11 @@ class ImageEditController:
         self.temp_crop_start = sp
         self.crop_rect = QRectF(sp, sp)
         self.active_aspect_ratio = None
+        self.aspect_drag_candidates = []
+        self.aspect_drag_caught_ratio = None
+        self.aspect_drag_handle = None
+        self.aspect_drag_last_mouse = None
+        self.aspect_drag_skip_snap = False
         self.overlay.update(self.crop_rect)
         return True
 
@@ -1082,11 +1109,44 @@ class ImageEditController:
             raw_rect = QRectF(
                 self.temp_crop_start, sp
             ).normalized()
-            self.crop_rect, self.active_aspect_ratio = self._snap_new_crop_rect(
-                raw_rect, self.temp_crop_start, sp
-            )
+
+            if (
+                raw_rect.width() >= MIN_RECT_SIZE
+                and raw_rect.height() >= MIN_RECT_SIZE
+                and not self.aspect_drag_candidates
+            ):
+                handle_id = (
+                    ("r" if sp.x() >= self.temp_crop_start.x() else "l")
+                    + ("b" if sp.y() >= self.temp_crop_start.y() else "t")
+                )
+                handle_id = {
+                    "rb": "br", "rt": "tr",
+                    "lb": "bl", "lt": "tl",
+                }[handle_id]
+                self.crop_rect = raw_rect
+                self._begin_aspect_drag(handle_id, sp)
+
+            if self.aspect_drag_candidates:
+                handle_id = self.aspect_drag_handle
+                snapped = self._apply_aspect_candidate_snap(
+                    raw_rect, handle_id, sp
+                )
+                if snapped is not None:
+                    self.crop_rect = snapped["rect"]
+                    self.active_aspect_ratio = snapped["ratio"]
+                else:
+                    self.crop_rect = raw_rect
+                    self.active_aspect_ratio = None
+            else:
+                self.crop_rect, self.active_aspect_ratio = self._snap_new_crop_rect(
+                    raw_rect, self.temp_crop_start, sp
+                )
+
             self.overlay.update(
-                self.crop_rect, self.active_aspect_ratio
+                self.crop_rect,
+                self.active_aspect_ratio,
+                self.aspect_drag_candidates,
+                self.aspect_drag_caught_ratio,
             )
             self.overlay.update_resolution_text(
                 self.crop_rect, self.crop_target_item
@@ -1108,6 +1168,7 @@ class ImageEditController:
             self.aspect_drag_used_ratios = set()
             self.aspect_drag_handle = None
             self.aspect_drag_last_mouse = None
+            self.aspect_drag_skip_snap = False
             return True
 
         if self.temp_crop_start is not None:
@@ -1138,6 +1199,12 @@ class ImageEditController:
                 self.crop_rect, self.crop_target_item
             )
             self.temp_crop_start = None
+            self.aspect_drag_candidates = []
+            self.aspect_drag_caught_ratio = None
+            self.aspect_drag_used_ratios = set()
+            self.aspect_drag_handle = None
+            self.aspect_drag_last_mouse = None
+            self.aspect_drag_skip_snap = False
             return True
 
         return False
