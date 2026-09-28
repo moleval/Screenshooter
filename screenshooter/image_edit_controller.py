@@ -286,10 +286,93 @@ class ImageEditController:
             image_rect = target_item.mapRectToScene(
                 QRectF(target_item.pixmap().rect())
             ).normalized()
-            if not image_rect.contains(snapped):
+            # Do not discard a valid ratio snap merely because the ratio
+            # correction would cross an image edge. Fit the snapped crop
+            # back into the pasted image while preserving the dragged anchor.
+            snapped = self._fit_ratio_rect_to_bounds(
+                snapped, handle_id, target, image_rect
+            )
+            if snapped.isEmpty() or snapped.width() < MIN_RECT_SIZE or snapped.height() < MIN_RECT_SIZE:
                 return rect, None
 
         return snapped, best
+
+    @staticmethod
+    def _fit_ratio_rect_to_bounds(rect, handle_id, ratio, bounds):
+        """Fits a ratio-constrained crop inside pasted-image bounds.
+
+        The opposite corner/edge remains the anchor, so snapping never makes
+        the crop jump outside the image being edited.
+        """
+        rect = QRectF(rect).normalized()
+        bounds = QRectF(bounds).normalized()
+        ratio = float(ratio)
+        if ratio <= 0 or bounds.isEmpty():
+            return rect
+
+        if handle_id in ("tl", "tr", "bl", "br"):
+            if handle_id == "tl":
+                ax, ay = rect.right(), rect.bottom()
+                max_w = ax - bounds.left()
+                max_h = ay - bounds.top()
+                w = min(rect.width(), max_w, max_h * ratio)
+                h = w / ratio
+                return QRectF(ax - w, ay - h, w, h).normalized()
+            if handle_id == "tr":
+                ax, ay = rect.left(), rect.bottom()
+                max_w = bounds.right() - ax
+                max_h = ay - bounds.top()
+                w = min(rect.width(), max_w, max_h * ratio)
+                h = w / ratio
+                return QRectF(ax, ay - h, w, h).normalized()
+            if handle_id == "bl":
+                ax, ay = rect.right(), rect.top()
+                max_w = ax - bounds.left()
+                max_h = bounds.bottom() - ay
+                w = min(rect.width(), max_w, max_h * ratio)
+                h = w / ratio
+                return QRectF(ax - w, ay, w, h).normalized()
+
+            ax, ay = rect.left(), rect.top()
+            max_w = bounds.right() - ax
+            max_h = bounds.bottom() - ay
+            w = min(rect.width(), max_w, max_h * ratio)
+            h = w / ratio
+            return QRectF(ax, ay, w, h).normalized()
+
+        if handle_id in ("tm", "bm"):
+            anchor_y = rect.bottom() if handle_id == "tm" else rect.top()
+            width = min(rect.width(), bounds.width())
+            height = width / ratio
+            if height > bounds.height():
+                height = bounds.height()
+                width = height * ratio
+            left = max(bounds.left(), min(rect.center().x() - width / 2, bounds.right() - width))
+            if handle_id == "tm":
+                top = anchor_y - height
+                top = max(bounds.top(), min(top, bounds.bottom() - height))
+            else:
+                top = anchor_y
+                top = max(bounds.top(), min(top, bounds.bottom() - height))
+            return QRectF(left, top, width, height).normalized()
+
+        if handle_id in ("lm", "rm"):
+            anchor_x = rect.right() if handle_id == "lm" else rect.left()
+            height = min(rect.height(), bounds.height())
+            width = height * ratio
+            if width > bounds.width():
+                width = bounds.width()
+                height = width / ratio
+            top = max(bounds.top(), min(rect.center().y() - height / 2, bounds.bottom() - height))
+            if handle_id == "lm":
+                left = anchor_x - width
+                left = max(bounds.left(), min(left, bounds.right() - width))
+            else:
+                left = anchor_x
+                left = max(bounds.left(), min(left, bounds.right() - width))
+            return QRectF(left, top, width, height).normalized()
+
+        return rect
 
     def _snap_new_crop_rect(self, rect, start_pos, current_pos):
         handle_id = (
@@ -613,8 +696,11 @@ class ImageEditController:
         if self.temp_crop_start is not None:
             sp = self.view.mapToScene(event.pos())
             sp = self._clamp_to_target(sp)
-            self.crop_rect = QRectF(self.temp_crop_start, sp).normalized()
-            self.overlay.update(self.crop_rect)
+            raw_rect = QRectF(self.temp_crop_start, sp).normalized()
+            self.crop_rect, self.active_aspect_ratio = self._snap_new_crop_rect(
+                raw_rect, self.temp_crop_start, sp
+            )
+            self.overlay.update(self.crop_rect, self.active_aspect_ratio)
             self.overlay.update_resolution_text(self.crop_rect, self.crop_target_item)
             return True
 
