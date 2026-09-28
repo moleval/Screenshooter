@@ -454,14 +454,12 @@ class ImageEditController:
         )
 
     def _distance_to_candidate(self, candidate, mouse_pos):
+        """Возвращает расстояние от курсора до ручки цели в координатах сцены."""
         point = candidate["handle_point"]
-        zoom = abs(self.view.transform().m11())
-        if zoom < 1e-6:
-            zoom = 1.0
         return math.hypot(
             point.x() - mouse_pos.x(),
             point.y() - mouse_pos.y(),
-        ) * zoom
+        )
 
     def _rect_with_handle_point(self, rect, handle_id, point):
         """Возвращает рамку с перемещённой ручкой и фиксированным якорем."""
