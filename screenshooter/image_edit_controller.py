@@ -31,6 +31,17 @@ class ImageEditController:
     Размытие вынесено в BlurController.
     """
 
+    ASPECT_RATIOS = (
+        (1, 1), (4, 5), (5, 4), (3, 4), (4, 3),
+        (2, 3), (3, 2), (10, 16), (16, 10), (9, 16),
+        (16, 9), (9, 21), (21, 9), (1, 2), (2, 1),
+        (1, 3), (3, 1),
+    )
+    ASPECT_SNAP_DISTANCE_PX = 8.0
+    ASPECT_RELEASE_DISTANCE_PX = 18.0
+    ASPECT_VISIBLE_CANDIDATES = 3
+    ASPECT_SOFT_SNAP_STRENGTH = 0.65
+
     def __init__(self, view):
         self.view = view
 
@@ -134,7 +145,13 @@ class ImageEditController:
 
         self.overlay.clear()
         self.overlay.create_handles(self.crop_rect)
-        self.overlay.update(self.crop_rect, self.active_aspect_ratio)
+        self._begin_aspect_drag("br", self.crop_rect.bottomRight())
+        self.overlay.update(
+            self.crop_rect,
+            self.active_aspect_ratio,
+            self.aspect_drag_candidates,
+            None,
+        )
         self.overlay.update_resolution_text(self.crop_rect, self.crop_target_item)
 
         self.view.crop_mode_changed.emit(True)
