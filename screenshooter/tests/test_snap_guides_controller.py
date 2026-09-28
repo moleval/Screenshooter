@@ -71,7 +71,7 @@ def test_snap_to_other_object_center(qapp):
     item = QGraphicsRectItem(0, 0, 20, 20)
     item.setPos(50, 40)
     target = QGraphicsRectItem(0, 0, 40, 40)
-    target.setPos(150, 30)
+    target.setPos(150, 80)
     scene = view.scene()
     scene.addItem(item)
     scene.addItem(target)
@@ -104,6 +104,29 @@ def test_no_snap_when_outside_threshold(qapp):
 
     assert snapped == QPointF(90, 0)
     assert not controller.guides
+
+    controller.clear_guides()
+    view.close()
+
+
+def test_double_axis_snap_uses_yellow_guides(qapp):
+    view, background = make_fixture(qapp)
+    item = QGraphicsRectItem(0, 0, 20, 20)
+    item.setPos(50, 40)
+    view.scene().addItem(item)
+
+    controller = SnapGuidesController(view)
+    controller.begin_drag([item], background)
+
+    snapped = controller.snap_delta(QPointF(98, 48))
+
+    assert snapped.x() != 98
+    assert snapped.y() != 48
+    assert controller.guides
+    assert all(
+        guide.pen().color() == controller.MULTI_SNAP_COLOR
+        for guide in controller.guides
+    )
 
     controller.clear_guides()
     view.close()
