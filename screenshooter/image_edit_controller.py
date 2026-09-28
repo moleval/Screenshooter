@@ -396,6 +396,16 @@ class ImageEditController:
             if handle_point is None:
                 continue
 
+            current_point = self._handle_point(rect, handle_id)
+            if (
+                current_point is not None
+                and math.hypot(
+                    handle_point.x() - current_point.x(),
+                    handle_point.y() - current_point.y(),
+                ) < 0.5
+            ):
+                continue
+
             distance = math.hypot(
                 handle_point.x() - mouse_pos.x(),
                 handle_point.y() - mouse_pos.y(),
