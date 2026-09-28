@@ -270,3 +270,41 @@ def test_crop_overlay_draws_landscape_and_portrait_ratio_guides(setup_editor):
 
     controller.overlay.clear()
     assert not controller.overlay.aspect_guide_items
+
+def test_crop_new_rectangle_soft_snaps_during_drag(setup_editor):
+    view = setup_editor
+    controller = view.image_editor
+
+    view.start_crop_mode()
+    start = QPointF(10, 10)
+    current = QPointF(90, 109)
+
+    raw = QRectF(start, current).normalized()
+    snapped, ratio = controller._snap_new_crop_rect(raw, start, current)
+
+    assert ratio == (4, 5)
+    assert snapped.width() == pytest.approx(80)
+    assert snapped.height() == pytest.approx(100)
+
+
+def test_crop_pasted_image_ratio_snap_stays_inside_image(setup_editor):
+    view = setup_editor
+    image = QPixmap(100, 80)
+    image.fill(QColor("blue"))
+    pasted = view.add_pasted_image(image, scene_pos=QPointF(0, 0))
+
+    pasted.setSelected(True)
+    view.start_crop_mode()
+    controller = view.image_editor
+
+    image_rect = pasted.mapRectToScene(QRectF(pasted.pixmap().rect())).normalized()
+    raw = QRectF(image_rect.left() + 5, image_rect.top() + 5,
+                 image_rect.width() - 5, image_rect.height() - 2)
+    snapped, ratio = controller._snap_aspect_ratio(
+        raw, "br", raw.bottomRight()
+    )
+
+    assert ratio is not None
+    assert image_rect.contains(snapped)
+    assert snapped.width() > 0
+    assert snapped.height() > 0
