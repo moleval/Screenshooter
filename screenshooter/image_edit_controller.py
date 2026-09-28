@@ -535,7 +535,6 @@ class ImageEditController:
         ]
         self.aspect_drag_used_ratios.add(tuple(caught["ratio"]))
         self.aspect_drag_caught_ratio = None
-        self.aspect_drag_skip_snap = True
 
         replacements = self._build_aspect_drag_candidates(
             rect, self.aspect_drag_handle, mouse_pos, forward_scale=1.35
@@ -600,6 +599,9 @@ class ImageEditController:
                     + movement.y() * away.y() > 0
                 ):
                     self._consume_caught_aspect_candidate(mouse_pos, raw_rect)
+                    self.aspect_drag_skip_snap = True
+                    self.aspect_drag_last_mouse = QPointF(mouse_pos)
+                    return None
                 else:
                     self.aspect_drag_last_mouse = QPointF(mouse_pos)
                     return {
