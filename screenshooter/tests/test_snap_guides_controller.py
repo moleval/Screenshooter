@@ -83,8 +83,10 @@ def test_snap_to_other_object_center(qapp):
     snapped = controller.snap_delta(QPointF(98, 0))
 
     group = item.sceneBoundingRect().translated(98, 0)
-    target_left = target.sceneBoundingRect().left()
-    expected = 98 + (target_left - group.left())
+    target = target.sceneBoundingRect()
+    # При таком положении ближайшим совпадением является центр цели
+    # с правой гранью перемещаемого объекта.
+    expected = 98 + (target.center().x() - group.right())
     assert snapped.x() == pytest.approx(expected)
     assert len(controller.guides) == 5
 
@@ -101,10 +103,10 @@ def test_no_snap_when_outside_threshold(qapp):
     controller = SnapGuidesController(view)
     controller.begin_drag([item], background)
 
-    snapped = controller.snap_delta(QPointF(80, 0))
+    snapped = controller.snap_delta(QPointF(70, 0))
 
-    # 80 px leaves the item's center outside the 8 px snap threshold.
-    assert snapped.x() == pytest.approx(80.0)
+    # Ни одна грань или центр объекта не должна попасть в порог 8 px.
+    assert snapped.x() == pytest.approx(70.0)
     assert snapped.y() == pytest.approx(0.0)
     assert not controller.guides
 
