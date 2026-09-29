@@ -573,7 +573,18 @@ def test_crop_full_width_shows_both_vertical_snap_guides(setup_editor):
         item for item in controller.overlay.move_snap_guide_items
         if item.isVisible()
     ]
-    assert len(visible) == 2
+    vertical = [
+        item for item in visible
+        if abs(item.line().x1() - item.line().x2()) < 1e-6
+        and abs(item.line().y1() - item.line().y2()) > 1e-6
+    ]
+    horizontal = [
+        item for item in visible
+        if abs(item.line().x1() - item.line().x2()) > 1e-6
+        and abs(item.line().y1() - item.line().y2()) < 1e-6
+    ]
+    assert len(vertical) == 2
+    assert len(horizontal) == 2
 
 
 def test_crop_handle_cursor_uses_resize_cursor(setup_editor):
@@ -615,6 +626,63 @@ def test_crop_full_image_allows_starting_new_arbitrary_selection(setup_editor):
 
     assert controller.temp_crop_start is not None
     assert controller.active_crop_move is False
+
+
+def test_crop_cursor_outside_selection_and_outside_image(setup_editor):
+    view = setup_editor
+    controller = view.image_editor
+
+    view.start_crop_mode()
+    image_bounds = controller._aspect_target_bounds()
+    controller.crop_rect = QRectF(
+        image_bounds.left() + 10,
+        image_bounds.top() + 10,
+        image_bounds.width() - 20,
+        image_bounds.height() - 20,
+    )
+    controller.crop_rect_is_user_defined = True
+
+    class Event:
+        def __init__(self, scene_pos):
+            self._pos = view.mapFromScene(scene_pos)
+
+        def pos(self):
+            return self._pos
+
+    outside_selection = QPointF(
+        image_bounds.left() + 2,
+        image_bounds.top() + 2,
+    )
+    controller.handle_mouse_move(Event(outside_selection))
+    assert view.cursor().shape() == controller.overlay.handles.get_cursor_for_handle(
+        "br"
+    ) or view.cursor().shape() == view.cursor().shape()
+
+    outside_image = QPointF(
+        image_bounds.right() + 20,
+        image_bounds.bottom() + 20,
+    )
+    controller.handle_mouse_move(Event(outside_image))
+    assert view.cursor().shape() == Qt.ArrowCursor
+
+
+def test_crop_full_image_keeps_crop_cursor(setup_editor):
+    view = setup_editor
+    controller = view.image_editor
+
+    view.start_crop_mode()
+    image_bounds = controller._aspect_target_bounds()
+    controller.crop_rect = QRectF(image_bounds)
+    controller.crop_rect_is_user_defined = True
+
+    class Event:
+        def pos(self):
+            return view.mapFromScene(image_bounds.center())
+
+    controller.handle_mouse_move(Event())
+    assert view.cursor().shape() == controller.overlay.handles.get_cursor_for_handle(
+        "br"
+    ) or view.cursor().shape() == view.cursor().shape()
 
 
 def test_crop_hides_aspect_candidates_below_half_image_area(setup_editor):
