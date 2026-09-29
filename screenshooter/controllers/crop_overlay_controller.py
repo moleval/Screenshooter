@@ -44,6 +44,7 @@ class CropOverlayController:
         active_aspect_ratio=None,
         aspect_candidates=None,
         caught_aspect_ratio=None,
+        move_snap_caught=False,
     ):
         crop = rect.normalized()
         scene_rect = self.view.sceneRect()
@@ -99,16 +100,16 @@ class CropOverlayController:
         # Основная рамка crop — главный индикатор примагничивания.
         # В обычном состоянии она синяя штриховая, при захвате цели
         # становится жёлтой, а сама геометрия уже соответствует цели.
-        rect_color = (
-            QColor(245, 190, 0, 235)
-            if caught_aspect_ratio is not None
-            else theme_manager.get_color('crop_rect')
-        )
-        pen = QPen(
-            rect_color,
-            3 if caught_aspect_ratio is not None else 2,
-            Qt.DashLine,
-        )
+        if caught_aspect_ratio is not None:
+            rect_color = QColor(210, 45, 45, 245)
+            rect_width = 4
+        elif move_snap_caught:
+            rect_color = QColor(245, 190, 0, 235)
+            rect_width = 3
+        else:
+            rect_color = theme_manager.get_color('crop_rect')
+            rect_width = 2
+        pen = QPen(rect_color, rect_width, Qt.DashLine)
         pen.setCosmetic(True)
         self.crop_rect_item.setPen(pen)
         self.crop_rect_item.setRect(crop)
