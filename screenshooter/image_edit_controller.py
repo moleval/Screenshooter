@@ -1347,7 +1347,7 @@ class ImageEditController:
                     self._begin_aspect_drag(handle_id, sp, new_selection=True)
                 self.crop_rect = raw_rect
 
-            if self.aspect_drag_candidates:
+            if self.aspect_drag_handle is not None:
                 handle_id = self.aspect_drag_handle
                 snapped = self._apply_aspect_candidate_snap(
                     raw_rect, handle_id, sp
