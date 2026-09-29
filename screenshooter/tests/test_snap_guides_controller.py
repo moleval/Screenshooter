@@ -131,8 +131,12 @@ def test_full_width_drag_shows_both_vertical_edge_guides(qapp):
         and abs(guide.line().y1() - guide.line().y2()) > 1e-6
     ]
     assert len(vertical_guides) == 2
-    assert len(controller._guide_labels) == 2
-    assert {label.text() for label in controller._guide_labels} == {
+    x_labels = {
+        label.text()
+        for label in controller._guide_labels
+        if label.text().startsWith("X:")
+    }
+    assert x_labels == {
         "X: левый край",
         "X: правый край",
     }
@@ -140,6 +144,28 @@ def test_full_width_drag_shows_both_vertical_edge_guides(qapp):
     controller.clear_guides()
     view.close()
 
+
+
+def test_full_height_drag_places_bottom_label_above_background_edge(qapp):
+    view, background = make_fixture(qapp)
+    item = QGraphicsPixmapItem(QPixmap(40, 200))
+    view.scene().addItem(item)
+
+    controller = SnapGuidesController(view)
+    controller.begin_drag([item], background)
+
+    controller.snap_delta(QPointF(0, 0))
+
+    bottom_labels = [
+        label for label in controller._guide_labels
+        if label.text() == "Y: нижний край"
+    ]
+    assert bottom_labels
+    label_rect = bottom_labels[0].sceneBoundingRect()
+    assert label_rect.bottom() <= background.sceneBoundingRect().bottom()
+
+    controller.clear_guides()
+    view.close()
 
 def test_double_axis_snap_uses_yellow_guides(qapp):
     view, background = make_fixture(qapp)
