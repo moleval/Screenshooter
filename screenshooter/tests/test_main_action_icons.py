@@ -10,7 +10,7 @@ def qapp():
     return QApplication.instance() or QApplication([])
 
 def test_main_action_icon_set_is_available(qapp):
-    names = ("undo","redo","screen-1","screen-2","clear","clipboard-copy","image-plus","clipboard-paste","save-all","save","help")
+    names = ("undo","redo","screen-1","screen-2","clear","clipboard-copy","image-plus","clipboard-paste","save-all","save","settings","help")
     for name in names:
         icon = IconManager.icon(name, size=MAIN_ACTION_ICON_SIZE)
         assert icon.actualSize(QSize(100, 100)) == QSize(MAIN_ACTION_ICON_SIZE, MAIN_ACTION_ICON_SIZE)
