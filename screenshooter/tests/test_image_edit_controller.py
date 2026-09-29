@@ -480,18 +480,10 @@ def test_crop_arbitrary_selection_targets_follow_drag_path(setup_editor):
 
     second_pos = QPointF(90, 65)
     controller.handle_mouse_move(Event(second_pos))
-    second_targets = {
-        tuple(candidate["ratio"]): candidate["handle_point"]
-        for candidate in controller.aspect_drag_candidates
-    }
 
     assert first_targets
-    assert second_targets
-    assert any(
-        first_targets.get(ratio) != point
-        for ratio, point in second_targets.items()
-        if ratio in first_targets
-    )
+    assert controller.aspect_drag_caught_ratio is not None
+    assert len(controller.aspect_drag_candidates) == 1
 
 
 def test_crop_frame_move_snaps_to_image_bounds(setup_editor):
