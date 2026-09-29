@@ -746,16 +746,6 @@ class ImageEditController:
             return None
 
         if self.aspect_drag_caught_ratio is None:
-            refreshed = self._build_aspect_drag_candidates(
-                raw_rect,
-                handle_id,
-                mouse_pos,
-            )
-            self.aspect_drag_candidates = [
-                candidate for candidate in refreshed
-                if tuple(candidate["ratio"]) not in self.aspect_drag_used_ratios
-            ][:self.ASPECT_VISIBLE_CANDIDATES]
-
             nearby = [
                 candidate
                 for candidate in self.aspect_drag_candidates
@@ -770,10 +760,29 @@ class ImageEditController:
                 )
                 self.aspect_drag_caught_ratio = tuple(caught["ratio"])
             else:
-                # Уже показанная цель остаётся фиксированной на траектории.
-                # Она не должна прыгать под курсором на каждом событии мыши:
-                # пользователь должен успевать подвести к ней ручку.
-                pass
+                refreshed = self._build_aspect_drag_candidates(
+                    raw_rect,
+                    handle_id,
+                    mouse_pos,
+                )
+                self.aspect_drag_candidates = [
+                    candidate for candidate in refreshed
+                    if tuple(candidate["ratio"]) not in self.aspect_drag_used_ratios
+                ][:self.ASPECT_VISIBLE_CANDIDATES]
+
+                nearby = [
+                    candidate
+                    for candidate in self.aspect_drag_candidates
+                    if tuple(candidate["ratio"]) not in self.aspect_drag_used_ratios
+                    and self._distance_to_candidate(candidate, mouse_pos)
+                    <= self.ASPECT_SNAP_DISTANCE_PX
+                ]
+                if nearby:
+                    caught = min(
+                        nearby,
+                        key=lambda item: self._distance_to_candidate(item, mouse_pos),
+                    )
+                    self.aspect_drag_caught_ratio = tuple(caught["ratio"])
 
         if self.aspect_drag_caught_ratio is None and self.aspect_drag_candidates:
             previous = self.aspect_drag_candidates[0]
@@ -1459,9 +1468,17 @@ class ImageEditController:
             self._set_crop_cursor(
                 self.overlay.handles.get_cursor_for_handle(handle_id)
             )
-        else:
+            return True
+
+        sp = self.view.mapToScene(event.pos())
+        image_bounds = self._aspect_target_bounds()
+        if image_bounds is not None and image_bounds.contains(sp):
+            # Внутри подложки вне текущего выделения показываем курсор
+            # обрезки: клик здесь начинает новое выделение.
             self._set_crop_cursor(CropCursorFactory.get_cursor())
-        return handle_id is not None
+        else:
+            self._set_crop_cursor(Qt.ArrowCursor)
+        return False
 
     def handle_mouse_release(self, event):
         if not self.crop_mode or event.button() != Qt.LeftButton:
