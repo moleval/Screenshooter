@@ -67,7 +67,6 @@ class ImageEditController:
         self.aspect_drag_new_selection = False
         self.crop_move_caught = False
         self.crop_move_snap_axes = []
-        self.crop_move_snap_axes = []
         self.active_crop_move = False
         self.crop_move_start = None
         self.crop_move_start_rect = None
@@ -105,6 +104,7 @@ class ImageEditController:
         self.aspect_drag_activation_area = None
         self.aspect_drag_new_selection = False
         self.crop_move_caught = False
+        self.crop_move_snap_axes = []
         self.active_crop_move = False
         self.crop_move_start = None
         self.crop_move_start_rect = None
