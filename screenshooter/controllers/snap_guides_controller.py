@@ -16,7 +16,7 @@ class SnapGuidesController:
     SNAP_DISTANCE_PX = 8.0
     GUIDE_Z_VALUE = 9998
     GUIDE_COLOR = QColor(0, 120, 215, 210)
-    MULTI_SNAP_COLOR = QColor(245, 190, 0, 235)
+    MULTI_SNAP_COLOR = QColor(255, 215, 0, 255)
     GUIDE_WIDTH = 2
     CROSS_SIZE_PX = 7
     CROSS_WIDTH = 2
@@ -121,23 +121,59 @@ class SnapGuidesController:
         )
 
         if snap_x:
-            x_guides = self._find_all_best(
-                x_values,
-                self._candidate_x,
-                threshold,
-            )
+            if full_width:
+                x_guides = [
+                    (
+                        background_rect.left(),
+                        group_rect.left(),
+                        abs(background_rect.left() - group_rect.left()),
+                    ),
+                    (
+                        background_rect.right(),
+                        group_rect.right(),
+                        abs(background_rect.right() - group_rect.right()),
+                    ),
+                ]
+                x_guides = [
+                    guide for guide in x_guides
+                    if guide[2] <= threshold
+                ]
+            else:
+                x_guides = self._find_all_best(
+                    x_values,
+                    self._candidate_x,
+                    threshold,
+                )
             if x_guides:
-                x_guide = x_guides[0]
+                x_guide = min(x_guides, key=lambda guide: guide[2])
                 dx = x_guide[0] - x_guide[1]
 
         if snap_y:
-            y_guides = self._find_all_best(
-                y_values,
-                self._candidate_y,
-                threshold,
-            )
+            if full_height:
+                y_guides = [
+                    (
+                        background_rect.top(),
+                        group_rect.top(),
+                        abs(background_rect.top() - group_rect.top()),
+                    ),
+                    (
+                        background_rect.bottom(),
+                        group_rect.bottom(),
+                        abs(background_rect.bottom() - group_rect.bottom()),
+                    ),
+                ]
+                y_guides = [
+                    guide for guide in y_guides
+                    if guide[2] <= threshold
+                ]
+            else:
+                y_guides = self._find_all_best(
+                    y_values,
+                    self._candidate_y,
+                    threshold,
+                )
             if y_guides:
-                y_guide = y_guides[0]
+                y_guide = min(y_guides, key=lambda guide: guide[2])
                 dy = y_guide[0] - y_guide[1]
 
         result = QPointF(delta.x() + dx, delta.y() + dy)
@@ -255,7 +291,7 @@ class SnapGuidesController:
     def _add_guide_label(self, x, y, text, color):
         """Добавляет подпись к активной направляющей."""
         label = QGraphicsSimpleTextItem(text)
-        label.setBrush(color)
+        label.setBrush(QColor(255, 235, 80, 255))
         label.setZValue(self.GUIDE_Z_VALUE + 2)
         label.setAcceptedMouseButtons(Qt.NoButton)
         label.setFlag(QGraphicsItem.ItemIgnoresTransformations)
@@ -263,7 +299,18 @@ class SnapGuidesController:
         font.setPointSize(9)
         font.setBold(True)
         label.setFont(font)
-        label.setPos(x + 6, y + 6)
+        label_rect = label.boundingRect()
+        label_x = (
+            x - label_rect.width() - 8
+            if "правый край" in text
+            else x + 6
+        )
+        label_y = (
+            y - label_rect.height() - 8
+            if "нижний край" in text
+            else y + 6
+        )
+        label.setPos(label_x, label_y)
         self._scene.addItem(label)
         self._guide_labels.append(label)
 
