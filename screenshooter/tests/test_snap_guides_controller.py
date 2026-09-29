@@ -134,7 +134,7 @@ def test_full_width_drag_shows_both_vertical_edge_guides(qapp):
     x_labels = {
         label.text()
         for label in controller._guide_labels
-        if label.text().startsWith("X:")
+        if label.text().startswith("X:")
     }
     assert x_labels == {
         "X: левый край",
