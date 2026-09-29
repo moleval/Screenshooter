@@ -1292,7 +1292,7 @@ class ImageEditController:
                 if new_rect.bottom() > bounds.bottom():
                     new_rect.translate(0, bounds.bottom() - new_rect.bottom())
             self.crop_rect = self._snap_crop_move_to_target(new_rect)
-            self.overlay.update(self.crop_rect, self.active_aspect_ratio)
+            self.overlay.update(self.crop_rect, self.active_aspect_ratio, move_snap_caught=self.crop_move_caught)
             self.overlay.update_resolution_text(
                 self.crop_rect, self.crop_target_item
             )
