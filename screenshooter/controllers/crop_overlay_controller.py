@@ -185,9 +185,12 @@ class CropOverlayController:
                 line.setLine(
                     visible_scene.left(), y, visible_scene.right(), y
                 )
+                # Подпись нижнего края должна находиться над линией,
+                # чтобы не уходить за рабочую область подложки.
+                label_rect = label.boundingRect()
                 label.setPos(
                     visible_scene.left() + 8,
-                    y + 6,
+                    y - label_rect.height() - 8,
                 )
             line.setVisible(True)
 
