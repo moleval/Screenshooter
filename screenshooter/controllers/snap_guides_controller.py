@@ -6,7 +6,8 @@
 
 from PyQt5.QtCore import QPointF, QRectF, Qt
 from PyQt5.QtGui import QColor, QPen
-from PyQt5.QtWidgets import QGraphicsLineItem
+from PyQt5.QtWidgets import QGraphicsLineItem, QGraphicsSimpleTextItem, QGraphicsItem
+from PyQt5.QtGui import QFont
 
 
 class SnapGuidesController:
@@ -27,6 +28,7 @@ class SnapGuidesController:
         self._candidate_x = []
         self._candidate_y = []
         self._guides = []
+        self._guide_labels = []
 
     def begin_drag(self, items, background_item):
         """Фиксирует исходную геометрию drag-группы и оси привязки."""
@@ -89,46 +91,72 @@ class SnapGuidesController:
         x_guide = None
         y_guide = None
 
+        x_guides = []
+        y_guides = []
+
         if snap_x:
-            x_guide = self._find_best(
+            x_guides = self._find_all_best(
                 (group_rect.left(), group_rect.center().x(), group_rect.right()),
                 self._candidate_x,
                 threshold,
             )
-            if x_guide is not None:
+            if x_guides:
+                x_guide = x_guides[0]
                 dx = x_guide[0] - x_guide[1]
 
         if snap_y:
-            y_guide = self._find_best(
+            y_guides = self._find_all_best(
                 (group_rect.top(), group_rect.center().y(), group_rect.bottom()),
                 self._candidate_y,
                 threshold,
             )
-            if y_guide is not None:
+            if y_guides:
+                y_guide = y_guides[0]
                 dy = y_guide[0] - y_guide[1]
 
         result = QPointF(delta.x() + dx, delta.y() + dy)
         self._show_guides(
-            x_guide=x_guide,
-            y_guide=y_guide,
+            x_guides=x_guides,
+            y_guides=y_guides,
             group_rect=group_rect,
-            multi_snap=(x_guide is not None and y_guide is not None),
+            multi_snap=(bool(x_guides) and bool(y_guides)),
         )
         return result
 
     @staticmethod
-    def _find_best(values, candidates, threshold):
-        best = None
+    def _find_all_best(values, candidates, threshold):
+        best_distance = None
+        best = []
         for value in values:
             for candidate in candidates:
                 distance = abs(candidate - value)
-                if distance <= threshold and (best is None or distance < best[2]):
-                    best = (candidate, value, distance)
-        return best
+                if distance > threshold:
+                    continue
+                if best_distance is None or distance < best_distance - 1e-6:
+                    best_distance = distance
+                    best = [(candidate, value, distance)]
+                elif abs(distance - best_distance) <= 1e-6:
+                    best.append((candidate, value, distance))
 
-    def _show_guides(self, x_guide=None, y_guide=None, group_rect=None,
+        unique = []
+        seen = set()
+        for guide in best:
+            key = (round(guide[0], 6), round(guide[1], 6))
+            if key not in seen:
+                seen.add(key)
+                unique.append(guide)
+        return unique
+
+    @staticmethod
+    def _find_best(values, candidates, threshold):
+        guides = SnapGuidesController._find_all_best(values, candidates, threshold)
+        return guides[0] if guides else None
+
+    def _show_guides(self, x_guides=None, y_guides=None, group_rect=None,
                      multi_snap=False):
         self.clear_guides()
+        x_guides = x_guides or []
+        y_guides = y_guides or []
         bg = getattr(self.view.image_editor, "background_item", None)
         if bg is not None and bg.scene() is self._scene:
             rect = bg.sceneBoundingRect()
@@ -142,7 +170,7 @@ class SnapGuidesController:
         pen = QPen(color, self.GUIDE_WIDTH, Qt.DashLine)
         pen.setCosmetic(True)
 
-        if x_guide is not None:
+        for x_guide in x_guides:
             x_target, x_value, _ = x_guide
             line = QGraphicsLineItem(x_target, rect.top(), x_target, rect.bottom())
             line.setPen(pen)
@@ -154,8 +182,14 @@ class SnapGuidesController:
             center_y = group_rect.center().y()
             self._add_cross(x_value, center_y, color)
             self._add_cross(x_target, center_y, color)
+            self._add_guide_label(
+                x_target,
+                rect.top(),
+                self._axis_label("x", x_target, rect),
+                color,
+            )
 
-        if y_guide is not None:
+        for y_guide in y_guides:
             y_target, y_value, _ = y_guide
             line = QGraphicsLineItem(rect.left(), y_target, rect.right(), y_target)
             line.setPen(pen)
@@ -167,6 +201,45 @@ class SnapGuidesController:
             center_x = group_rect.center().x()
             self._add_cross(center_x, y_value, color)
             self._add_cross(center_x, y_target, color)
+            self._add_guide_label(
+                rect.left(),
+                y_target,
+                self._axis_label("y", y_target, rect),
+                color,
+            )
+
+    def _axis_label(self, axis, position, background_rect):
+        """Возвращает понятную подпись направляющей относительно подложки."""
+        if axis == "x":
+            if abs(position - background_rect.left()) <= 1e-6:
+                return "X: левый край"
+            if abs(position - background_rect.center().x()) <= 1e-6:
+                return "X: центр"
+            if abs(position - background_rect.right()) <= 1e-6:
+                return "X: правый край"
+            return "X: цель"
+        if abs(position - background_rect.top()) <= 1e-6:
+            return "Y: верхний край"
+        if abs(position - background_rect.center().y()) <= 1e-6:
+            return "Y: центр"
+        if abs(position - background_rect.bottom()) <= 1e-6:
+            return "Y: нижний край"
+        return "Y: цель"
+
+    def _add_guide_label(self, x, y, text, color):
+        """Добавляет подпись к активной направляющей."""
+        label = QGraphicsSimpleTextItem(text)
+        label.setBrush(color)
+        label.setZValue(self.GUIDE_Z_VALUE + 2)
+        label.setAcceptedMouseButtons(Qt.NoButton)
+        label.setFlag(QGraphicsItem.ItemIgnoresTransformations)
+        font = QFont()
+        font.setPointSize(9)
+        font.setBold(True)
+        label.setFont(font)
+        label.setPos(x + 6, y + 6)
+        self._scene.addItem(label)
+        self._guide_labels.append(label)
 
     def _add_cross(self, x, y, color):
         zoom = abs(self.view.transform().m11())
@@ -189,7 +262,11 @@ class SnapGuidesController:
         for guide in self._guides:
             if guide.scene() is self._scene:
                 self._scene.removeItem(guide)
+        for label in self._guide_labels:
+            if label.scene() is self._scene:
+                self._scene.removeItem(label)
         self._guides.clear()
+        self._guide_labels.clear()
 
     @property
     def guides(self):
