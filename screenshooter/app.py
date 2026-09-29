@@ -26,6 +26,7 @@ from .widgets.thickness import ThicknessWidget
 from .widgets.color_palette import ColorPaletteWidget
 from .widgets.icon_manager import IconManager
 from .settings import AppSettings
+from .settings_dialog import SettingsDialog
 from .utils import load_app_icon
 from .theme import theme_manager
 from .controllers.crop_cursor_factory import CropCursorFactory
@@ -210,6 +211,13 @@ class ScreenshotApp(QMainWindow):
         self.quick_save_btn.customContextMenuRequested.connect(self.show_quick_save_menu)
         right_group_layout.addWidget(self.quick_save_btn)
 
+        # Кнопка настроек
+        self.settings_btn = QPushButton()
+        self.settings_btn.setIcon(IconManager.icon("settings", size=MAIN_ACTION_ICON_SIZE))
+        self.settings_btn.setToolTip("Настройки")
+        self.settings_btn.clicked.connect(self.show_settings)
+        right_group_layout.addWidget(self.settings_btn)
+
         # Кнопка справки
         self.help_btn = QPushButton()
         self.help_btn.setIcon(IconManager.icon("help", size=MAIN_ACTION_ICON_SIZE))
@@ -231,6 +239,7 @@ class ScreenshotApp(QMainWindow):
             self.insert_clipboard_btn,
             self.save_as_btn,
             self.quick_save_btn,
+            self.settings_btn,
             self.help_btn,
         )
         for btn in main_action_buttons:
@@ -574,6 +583,7 @@ class ScreenshotApp(QMainWindow):
             (self.insert_clipboard_btn, "clipboard-copy"),
             (self.save_as_btn, "save-all"),
             (self.quick_save_btn, "save"),
+            (self.settings_btn, "settings"),
             (self.help_btn, "help"),
         ):
             button.setIcon(IconManager.icon(icon_name, size=MAIN_ACTION_ICON_SIZE))
@@ -1019,6 +1029,17 @@ class ScreenshotApp(QMainWindow):
         else:
             self.setWindowState(Qt.WindowNoState)
         self.setUpdatesEnabled(True)
+
+    def show_settings(self):
+        """Открывает окно настроек приложения."""
+        dialog = SettingsDialog(self.settings, self)
+        if dialog.exec_() == QDialog.Accepted:
+            selected_theme = self.settings.theme
+            if selected_theme != theme_manager.theme:
+                self.apply_theme(selected_theme)
+            self._update_window_minimum_width()
+            if self.tray_manager is not None:
+                self.tray_manager.update_windows_menu()
 
     def show_help(self):
         """Отображает окно справки."""
