@@ -746,6 +746,16 @@ class ImageEditController:
             return None
 
         if self.aspect_drag_caught_ratio is None:
+            refreshed = self._build_aspect_drag_candidates(
+                raw_rect,
+                handle_id,
+                mouse_pos,
+            )
+            self.aspect_drag_candidates = [
+                candidate for candidate in refreshed
+                if tuple(candidate["ratio"]) not in self.aspect_drag_used_ratios
+            ][:self.ASPECT_VISIBLE_CANDIDATES]
+
             nearby = [
                 candidate
                 for candidate in self.aspect_drag_candidates
@@ -793,17 +803,6 @@ class ImageEditController:
                 self.aspect_drag_last_mouse = QPointF(mouse_pos)
                 self.aspect_drag_last_distance = current_distance
                 return None
-
-        if self.aspect_drag_caught_ratio is None:
-            refreshed = self._build_aspect_drag_candidates(
-                raw_rect,
-                handle_id,
-                mouse_pos,
-            )
-            self.aspect_drag_candidates = [
-                candidate for candidate in refreshed
-                if tuple(candidate["ratio"]) not in self.aspect_drag_used_ratios
-            ][:self.ASPECT_VISIBLE_CANDIDATES]
 
         if self.aspect_drag_caught_ratio is not None:
             caught = next(
