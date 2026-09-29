@@ -139,7 +139,7 @@ class CropOverlayController:
         while len(self.move_snap_guide_items) < len(visible_axes):
             item = QGraphicsLineItem()
             item.setAcceptedMouseButtons(Qt.NoButton)
-            item.setZValue(CROP_RECT_Z - 2)
+            item.setZValue(CROP_RECT_Z + 1)
             self.view.scene().addItem(item)
             self.move_snap_guide_items.append(item)
 
@@ -155,6 +155,9 @@ class CropOverlayController:
             self.move_snap_label_items.append(label)
 
         visible_scene = self.view.sceneRect()
+        target_bounds = getattr(self.view.image_editor, "_aspect_target_bounds", lambda: None)()
+        if target_bounds is not None and not target_bounds.isEmpty():
+            visible_scene = target_bounds
         for index, line in enumerate(self.move_snap_guide_items):
             if index >= len(visible_axes):
                 line.setVisible(False)
