@@ -66,6 +66,8 @@ class ImageEditController:
         self.aspect_drag_activation_area = None
         self.aspect_drag_new_selection = False
         self.crop_move_caught = False
+        self.crop_move_snap_axes = []
+        self.crop_move_snap_axes = []
         self.active_crop_move = False
         self.crop_move_start = None
         self.crop_move_start_rect = None
@@ -355,27 +357,66 @@ class ImageEditController:
         threshold = self.ASPECT_SNAP_DISTANCE_PX
         dx = 0.0
         dy = 0.0
+        self.crop_move_snap_axes = []
 
         candidates_x = (
-            (abs(rect.left() - bounds.left()), bounds.left() - rect.left()),
-            (abs(rect.right() - bounds.right()), bounds.right() - rect.right()),
+            (
+                abs(rect.left() - bounds.left()),
+                bounds.left() - rect.left(),
+                "X: левый край",
+                bounds.left(),
+            ),
+            (
+                abs(rect.right() - bounds.right()),
+                bounds.right() - rect.right(),
+                "X: правый край",
+                bounds.right(),
+            ),
             (
                 abs(rect.center().x() - bounds.center().x()),
                 bounds.center().x() - rect.center().x(),
+                "X: центр",
+                bounds.center().x(),
             ),
         )
         candidates_y = (
-            (abs(rect.top() - bounds.top()), bounds.top() - rect.top()),
-            (abs(rect.bottom() - bounds.bottom()), bounds.bottom() - rect.bottom()),
+            (
+                abs(rect.top() - bounds.top()),
+                bounds.top() - rect.top(),
+                "Y: верхний край",
+                bounds.top(),
+            ),
+            (
+                abs(rect.bottom() - bounds.bottom()),
+                bounds.bottom() - rect.bottom(),
+                "Y: нижний край",
+                bounds.bottom(),
+            ),
             (
                 abs(rect.center().y() - bounds.center().y()),
                 bounds.center().y() - rect.center().y(),
+                "Y: центр",
+                bounds.center().y(),
             ),
         )
 
         near_x = min(candidates_x, key=lambda item: item[0])
         near_y = min(candidates_y, key=lambda item: item[0])
-        self.crop_move_caught = near_x[0] <= threshold or near_y[0] <= threshold
+        self.crop_move_caught = (
+            near_x[0] <= threshold or near_y[0] <= threshold
+        )
+        if near_x[0] <= threshold:
+            self.crop_move_snap_axes.append({
+                "axis": "x",
+                "position": near_x[3],
+                "label": near_x[2],
+            })
+        if near_y[0] <= threshold:
+            self.crop_move_snap_axes.append({
+                "axis": "y",
+                "position": near_y[3],
+                "label": near_y[2],
+            })
         if near_x[0] <= threshold:
             dx = near_x[1]
         if near_y[0] <= threshold:
@@ -1300,7 +1341,12 @@ class ImageEditController:
                 if new_rect.bottom() > bounds.bottom():
                     new_rect.translate(0, bounds.bottom() - new_rect.bottom())
             self.crop_rect = self._snap_crop_move_to_target(new_rect)
-            self.overlay.update(self.crop_rect, self.active_aspect_ratio, move_snap_caught=self.crop_move_caught)
+            self.overlay.update(
+                self.crop_rect,
+                self.active_aspect_ratio,
+                move_snap_caught=self.crop_move_caught,
+                move_snap_axes=self.crop_move_snap_axes,
+            )
             self.overlay.update_resolution_text(
                 self.crop_rect, self.crop_target_item
             )
@@ -1391,6 +1437,7 @@ class ImageEditController:
         if self.active_crop_move:
             self.active_crop_move = False
             self.crop_move_caught = False
+            self.crop_move_snap_axes = []
             self.crop_move_start = None
             self.crop_move_start_rect = None
             self._set_crop_cursor(CropCursorFactory.get_cursor())
