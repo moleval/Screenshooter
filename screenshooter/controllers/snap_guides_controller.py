@@ -94,9 +94,35 @@ class SnapGuidesController:
         x_guides = []
         y_guides = []
 
+        background = getattr(self.view.image_editor, "background_item", None)
+        background_rect = (
+            background.sceneBoundingRect()
+            if background is not None and background.scene() is self._scene
+            else QRectF()
+        )
+        full_width = (
+            not background_rect.isEmpty()
+            and abs(group_rect.width() - background_rect.width()) <= 1e-6
+        )
+        full_height = (
+            not background_rect.isEmpty()
+            and abs(group_rect.height() - background_rect.height()) <= 1e-6
+        )
+
+        x_values = (
+            (group_rect.left(), group_rect.right())
+            if full_width
+            else (group_rect.left(), group_rect.center().x(), group_rect.right())
+        )
+        y_values = (
+            (group_rect.top(), group_rect.bottom())
+            if full_height
+            else (group_rect.top(), group_rect.center().y(), group_rect.bottom())
+        )
+
         if snap_x:
             x_guides = self._find_all_best(
-                (group_rect.left(), group_rect.center().x(), group_rect.right()),
+                x_values,
                 self._candidate_x,
                 threshold,
             )
@@ -106,7 +132,7 @@ class SnapGuidesController:
 
         if snap_y:
             y_guides = self._find_all_best(
-                (group_rect.top(), group_rect.center().y(), group_rect.bottom()),
+                y_values,
                 self._candidate_y,
                 threshold,
             )
