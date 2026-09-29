@@ -402,25 +402,48 @@ class ImageEditController:
 
         near_x = min(candidates_x, key=lambda item: item[0])
         near_y = min(candidates_y, key=lambda item: item[0])
-        self.crop_move_caught = (
-            near_x[0] <= threshold or near_y[0] <= threshold
-        )
-        if near_x[0] <= threshold:
+
+        edge_x = [
+            candidate for candidate in candidates_x[:2]
+            if candidate[0] <= threshold
+        ]
+        edge_y = [
+            candidate for candidate in candidates_y[:2]
+            if candidate[0] <= threshold
+        ]
+
+        if len(edge_x) == 2:
+            active_x = edge_x
+            dx = min(edge_x, key=lambda item: item[0])[1]
+        elif near_x[0] <= threshold:
+            active_x = [near_x]
+            dx = near_x[1]
+        else:
+            active_x = []
+
+        if len(edge_y) == 2:
+            active_y = edge_y
+            dy = min(edge_y, key=lambda item: item[0])[1]
+        elif near_y[0] <= threshold:
+            active_y = [near_y]
+            dy = near_y[1]
+        else:
+            active_y = []
+
+        self.crop_move_caught = bool(active_x or active_y)
+
+        for candidate in active_x:
             self.crop_move_snap_axes.append({
                 "axis": "x",
-                "position": near_x[3],
-                "label": near_x[2],
+                "position": candidate[3],
+                "label": candidate[2],
             })
-        if near_y[0] <= threshold:
+        for candidate in active_y:
             self.crop_move_snap_axes.append({
                 "axis": "y",
-                "position": near_y[3],
-                "label": near_y[2],
+                "position": candidate[3],
+                "label": candidate[2],
             })
-        if near_x[0] <= threshold:
-            dx = near_x[1]
-        if near_y[0] <= threshold:
-            dy = near_y[1]
 
         snapped = QRectF(rect).translated(dx, dy)
         if snapped.left() < bounds.left():
@@ -606,9 +629,9 @@ class ImageEditController:
                 self.crop_rect, handle_id, mouse_pos
             )
             if (
-                not self.aspect_drag_new_selection
+                self.aspect_drag_activation_area is None
                 or self.crop_rect.width() * self.crop_rect.height()
-                >= (self.aspect_drag_activation_area or 0.0)
+                >= self.aspect_drag_activation_area
             )
             else []
         )
@@ -770,6 +793,17 @@ class ImageEditController:
                 self.aspect_drag_last_mouse = QPointF(mouse_pos)
                 self.aspect_drag_last_distance = current_distance
                 return None
+
+        if self.aspect_drag_caught_ratio is None:
+            refreshed = self._build_aspect_drag_candidates(
+                raw_rect,
+                handle_id,
+                mouse_pos,
+            )
+            self.aspect_drag_candidates = [
+                candidate for candidate in refreshed
+                if tuple(candidate["ratio"]) not in self.aspect_drag_used_ratios
+            ][:self.ASPECT_VISIBLE_CANDIDATES]
 
         if self.aspect_drag_caught_ratio is not None:
             caught = next(
