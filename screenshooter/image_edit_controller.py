@@ -63,6 +63,8 @@ class ImageEditController:
         self.aspect_drag_last_mouse = None
         self.aspect_drag_skip_snap = False
         self.aspect_drag_last_distance = None
+        self.aspect_drag_activation_area = None
+        self.crop_move_caught = False
         self.active_crop_move = False
         self.crop_move_start = None
         self.crop_move_start_rect = None
@@ -369,6 +371,7 @@ class ImageEditController:
 
         near_x = min(candidates_x, key=lambda item: item[0])
         near_y = min(candidates_y, key=lambda item: item[0])
+        self.crop_move_caught = near_x[0] <= threshold or near_y[0] <= threshold
         if near_x[0] <= threshold:
             dx = near_x[1]
         if near_y[0] <= threshold:
@@ -546,8 +549,19 @@ class ImageEditController:
         self.aspect_drag_last_mouse = QPointF(mouse_pos)
         anchor = self._aspect_anchor(self.crop_rect, handle_id)
         self.aspect_drag_last_distance = (math.hypot(mouse_pos.x() - anchor.x(), mouse_pos.y() - anchor.y()) if anchor is not None else None)
-        self.aspect_drag_candidates = self._build_aspect_drag_candidates(
-            self.crop_rect, handle_id, mouse_pos
+        bounds = self._aspect_target_bounds()
+        self.aspect_drag_activation_area = (
+            bounds.width() * bounds.height() * 0.5
+            if bounds is not None
+            else None
+        )
+        self.aspect_drag_candidates = (
+            self._build_aspect_drag_candidates(
+                self.crop_rect, handle_id, mouse_pos
+            )
+            if self.crop_rect.width() * self.crop_rect.height()
+            >= (self.aspect_drag_activation_area or 0.0)
+            else []
         )
         self.aspect_drag_skip_snap = False
 
@@ -628,8 +642,21 @@ class ImageEditController:
         """Возвращает мягко притянутую цель или None."""
         if self.aspect_drag_handle != handle_id:
             return None
-        if not self.aspect_drag_candidates:
+
+        activation_area = self.aspect_drag_activation_area
+        if activation_area is not None and raw_rect.width() * raw_rect.height() < activation_area:
+            self.aspect_drag_candidates = []
+            self.aspect_drag_caught_ratio = None
+            self.active_aspect_ratio = None
+            self.aspect_drag_last_mouse = QPointF(mouse_pos)
             return None
+
+        if not self.aspect_drag_candidates:
+            self.aspect_drag_candidates = self._build_aspect_drag_candidates(
+                raw_rect, handle_id, mouse_pos
+            )
+            if not self.aspect_drag_candidates:
+                return None
 
         last_mouse = self.aspect_drag_last_mouse or QPointF(mouse_pos)
         anchor = self._aspect_anchor(raw_rect, handle_id)
@@ -1224,6 +1251,7 @@ class ImageEditController:
             and not full_image_crop
         ):
             self.active_crop_move = True
+            self.crop_move_caught = False
             self.crop_move_start = QPointF(sp)
             self.crop_move_start_rect = QRectF(self.crop_rect)
             self.aspect_drag_candidates = []
@@ -1354,6 +1382,7 @@ class ImageEditController:
 
         if self.active_crop_move:
             self.active_crop_move = False
+            self.crop_move_caught = False
             self.crop_move_start = None
             self.crop_move_start_rect = None
             self._set_crop_cursor(CropCursorFactory.get_cursor())
