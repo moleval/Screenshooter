@@ -210,10 +210,10 @@ class ManipulationController:
             view.viewport().setCursor(Qt.SizeAllCursor)
             return
 
-        # 8. Инструменты рисования — используем контрастный курсор
+        # 8. В режиме рисования используется обычная стрелка.
+        # Специальный курсор обрезки относится только к crop-режиму.
         if view.current_tool in ('rect', 'ellipse', 'arrow', 'line', 'text'):
-            from ..controllers.crop_cursor_factory import CropCursorFactory
-            view.viewport().setCursor(CropCursorFactory.get_cursor())
+            view.viewport().setCursor(Qt.ArrowCursor)
         else:
             view.viewport().setCursor(Qt.ArrowCursor)
 
