@@ -114,6 +114,32 @@ def test_no_snap_when_outside_threshold(qapp):
     view.close()
 
 
+def test_full_width_drag_shows_both_vertical_edge_guides(qapp):
+    view, background = make_fixture(qapp)
+    item = QGraphicsPixmapItem(QPixmap(300, 40))
+    view.scene().addItem(item)
+
+    controller = SnapGuidesController(view)
+    controller.begin_drag([item], background)
+
+    snapped = controller.snap_delta(QPointF(0, 0))
+
+    assert snapped.x() == pytest.approx(0)
+    vertical_guides = [
+        guide for guide in controller.guides
+        if abs(guide.line().x1() - guide.line().x2()) > 0
+    ]
+    assert len(vertical_guides) == 2
+    assert len(controller._guide_labels) == 2
+    assert {label.text() for label in controller._guide_labels} == {
+        "X: левый край",
+        "X: правый край",
+    }
+
+    controller.clear_guides()
+    view.close()
+
+
 def test_double_axis_snap_uses_yellow_guides(qapp):
     view, background = make_fixture(qapp)
     item = QGraphicsRectItem(0, 0, 20, 20)
