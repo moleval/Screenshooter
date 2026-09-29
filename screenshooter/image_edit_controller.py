@@ -110,20 +110,21 @@ class ImageEditController:
     def _is_deleted(obj):
         return obj is None or sip.isdeleted(obj)
 
+    def _set_crop_cursor(self, cursor):
+        """Устанавливает курсор одновременно на представление и его viewport."""
+        self.view.setCursor(cursor)
+        self.view.viewport().setCursor(cursor)
+
     # --------------------------------------------------------------
     # Ограничение точки пределами целевого изображения
     # --------------------------------------------------------------
     def _clamp_to_target(self, scene_pos):
-        """Ограничивает точку только для вставленного изображения."""
-        if self.crop_target_item is None:
+        """Ограничивает точку пределами изображения, которое обрезается."""
+        bounds = self._aspect_target_bounds()
+        if bounds is None:
             return scene_pos
-        if self.crop_target_item is self.background_item:
-            return scene_pos
-        pixmap = self.crop_target_item.pixmap()
-        image_rect = self.crop_target_item.mapRectToScene(
-            QRectF(0, 0, pixmap.width(), pixmap.height()))
-        x = max(image_rect.left(), min(image_rect.right(), scene_pos.x()))
-        y = max(image_rect.top(), min(image_rect.bottom(), scene_pos.y()))
+        x = max(bounds.left(), min(bounds.right(), scene_pos.x()))
+        y = max(bounds.top(), min(bounds.bottom(), scene_pos.y()))
         return QPointF(x, y)
 
     # --------------------------------------------------------------
@@ -140,7 +141,7 @@ class ImageEditController:
         self.temp_crop_start = None
         self.active_handle = None
 
-        self.view.setCursor(CropCursorFactory.get_cursor())
+        self._set_crop_cursor(CropCursorFactory.get_cursor())
         self.view.setBackgroundBrush(theme_manager.get_color('crop_bg'))
 
         if self.crop_target_item is None:
@@ -196,7 +197,7 @@ class ImageEditController:
         self.crop_move_start = None
         self.crop_move_start_rect = None
 
-        self.view.setCursor(Qt.CrossCursor)
+        self._set_crop_cursor(Qt.CrossCursor)
         self.view.setBackgroundBrush(self.view.normal_background_color)
         if self.background_item is not None and not self._is_deleted(self.background_item):
             self.view.set_scene_rect_preserving_view(
@@ -979,7 +980,7 @@ class ImageEditController:
         self.active_handle = None
         self.crop_mode = False
 
-        self.view.setCursor(Qt.CrossCursor)
+        self._set_crop_cursor(Qt.CrossCursor)
         self.view.setBackgroundBrush(self.view.normal_background_color)
         self.view.crop_mode_changed.emit(False)
         self.view._update_floating_widgets_visibility()
@@ -1121,7 +1122,7 @@ class ImageEditController:
         handle_id = self.overlay.hit_test_handle(QPointF(event.pos()))
         if handle_id:
             self.active_handle = handle_id
-            self.view.setCursor(
+            self._set_crop_cursor(
                 self.overlay.handles.get_cursor_for_handle(handle_id)
             )
             self._begin_aspect_drag(
@@ -1144,7 +1145,7 @@ class ImageEditController:
             self.aspect_drag_caught_ratio = None
             self.aspect_drag_handle = None
             self.aspect_drag_skip_snap = False
-            self.view.setCursor(Qt.ClosedHandCursor)
+            self._set_crop_cursor(Qt.ClosedHandCursor)
             return True
 
         sp = self._clamp_to_target(sp)
@@ -1182,7 +1183,7 @@ class ImageEditController:
             self.overlay.update_resolution_text(
                 self.crop_rect, self.crop_target_item
             )
-            self.view.setCursor(Qt.ClosedHandCursor)
+            self._set_crop_cursor(Qt.ClosedHandCursor)
             return True
 
         if self.active_handle is not None:
@@ -1200,7 +1201,7 @@ class ImageEditController:
             self.overlay.update_resolution_text(
                 self.crop_rect, self.crop_target_item
             )
-            self.view.setCursor(
+            self._set_crop_cursor(
                 self.overlay.handles.get_cursor_for_handle(self.active_handle)
             )
             return True
@@ -1250,16 +1251,16 @@ class ImageEditController:
             self.overlay.update_resolution_text(
                 self.crop_rect, self.crop_target_item
             )
-            self.view.setCursor(CropCursorFactory.get_cursor())
+            self._set_crop_cursor(CropCursorFactory.get_cursor())
             return True
 
         handle_id = self.overlay.hit_test_handle(QPointF(event.pos()))
         if handle_id is not None:
-            self.view.setCursor(
+            self._set_crop_cursor(
                 self.overlay.handles.get_cursor_for_handle(handle_id)
             )
         else:
-            self.view.setCursor(CropCursorFactory.get_cursor())
+            self._set_crop_cursor(CropCursorFactory.get_cursor())
         return handle_id is not None
 
     def handle_mouse_release(self, event):
@@ -1270,7 +1271,7 @@ class ImageEditController:
             self.active_crop_move = False
             self.crop_move_start = None
             self.crop_move_start_rect = None
-            self.view.setCursor(CropCursorFactory.get_cursor())
+            self._set_crop_cursor(CropCursorFactory.get_cursor())
             return True
 
         if self.active_handle is not None:
@@ -1290,7 +1291,7 @@ class ImageEditController:
                 [],
                 None,
             )
-            self.view.setCursor(CropCursorFactory.get_cursor())
+            self._set_crop_cursor(CropCursorFactory.get_cursor())
             return True
 
         if self.temp_crop_start is not None:
