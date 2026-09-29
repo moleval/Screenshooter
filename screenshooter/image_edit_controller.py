@@ -100,6 +100,9 @@ class ImageEditController:
         self.aspect_drag_last_mouse = None
         self.aspect_drag_skip_snap = False
         self.aspect_drag_last_distance = None
+        self.aspect_drag_activation_area = None
+        self.aspect_drag_new_selection = False
+        self.crop_move_caught = False
         self.active_crop_move = False
         self.crop_move_start = None
         self.crop_move_start_rect = None
