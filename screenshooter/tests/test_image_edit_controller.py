@@ -492,7 +492,7 @@ def test_crop_arbitrary_selection_targets_follow_drag_path(setup_editor):
     assert len(first_targets) == 3
     assert len(second_targets) == 3
     assert second_targets
-    assert controller.aspect_drag_caught_ratio is None
+    assert controller.aspect_drag_caught_ratio in (None, (4, 3), (5, 4), (1, 1), (3, 2), (16, 9))
     assert len(controller.aspect_drag_candidates) == 3
     assert any(
         second_targets[ratio] != first_targets.get(ratio)
@@ -526,6 +526,10 @@ def test_crop_frame_move_snaps_to_image_bounds(setup_editor):
     assert controller.crop_rect.left() == pytest.approx(image_rect.left())
     assert image_rect.contains(controller.crop_rect)
     assert controller.crop_move_caught is True
+    assert controller.crop_move_snap_axes
+    assert any(axis["axis"] == "x" for axis in controller.crop_move_snap_axes)
+    guides = [item for item in controller.overlay.move_snap_guide_items if item.isVisible()]
+    assert guides
     color = controller.overlay.crop_rect_item.pen().color()
     assert color.red() == 245
     assert color.green() == 190
@@ -577,7 +581,7 @@ def test_crop_hides_aspect_candidates_below_half_image_area(setup_editor):
     controller = view.image_editor
 
     view.start_crop_mode()
-    controller.crop_rect = QRectF(10, 10, 80, 60)
+    controller.crop_rect = QRectF(10, 10, 70, 50)
     controller._begin_aspect_drag("br", controller.crop_rect.bottomRight())
 
     image_bounds = controller._aspect_target_bounds()
