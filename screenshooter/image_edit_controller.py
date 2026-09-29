@@ -759,8 +759,17 @@ class ImageEditController:
             return rect, None
 
         current = rect.width() / rect.height()
+        landscape = rect.width() >= rect.height()
+        effective_pairs = []
+        for pair in self.ASPECT_RATIOS:
+            if pair == (1, 1):
+                effective_pairs.append(pair)
+            elif landscape:
+                effective_pairs.append((max(pair), min(pair)))
+            else:
+                effective_pairs.append((min(pair), max(pair)))
         best = min(
-            self.ASPECT_RATIOS,
+            effective_pairs,
             key=lambda pair: self._ratio_error(current, pair[0] / pair[1]),
         )
         target = best[0] / best[1]
