@@ -338,8 +338,8 @@ def test_crop_new_selection_shows_aspect_candidates(setup_editor):
     controller = view.image_editor
 
     view.start_crop_mode()
-    start = QPointF(10, 10)
-    current = QPointF(70, 60)
+    start = QPointF(5, 5)
+    current = QPointF(80, 65)
 
     controller.temp_crop_start = start
     controller.crop_rect = QRectF(start, start)
@@ -461,7 +461,7 @@ def test_crop_arbitrary_selection_targets_follow_drag_path(setup_editor):
     controller = view.image_editor
 
     view.start_crop_mode()
-    start = QPointF(20, 20)
+    start = QPointF(5, 5)
     controller.temp_crop_start = start
     controller.crop_rect = QRectF(start, start)
 
@@ -472,14 +472,14 @@ def test_crop_arbitrary_selection_targets_follow_drag_path(setup_editor):
         def pos(self):
             return self._pos
 
-    first_pos = QPointF(55, 45)
+    first_pos = QPointF(80, 65)
     controller.handle_mouse_move(Event(first_pos))
     first_targets = {
         tuple(candidate["ratio"]): candidate["handle_point"]
         for candidate in controller.aspect_drag_candidates
     }
 
-    second_pos = QPointF(90, 65)
+    second_pos = QPointF(90, 75)
     controller.handle_mouse_move(Event(second_pos))
 
     second_targets = {
