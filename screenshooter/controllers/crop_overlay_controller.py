@@ -163,7 +163,7 @@ class CropOverlayController:
                 if is_caught
                 else QColor(0, 120, 215, 155)
             )
-            pen = QPen(color, 3 if is_caught else 2, Qt.SolidLine)
+            pen = QPen(color, 4 if is_caught else 2, Qt.SolidLine)
             pen.setCosmetic(True)
             item.setPen(pen)
             item.setRect(rect)
@@ -222,7 +222,7 @@ class CropOverlayController:
             label.setAcceptedMouseButtons(Qt.NoButton)
             label.setFlag(QGraphicsItem.ItemIgnoresTransformations)
             font = QFont()
-            font.setPointSize(11)
+            font.setPointSize(12 if is_caught else 11)
             font.setBold(True)
             label.setFont(font)
             self.view.scene().addItem(label)
