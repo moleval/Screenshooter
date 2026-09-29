@@ -162,12 +162,12 @@ class CropOverlayController:
                 continue
 
             axis = visible_axes[index]
-            pen = QPen(QColor(245, 190, 0, 220), 2, Qt.DashLine)
+            pen = QPen(QColor(255, 215, 0, 255), 2, Qt.DashLine)
             pen.setCosmetic(True)
             line.setPen(pen)
 
             label = self.move_snap_label_items[index]
-            label.setBrush(QColor(245, 190, 0, 245))
+            label.setBrush(QColor(255, 235, 80, 255))
             label.setText(axis.get("label", "магнитная ось"))
             label.setVisible(True)
 
