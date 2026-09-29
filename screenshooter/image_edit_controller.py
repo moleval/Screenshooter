@@ -40,8 +40,8 @@ class ImageEditController:
         (2, 3),
         (16, 9),
     )
-    ASPECT_SNAP_DISTANCE_PX = 12.0
-    ASPECT_RELEASE_DISTANCE_PX = 18.0
+    ASPECT_SNAP_DISTANCE_PX = 18.0
+    ASPECT_RELEASE_DISTANCE_PX = 30.0
     ASPECT_VISIBLE_CANDIDATES = 1
     ASPECT_SOFT_SNAP_STRENGTH = 0.65
 
@@ -658,14 +658,39 @@ class ImageEditController:
                 )
                 self.aspect_drag_caught_ratio = tuple(caught["ratio"])
             else:
-                refreshed = self._build_aspect_drag_candidates(
-                    raw_rect, handle_id, mouse_pos
-                )
-                self.aspect_drag_candidates = [
-                    candidate
-                    for candidate in refreshed
-                    if tuple(candidate["ratio"]) not in self.aspect_drag_used_ratios
-                ][:self.ASPECT_VISIBLE_CANDIDATES]
+                # Уже показанная цель остаётся фиксированной на траектории.
+                # Она не должна прыгать под курсором на каждом событии мыши:
+                # пользователь должен успевать подвести к ней ручку.
+                pass
+
+        if self.aspect_drag_caught_ratio is None and self.aspect_drag_candidates:
+            previous = self.aspect_drag_candidates[0]
+            previous_point = previous["handle_point"]
+            previous_distance = self._distance_to_candidate(previous, last_mouse)
+            current_distance = self._distance_to_candidate(previous, mouse_pos)
+            movement = QPointF(
+                mouse_pos.x() - last_mouse.x(),
+                mouse_pos.y() - last_mouse.y(),
+            )
+            before = QPointF(
+                last_mouse.x() - previous_point.x(),
+                last_mouse.y() - previous_point.y(),
+            )
+            after = QPointF(
+                mouse_pos.x() - previous_point.x(),
+                mouse_pos.y() - previous_point.y(),
+            )
+            crossed = (
+                movement.x() * before.x() + movement.y() * before.y() < 0
+                and movement.x() * after.x() + movement.y() * after.y() > 0
+                and previous_distance <= self.ASPECT_RELEASE_DISTANCE_PX
+                and current_distance > previous_distance
+            )
+            if crossed:
+                self._consume_caught_aspect_candidate(mouse_pos, raw_rect)
+                self.aspect_drag_last_mouse = QPointF(mouse_pos)
+                self.aspect_drag_last_distance = current_distance
+                return None
 
         if self.aspect_drag_caught_ratio is not None:
             caught = next(
