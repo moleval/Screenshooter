@@ -64,6 +64,7 @@ class ImageEditController:
         self.aspect_drag_skip_snap = False
         self.aspect_drag_last_distance = None
         self.aspect_drag_activation_area = None
+        self.aspect_drag_new_selection = False
         self.crop_move_caught = False
         self.active_crop_move = False
         self.crop_move_start = None
@@ -541,9 +542,10 @@ class ImageEditController:
         }
         return anchors.get(handle_id)
 
-    def _begin_aspect_drag(self, handle_id, mouse_pos):
+    def _begin_aspect_drag(self, handle_id, mouse_pos, new_selection=False):
         """Фиксирует стартовый набор целей и очищает прошлое состояние."""
         self.aspect_drag_handle = handle_id
+        self.aspect_drag_new_selection = new_selection
         self.aspect_drag_caught_ratio = None
         self.aspect_drag_used_ratios = set()
         self.aspect_drag_last_mouse = QPointF(mouse_pos)
@@ -559,8 +561,11 @@ class ImageEditController:
             self._build_aspect_drag_candidates(
                 self.crop_rect, handle_id, mouse_pos
             )
-            if self.crop_rect.width() * self.crop_rect.height()
-            >= (self.aspect_drag_activation_area or 0.0)
+            if (
+                not self.aspect_drag_new_selection
+                or self.crop_rect.width() * self.crop_rect.height()
+                >= (self.aspect_drag_activation_area or 0.0)
+            )
             else []
         )
         self.aspect_drag_skip_snap = False
@@ -1336,7 +1341,7 @@ class ImageEditController:
                     "lb": "bl", "lt": "tl",
                 }[handle_id]
                 if self.aspect_drag_handle != handle_id:
-                    self._begin_aspect_drag(handle_id, sp)
+                    self._begin_aspect_drag(handle_id, sp, new_selection=True)
                 self.crop_rect = raw_rect
 
             if self.aspect_drag_candidates:
