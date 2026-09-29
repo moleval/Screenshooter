@@ -1035,7 +1035,7 @@ class ScreenshotApp(QMainWindow):
         dialog = SettingsDialog(self.settings, self)
         if dialog.exec_() == QDialog.Accepted:
             selected_theme = self.settings.theme
-            if selected_theme != theme_manager.theme:
+            if selected_theme != self.settings.theme:
                 self.apply_theme(selected_theme)
             self._update_window_minimum_width()
             if self.tray_manager is not None:
