@@ -6,7 +6,7 @@
 
 from PyQt5.QtCore import QPointF, QRectF, Qt
 from PyQt5.QtGui import QColor, QPen, QBrush
-from PyQt5.QtWidgets import QGraphicsLineItem, QGraphicsSimpleTextItem, QGraphicsItem, QGraphicsEllipseItem
+from PyQt5.QtWidgets import QGraphicsLineItem, QGraphicsSimpleTextItem, QGraphicsItem
 from PyQt5.QtGui import QFont
 
 
@@ -315,6 +315,7 @@ class SnapGuidesController:
         self._guide_labels.append(label)
 
     def _add_cross(self, x, y, color):
+        """Добавляет небольшой X-маркер из двух лучей."""
         zoom = abs(self.view.transform().m11())
         if zoom < 1e-6:
             zoom = 1.0
@@ -322,18 +323,16 @@ class SnapGuidesController:
         pen = QPen(color, self.CROSS_WIDTH)
         pen.setCosmetic(True)
 
-        marker = QGraphicsEllipseItem(
-            x - size,
-            y - size,
-            size * 2,
-            size * 2,
-        )
-        marker.setBrush(QBrush(Qt.NoBrush))
-        marker.setPen(pen)
-        marker.setZValue(self.GUIDE_Z_VALUE + 1)
-        marker.setFlag(QGraphicsEllipseItem.ItemIsSelectable, False)
-        self._scene.addItem(marker)
-        self._guides.append(marker)
+        for x1, y1, x2, y2 in (
+            (x - size, y - size, x + size, y + size),
+            (x - size, y + size, x + size, y - size),
+        ):
+            marker = QGraphicsLineItem(x1, y1, x2, y2)
+            marker.setPen(pen)
+            marker.setZValue(self.GUIDE_Z_VALUE + 1)
+            marker.setFlag(QGraphicsLineItem.ItemIsSelectable, False)
+            self._scene.addItem(marker)
+            self._guides.append(marker)
 
     def clear_guides(self):
         for guide in self._guides:
