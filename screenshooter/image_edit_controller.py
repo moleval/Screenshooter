@@ -504,62 +504,9 @@ class ImageEditController:
         if not visible:
             return []
 
-        # Первая цель остаётся в естественной точке пересечения.
-        # Следующие цели сдвигаются дальше по лучу от неподвижного якоря,
-        # чтобы их контуры не накладывались друг на друга.
-        anchor = self._aspect_anchor(rect, handle_id)
-        if anchor is None:
-            return visible
-
-        spaced = []
-        previous_distance = None
-        for index, candidate in enumerate(visible):
-            point = candidate["handle_point"]
-            natural_distance = math.hypot(
-                point.x() - anchor.x(),
-                point.y() - anchor.y(),
-            )
-            if previous_distance is None:
-                target_distance = natural_distance
-            else:
-                target_distance = max(
-                    natural_distance,
-                    previous_distance + max(32.0, rect.width() * 0.12),
-                )
-
-            if natural_distance > 0.001:
-                scale = target_distance / natural_distance
-            else:
-                scale = 1.0
-
-            spaced_rect = self._candidate_rect_for_ratio(
-                rect,
-                handle_id,
-                candidate["ratio"][0] / candidate["ratio"][1],
-                mouse_pos,
-                forward_scale * scale,
-            )
-            if spaced_rect is None:
-                # Для вставленного изображения не выходим за границы:
-                # если следующая цель не помещается, оставляем естественную.
-                spaced_rect = candidate["rect"]
-
-            candidate = dict(candidate)
-            candidate["rect"] = spaced_rect
-            candidate["handle_point"] = self._handle_point(
-                spaced_rect, handle_id
-            )
-            candidate["distance"] = self._distance_to_candidate(
-                candidate, mouse_pos
-            )
-            spaced.append(candidate)
-            previous_distance = math.hypot(
-                candidate["handle_point"].x() - anchor.x(),
-                candidate["handle_point"].y() - anchor.y(),
-            )
-
-        return spaced
-
+        # Каждая цель остаётся непосредственно в точке, рассчитанной от курсора.
+        # Поэтому марки идут по траектории ручки и не сливаются у якоря.
+        return visible
     def _aspect_anchor(self, rect, handle_id):
         """Возвращает неподвижную точку для выбранной ручки."""
         anchors = {
