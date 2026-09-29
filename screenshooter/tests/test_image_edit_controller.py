@@ -490,8 +490,13 @@ def test_crop_arbitrary_selection_targets_follow_drag_path(setup_editor):
     assert second_targets
     assert len(first_targets) == 3
     assert len(second_targets) == 3
-    assert second_targets == first_targets
+    assert second_targets
     assert controller.aspect_drag_caught_ratio is None
+    assert len(controller.aspect_drag_candidates) == 3
+    assert any(
+        second_targets[ratio] != first_targets.get(ratio)
+        for ratio in second_targets
+    )
     candidate = controller.aspect_drag_candidates[0]
     assert candidate["label"] in {"1:1", "5:4", "4:3", "3:2", "16:9"}
 
@@ -562,7 +567,7 @@ def test_crop_full_image_allows_starting_new_arbitrary_selection(setup_editor):
     assert controller.active_crop_move is False
 
 
-def test_crop_shows_only_one_aspect_candidate(setup_editor):
+def test_crop_hides_aspect_candidates_below_half_image_area(setup_editor):
     view = setup_editor
     controller = view.image_editor
 
@@ -570,4 +575,9 @@ def test_crop_shows_only_one_aspect_candidate(setup_editor):
     controller.crop_rect = QRectF(10, 10, 80, 60)
     controller._begin_aspect_drag("br", controller.crop_rect.bottomRight())
 
-    assert len(controller.aspect_drag_candidates) == 1
+    image_bounds = controller._aspect_target_bounds()
+    assert (
+        controller.crop_rect.width() * controller.crop_rect.height()
+        < image_bounds.width() * image_bounds.height() * 0.5
+    )
+    assert controller.aspect_drag_candidates == []
