@@ -1032,10 +1032,11 @@ class ScreenshotApp(QMainWindow):
 
     def show_settings(self):
         """Открывает окно настроек приложения."""
+        previous_theme = self.settings.theme
         dialog = SettingsDialog(self.settings, self)
         if dialog.exec_() == QDialog.Accepted:
             selected_theme = self.settings.theme
-            if selected_theme != self.settings.theme:
+            if selected_theme != previous_theme:
                 self.apply_theme(selected_theme)
             self._update_window_minimum_width()
             if self.tray_manager is not None:
