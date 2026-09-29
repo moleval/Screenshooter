@@ -161,9 +161,9 @@ class CropOverlayController:
             color = (
                 QColor(245, 190, 0, 225)
                 if is_caught
-                else QColor(0, 120, 215, 95)
+                else QColor(0, 120, 215, 155)
             )
-            pen = QPen(color, 2 if is_caught else 1, Qt.SolidLine)
+            pen = QPen(color, 3 if is_caught else 2, Qt.SolidLine)
             pen.setCosmetic(True)
             item.setPen(pen)
             item.setRect(rect)
@@ -177,8 +177,8 @@ class CropOverlayController:
 
             label_rect = label.boundingRect()
             handle_point = candidate.get("handle_point", rect.center())
-            label_x = handle_point.x() + 8
-            label_y = handle_point.y() - label_rect.height() - 8
+            label_x = handle_point.x() + 10
+            label_y = handle_point.y() - label_rect.height() - 10
 
             visible_scene = self.view.sceneRect()
             if label_x + label_rect.width() > visible_scene.right():
@@ -189,10 +189,10 @@ class CropOverlayController:
             label.setPos(label_x, label_y)
             label_bg.setRect(
                 QRectF(
+                    -5,
                     -3,
-                    -2,
-                    label_rect.width() + 6,
-                    label_rect.height() + 4,
+                    label_rect.width() + 10,
+                    label_rect.height() + 6,
                 )
             )
             label_bg.setPos(label_x, label_y)
@@ -222,7 +222,7 @@ class CropOverlayController:
             label.setAcceptedMouseButtons(Qt.NoButton)
             label.setFlag(QGraphicsItem.ItemIgnoresTransformations)
             font = QFont()
-            font.setPointSize(9)
+            font.setPointSize(11)
             font.setBold(True)
             label.setFont(font)
             self.view.scene().addItem(label)
