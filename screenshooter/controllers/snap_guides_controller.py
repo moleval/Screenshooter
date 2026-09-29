@@ -6,7 +6,7 @@
 
 from PyQt5.QtCore import QPointF, QRectF, Qt
 from PyQt5.QtGui import QColor, QPen
-from PyQt5.QtWidgets import QGraphicsLineItem, QGraphicsSimpleTextItem, QGraphicsItem
+from PyQt5.QtWidgets import QGraphicsLineItem, QGraphicsSimpleTextItem, QGraphicsItem, QGraphicsEllipseItem
 from PyQt5.QtGui import QFont
 
 
@@ -322,14 +322,18 @@ class SnapGuidesController:
         pen = QPen(color, self.CROSS_WIDTH)
         pen.setCosmetic(True)
 
-        horizontal = QGraphicsLineItem(x - size, y, x + size, y)
-        vertical = QGraphicsLineItem(x, y - size, x, y + size)
-        for line in (horizontal, vertical):
-            line.setPen(pen)
-            line.setZValue(self.GUIDE_Z_VALUE + 1)
-            line.setFlag(QGraphicsLineItem.ItemIsSelectable, False)
-            self._scene.addItem(line)
-            self._guides.append(line)
+        marker = QGraphicsEllipseItem(
+            x - size,
+            y - size,
+            size * 2,
+            size * 2,
+        )
+        marker.setBrush(Qt.NoBrush)
+        marker.setPen(pen)
+        marker.setZValue(self.GUIDE_Z_VALUE + 1)
+        marker.setFlag(QGraphicsEllipseItem.ItemIsSelectable, False)
+        self._scene.addItem(marker)
+        self._guides.append(marker)
 
     def clear_guides(self):
         for guide in self._guides:
