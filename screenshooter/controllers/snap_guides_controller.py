@@ -5,7 +5,7 @@
 """
 
 from PyQt5.QtCore import QPointF, QRectF, Qt
-from PyQt5.QtGui import QColor, QPen
+from PyQt5.QtGui import QColor, QPen, QBrush
 from PyQt5.QtWidgets import QGraphicsLineItem, QGraphicsSimpleTextItem, QGraphicsItem, QGraphicsEllipseItem
 from PyQt5.QtGui import QFont
 
@@ -328,7 +328,7 @@ class SnapGuidesController:
             size * 2,
             size * 2,
         )
-        marker.setBrush(Qt.NoBrush)
+        marker.setBrush(QBrush(Qt.NoBrush))
         marker.setPen(pen)
         marker.setZValue(self.GUIDE_Z_VALUE + 1)
         marker.setFlag(QGraphicsEllipseItem.ItemIsSelectable, False)
