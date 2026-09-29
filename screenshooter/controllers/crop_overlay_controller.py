@@ -7,7 +7,7 @@
 from PyQt5 import sip
 from PyQt5.QtCore import Qt, QRectF, QPointF
 from PyQt5.QtGui import QPen, QBrush, QFont, QColor
-from PyQt5.QtWidgets import QGraphicsRectItem, QGraphicsSimpleTextItem, QGraphicsItem
+from PyQt5.QtWidgets import QGraphicsRectItem, QGraphicsSimpleTextItem, QGraphicsLineItem, QGraphicsItem
 
 from ..constants import (
     CROP_OVERLAY_Z, CROP_RECT_Z, CROP_LABEL_Z,
@@ -37,6 +37,8 @@ class CropOverlayController:
         self.active_aspect_ratio = None
         self.caught_aspect_ratio = None
         self._aspect_candidates_signature = ()
+        self.move_snap_guide_items = []
+        self.move_snap_label_items = []
 
     def update(
         self,
@@ -45,6 +47,7 @@ class CropOverlayController:
         aspect_candidates=None,
         caught_aspect_ratio=None,
         move_snap_caught=False,
+        move_snap_axes=None,
     ):
         crop = rect.normalized()
         scene_rect = self.view.sceneRect()
@@ -114,6 +117,8 @@ class CropOverlayController:
         self.crop_rect_item.setPen(pen)
         self.crop_rect_item.setRect(crop)
 
+        self._update_move_snap_guides(move_snap_axes or [])
+
         self.active_aspect_ratio = active_aspect_ratio
         previous_caught = self.caught_aspect_ratio
         self.caught_aspect_ratio = caught_aspect_ratio
@@ -127,6 +132,73 @@ class CropOverlayController:
 
         if self.handles:
             self.handles.update_handles(crop)
+
+    def _update_move_snap_guides(self, axes):
+        """Показывает оси, к которым примагничена перемещаемая рамка."""
+        visible_axes = list(axes or [])
+        while len(self.move_snap_guide_items) < len(visible_axes):
+            item = QGraphicsLineItem()
+            item.setAcceptedMouseButtons(Qt.NoButton)
+            item.setZValue(CROP_RECT_Z - 2)
+            self.view.scene().addItem(item)
+            self.move_snap_guide_items.append(item)
+
+            label = QGraphicsSimpleTextItem()
+            label.setAcceptedMouseButtons(Qt.NoButton)
+            label.setZValue(CROP_LABEL_Z + 2)
+            label.setFlag(QGraphicsItem.ItemIgnoresTransformations)
+            font = QFont()
+            font.setPointSize(10)
+            font.setBold(True)
+            label.setFont(font)
+            self.view.scene().addItem(label)
+            self.move_snap_label_items.append(label)
+
+        visible_scene = self.view.sceneRect()
+        for index, line in enumerate(self.move_snap_guide_items):
+            if index >= len(visible_axes):
+                line.setVisible(False)
+                self.move_snap_label_items[index].setVisible(False)
+                continue
+
+            axis = visible_axes[index]
+            pen = QPen(QColor(245, 190, 0, 220), 2, Qt.DashLine)
+            pen.setCosmetic(True)
+            line.setPen(pen)
+
+            label = self.move_snap_label_items[index]
+            label.setBrush(QColor(245, 190, 0, 245))
+            label.setText(axis.get("label", "магнитная ось"))
+            label.setVisible(True)
+
+            if axis.get("axis") == "x":
+                x = axis["position"]
+                line.setLine(
+                    x, visible_scene.top(), x, visible_scene.bottom()
+                )
+                label.setPos(
+                    x + 6,
+                    visible_scene.top() + 8,
+                )
+            else:
+                y = axis["position"]
+                line.setLine(
+                    visible_scene.left(), y, visible_scene.right(), y
+                )
+                label.setPos(
+                    visible_scene.left() + 8,
+                    y + 6,
+                )
+            line.setVisible(True)
+
+    def _clear_move_snap_guides(self):
+        """Удаляет направляющие перемещения рамки."""
+        for item in self.move_snap_guide_items + self.move_snap_label_items:
+            if item is not None and not self._is_deleted(item):
+                if item.scene() is self.view.scene():
+                    self.view.scene().removeItem(item)
+        self.move_snap_guide_items.clear()
+        self.move_snap_label_items.clear()
 
     @staticmethod
     def _make_aspect_candidates_signature(candidates):
@@ -234,6 +306,8 @@ class CropOverlayController:
             list(self.aspect_guide_items)
             + list(self.aspect_label_items)
             + list(self.aspect_label_bg_items)
+            + list(self.move_snap_guide_items)
+            + list(self.move_snap_label_items)
         )
         for item in items:
             if item is not None and not self._is_deleted(item):
@@ -294,6 +368,7 @@ class CropOverlayController:
         self.crop_size_bg = None
 
         self._clear_aspect_guides()
+        self._clear_move_snap_guides()
         for item in self.crop_overlay_items:
             if item is not None and not self._is_deleted(item):
                 if item.scene() is self.view.scene():
@@ -428,6 +503,8 @@ class CropOverlayController:
         items.extend(self.aspect_guide_items)
         items.extend(self.aspect_label_items)
         items.extend(self.aspect_label_bg_items)
+        items.extend(self.move_snap_guide_items)
+        items.extend(self.move_snap_label_items)
         if self.crop_rect_item is not None:
             items.append(self.crop_rect_item)
         if self.crop_size_label is not None:
