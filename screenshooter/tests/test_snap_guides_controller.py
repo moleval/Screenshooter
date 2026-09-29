@@ -127,7 +127,8 @@ def test_full_width_drag_shows_both_vertical_edge_guides(qapp):
     assert snapped.x() == pytest.approx(0)
     vertical_guides = [
         guide for guide in controller.guides
-        if abs(guide.line().x1() - guide.line().x2()) > 0
+        if abs(guide.line().x1() - guide.line().x2()) < 1e-6
+        and abs(guide.line().y1() - guide.line().y2()) > 1e-6
     ]
     assert len(vertical_guides) == 2
     assert len(controller._guide_labels) == 2
