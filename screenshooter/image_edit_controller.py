@@ -65,6 +65,7 @@ class ImageEditController:
         self.aspect_drag_last_distance = None
         self.aspect_drag_activation_area = None
         self.aspect_drag_new_selection = False
+        self.aspect_drag_orientation = None
         self.crop_move_caught = False
         self.crop_move_snap_axes = []
         self.active_crop_move = False
@@ -103,6 +104,7 @@ class ImageEditController:
         self.aspect_drag_last_distance = None
         self.aspect_drag_activation_area = None
         self.aspect_drag_new_selection = False
+        self.aspect_drag_orientation = None
         self.crop_move_caught = False
         self.crop_move_snap_axes = []
         self.active_crop_move = False
@@ -613,6 +615,7 @@ class ImageEditController:
         """Фиксирует стартовый набор целей и очищает прошлое состояние."""
         self.aspect_drag_handle = handle_id
         self.aspect_drag_new_selection = new_selection
+        self.aspect_drag_orientation = self.crop_rect.width() >= self.crop_rect.height()
         self.aspect_drag_caught_ratio = None
         self.aspect_drag_used_ratios = set()
         self.aspect_drag_last_mouse = QPointF(mouse_pos)
@@ -722,6 +725,19 @@ class ImageEditController:
             self.active_aspect_ratio = None
             self.aspect_drag_last_mouse = QPointF(mouse_pos)
             return None
+
+        orientation = raw_rect.width() >= raw_rect.height()
+        if self.aspect_drag_orientation is None:
+            self.aspect_drag_orientation = orientation
+        elif orientation != self.aspect_drag_orientation:
+            # При переходе landscape/portrait цели должны пересчитываться
+            # с новой ориентацией, иначе на рамке остаются старые форматы.
+            self.aspect_drag_orientation = orientation
+            self.aspect_drag_used_ratios.clear()
+            self.aspect_drag_caught_ratio = None
+            self.aspect_drag_candidates = self._build_aspect_drag_candidates(
+                raw_rect, handle_id, mouse_pos
+            )
 
         if not self.aspect_drag_candidates:
             self.aspect_drag_candidates = self._build_aspect_drag_candidates(
