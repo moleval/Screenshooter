@@ -824,6 +824,30 @@ class ImageEditController:
                 None,
             )
             if caught is not None:
+                # После захвата текущая цель остаётся фиксированной, но
+                # остальные подсказки должны следовать за курсором.
+                refreshed = self._build_aspect_drag_candidates(
+                    raw_rect,
+                    handle_id,
+                    mouse_pos,
+                )
+                caught_ratio = tuple(self.aspect_drag_caught_ratio)
+                caught_candidate = next(
+                    (
+                        item for item in refreshed
+                        if tuple(item["ratio"]) == caught_ratio
+                    ),
+                    caught,
+                )
+                refreshed = [
+                    item for item in refreshed
+                    if tuple(item["ratio"]) != caught_ratio
+                    and tuple(item["ratio"]) not in self.aspect_drag_used_ratios
+                ]
+                self.aspect_drag_candidates = (
+                    [caught_candidate] + refreshed
+                )[:self.ASPECT_VISIBLE_CANDIDATES]
+                caught = caught_candidate
                 distance = self._distance_to_candidate(caught, mouse_pos)
                 movement = QPointF(
                     mouse_pos.x() - last_mouse.x(),
