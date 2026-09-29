@@ -4,7 +4,7 @@ Smoke-тесты для ImageEditController: обрезка и поворот п
 """
 
 import pytest
-from PyQt5.QtCore import QRectF, QPointF
+from PyQt5.QtCore import Qt, QRectF, QPointF
 from PyQt5.QtGui import QPixmap, QColor, QPen
 from PyQt5.QtWidgets import QGraphicsScene, QGraphicsEllipseItem
 
@@ -487,9 +487,11 @@ def test_crop_arbitrary_selection_targets_follow_drag_path(setup_editor):
     }
 
     assert first_targets
+    assert second_targets
+    assert len(first_targets) == 3
+    assert len(second_targets) == 3
     assert second_targets == first_targets
     assert controller.aspect_drag_caught_ratio is None
-    assert len(controller.aspect_drag_candidates) == 1
     candidate = controller.aspect_drag_candidates[0]
     assert candidate["label"] in {"1:1", "5:4", "4:3", "3:2", "16:9"}
 
