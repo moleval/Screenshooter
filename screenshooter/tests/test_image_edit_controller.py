@@ -481,9 +481,17 @@ def test_crop_arbitrary_selection_targets_follow_drag_path(setup_editor):
     second_pos = QPointF(90, 65)
     controller.handle_mouse_move(Event(second_pos))
 
+    second_targets = {
+        tuple(candidate["ratio"]): candidate["handle_point"]
+        for candidate in controller.aspect_drag_candidates
+    }
+
     assert first_targets
-    assert controller.aspect_drag_caught_ratio is not None
+    assert second_targets == first_targets
+    assert controller.aspect_drag_caught_ratio is None
     assert len(controller.aspect_drag_candidates) == 1
+    candidate = controller.aspect_drag_candidates[0]
+    assert candidate["label"] in {"1:1", "5:4", "4:3", "3:2", "16:9"}
 
 
 def test_crop_frame_move_snaps_to_image_bounds(setup_editor):
@@ -542,6 +550,9 @@ def test_crop_full_image_allows_starting_new_arbitrary_selection(setup_editor):
             return view.mapFromScene(
                 QPointF(image_bounds.center().x(), image_bounds.center().y())
             )
+
+        def button(self):
+            return Qt.LeftButton
 
     controller.handle_mouse_press(Event())
 
