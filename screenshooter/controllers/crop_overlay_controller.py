@@ -176,8 +176,9 @@ class CropOverlayController:
             label.setVisible(True)
 
             label_rect = label.boundingRect()
-            label_x = rect.left() + 5
-            label_y = rect.top() + 5
+            handle_point = candidate.get("handle_point", rect.center())
+            label_x = handle_point.x() + 8
+            label_y = handle_point.y() - label_rect.height() - 8
 
             visible_scene = self.view.sceneRect()
             if label_x + label_rect.width() > visible_scene.right():
