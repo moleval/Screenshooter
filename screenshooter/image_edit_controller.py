@@ -601,7 +601,7 @@ class ImageEditController:
         self.aspect_drag_caught_ratio = None
 
         replacements = self._build_aspect_drag_candidates(
-            rect, self.aspect_drag_handle, mouse_pos, forward_scale=1.35
+            rect, self.aspect_drag_handle, mouse_pos, forward_scale=1.15
         )
         for candidate in replacements:
             if (
