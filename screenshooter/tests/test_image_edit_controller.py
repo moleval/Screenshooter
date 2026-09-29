@@ -535,6 +535,47 @@ def test_crop_frame_move_snaps_to_image_bounds(setup_editor):
     assert color.green() == 190
 
 
+def test_crop_full_width_shows_both_vertical_snap_guides(setup_editor):
+    view = setup_editor
+    controller = view.image_editor
+
+    view.start_crop_mode()
+    image_bounds = controller._aspect_target_bounds()
+    controller.crop_rect = QRectF(
+        image_bounds.left(),
+        image_bounds.top() + 10,
+        image_bounds.width(),
+        image_bounds.height() - 20,
+    )
+    controller.crop_rect_is_user_defined = True
+    controller.active_crop_move = True
+    controller.crop_move_start = controller.crop_rect.center()
+    controller.crop_move_start_rect = QRectF(controller.crop_rect)
+
+    controller._snap_crop_move_to_target(controller.crop_rect)
+
+    x_guides = [
+        axis for axis in controller.crop_move_snap_axes
+        if axis["axis"] == "x"
+    ]
+    assert len(x_guides) == 2
+    assert {axis["label"] for axis in x_guides} == {
+        "X: левый край",
+        "X: правый край",
+    }
+
+    controller.overlay.update(
+        controller.crop_rect,
+        move_snap_caught=controller.crop_move_caught,
+        move_snap_axes=controller.crop_move_snap_axes,
+    )
+    visible = [
+        item for item in controller.overlay.move_snap_guide_items
+        if item.isVisible()
+    ]
+    assert len(visible) == 2
+
+
 def test_crop_handle_cursor_uses_resize_cursor(setup_editor):
     view = setup_editor
     controller = view.image_editor
