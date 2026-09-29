@@ -15,7 +15,7 @@ class SnapGuidesController:
 
     SNAP_DISTANCE_PX = 8.0
     GUIDE_Z_VALUE = 9998
-    GUIDE_COLOR = QColor(0, 120, 215, 210)
+    GUIDE_COLOR = QColor(0, 170, 255, 255)
     MULTI_SNAP_COLOR = QColor(255, 215, 0, 255)
     GUIDE_WIDTH = 2
     CROSS_SIZE_PX = 7
