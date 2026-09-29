@@ -160,7 +160,7 @@ class CropOverlayController:
             ratio = candidate["ratio"]
             is_caught = tuple(ratio) == tuple(self.caught_aspect_ratio or ())
             color = (
-                QColor(245, 190, 0, 225)
+                QColor(210, 45, 45, 245)
                 if is_caught
                 else QColor(0, 120, 215, 155)
             )
