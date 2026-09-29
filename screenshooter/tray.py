@@ -11,6 +11,7 @@ from PyQt5.QtWidgets import QSystemTrayIcon, QMenu, QAction, QApplication, QFile
 from .utils import load_app_icon
 from .settings import AppSettings
 from .theme import theme_manager
+from .settings_dialog import SettingsDialog
 
 
 class TrayManager(QObject):
@@ -107,6 +108,12 @@ class TrayManager(QObject):
         self.autostart_action.toggled.connect(self._on_autostart_toggled)
         self.menu.addAction(self.autostart_action)
 
+        self.settings_action = QAction("Настройки", self)
+        self.settings_action.triggered.connect(self._show_settings)
+        self.menu.addAction(self.settings_action)
+
+        self.menu.addSeparator()
+
         self.theme_menu = self.menu.addMenu("Тема")
         self.theme_menu.setEnabled(True)
         self._build_theme_menu()
@@ -173,6 +180,29 @@ class TrayManager(QObject):
             action.triggered.connect(lambda checked, k=key: self._on_theme_selected(k))
             self.theme_actions[key] = action
             self.theme_menu.addAction(action)
+
+    def _show_settings(self):
+        """Открывает настройки из системного трея."""
+        target = self._current_window()
+        settings = target.settings if target is not None else self.settings
+        parent = target if target is not None else None
+        previous_theme = settings.theme
+
+        dialog = SettingsDialog(settings, parent)
+        if dialog.exec_() != dialog.Accepted:
+            return
+
+        selected_theme = settings.theme
+        if selected_theme != previous_theme:
+            if target is not None:
+                target.apply_theme(selected_theme)
+            else:
+                theme_manager.set_theme(selected_theme)
+                theme_manager.apply(QApplication.instance())
+                self._apply_theme_to_all_windows()
+
+        self._last_system_theme = theme_manager.detect_system_theme()
+        self.update_windows_menu()
 
     def _toggle_all_windows(self):
         if self.window_manager is None:
