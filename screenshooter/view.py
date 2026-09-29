@@ -513,6 +513,10 @@ class EditorView(QGraphicsView):
         for item in self.scene().items():
             if item is bg or self._is_background_item(item):
                 continue
+            # Служебные ручки, направляющие и другие элементы интерфейса
+            # не являются содержимым холста и не должны расширять подложку.
+            if item.zValue() >= 2000:
+                continue
             try:
                 if not item.isVisible():
                     continue
