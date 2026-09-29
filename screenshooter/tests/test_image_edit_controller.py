@@ -327,7 +327,8 @@ def test_crop_aspect_candidate_turns_yellow_and_softly_snaps(setup_editor):
     caught = [
         item for item in controller.overlay.aspect_guide_items
         if item.isVisible()
-        and item.pen().color().alpha() == 225
+        and item.pen().color().red() == 210
+        and item.pen().color().green() == 45
     ]
     assert caught
 
@@ -524,6 +525,10 @@ def test_crop_frame_move_snaps_to_image_bounds(setup_editor):
     image_rect = controller._aspect_target_bounds()
     assert controller.crop_rect.left() == pytest.approx(image_rect.left())
     assert image_rect.contains(controller.crop_rect)
+    assert controller.crop_move_caught is True
+    color = controller.overlay.crop_rect_item.pen().color()
+    assert color.red() == 245
+    assert color.green() == 190
 
 
 def test_crop_handle_cursor_uses_resize_cursor(setup_editor):
