@@ -536,6 +536,78 @@ def test_crop_frame_move_snaps_to_image_bounds(setup_editor):
     assert color.green() == 190
 
 
+def test_crop_background_move_shows_magnet_labels_inside_image(setup_editor):
+    view = setup_editor
+    controller = view.image_editor
+
+    view.start_crop_mode()
+    image_bounds = controller._aspect_target_bounds()
+    controller.crop_rect = QRectF(
+        image_bounds.left() + 20,
+        image_bounds.top() + 20,
+        40,
+        30,
+    )
+    controller.crop_rect_is_user_defined = True
+
+    controller.crop_move_start = controller.crop_rect.center()
+    controller.crop_move_start_rect = QRectF(controller.crop_rect)
+    controller.crop_rect = controller._snap_crop_move_to_target(
+        QRectF(
+            image_bounds.left(),
+            image_bounds.top() + 20,
+            40,
+            30,
+        )
+    )
+    controller.overlay.update(
+        controller.crop_rect,
+        move_snap_caught=controller.crop_move_caught,
+        move_snap_axes=controller.crop_move_snap_axes,
+    )
+
+    labels = [
+        label for label in controller.overlay.move_snap_label_items
+        if label.isVisible()
+    ]
+    assert labels
+    assert any(label.text() == "X: левый край" for label in labels)
+    assert all(
+        image_bounds.top() <= label.sceneBoundingRect().center().y()
+        <= image_bounds.bottom()
+        for label in labels
+    )
+
+
+def test_crop_aspect_candidates_switch_to_portrait_orientation(setup_editor):
+    view = setup_editor
+    controller = view.image_editor
+
+    view.start_crop_mode()
+    controller.crop_rect = QRectF(10, 10, 70, 60)
+    controller._begin_aspect_drag("br", controller.crop_rect.bottomRight())
+
+    assert any(
+        candidate["ratio"][0] > candidate["ratio"][1]
+        for candidate in controller.aspect_drag_candidates
+        if tuple(candidate["ratio"]) != (1, 1)
+    )
+
+    raw_rect = QRectF(10, 10, 60, 70)
+    result = controller._apply_aspect_candidate_snap(
+        raw_rect,
+        "br",
+        raw_rect.bottomRight(),
+    )
+
+    assert result is None or result["ratio"][0] <= result["ratio"][1]
+    assert all(
+        candidate["ratio"][0] <= candidate["ratio"][1]
+        or tuple(candidate["ratio"]) == (1, 1)
+        for candidate in controller.aspect_drag_candidates
+    )
+
+
 def test_crop_full_width_shows_both_vertical_snap_guides(setup_editor):
     view = setup_editor
     controller = view.image_editor
