@@ -9,6 +9,7 @@ from PyQt5.QtGui import QPixmap, QColor, QPen
 from PyQt5.QtWidgets import QGraphicsScene, QGraphicsEllipseItem
 
 from screenshooter.items.pasted_image_item import PastedImageItem
+from screenshooter.controllers.crop_cursor_factory import CropCursorFactory
 from screenshooter.items.blur_region_item import BlurRegionItem
 from screenshooter.items.shape_items import RectangleItem
 from screenshooter.view import EditorView
@@ -654,9 +655,7 @@ def test_crop_cursor_outside_selection_and_outside_image(setup_editor):
         image_bounds.top() + 2,
     )
     controller.handle_mouse_move(Event(outside_selection))
-    assert view.cursor().shape() == controller.overlay.handles.get_cursor_for_handle(
-        "br"
-    ) or view.cursor().shape() == view.cursor().shape()
+    assert view.cursor().shape() == CropCursorFactory.get_cursor().shape()
 
     outside_image = QPointF(
         image_bounds.right() + 20,
