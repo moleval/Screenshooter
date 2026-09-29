@@ -31,15 +31,18 @@ class ImageEditController:
     Размытие вынесено в BlurController.
     """
 
+    # Небольшой набор наиболее употребимых форматов. Ориентация
+    # автоматически выбирается по направлению текущего растягивания.
     ASPECT_RATIOS = (
-        (1, 1), (4, 5), (5, 4), (3, 4), (4, 3),
-        (2, 3), (3, 2), (10, 16), (16, 10), (9, 16),
-        (16, 9), (9, 21), (21, 9), (1, 2), (2, 1),
-        (1, 3), (3, 1),
+        (1, 1),
+        (4, 5),
+        (3, 4),
+        (2, 3),
+        (16, 9),
     )
-    ASPECT_SNAP_DISTANCE_PX = 8.0
+    ASPECT_SNAP_DISTANCE_PX = 12.0
     ASPECT_RELEASE_DISTANCE_PX = 18.0
-    ASPECT_VISIBLE_CANDIDATES = 3
+    ASPECT_VISIBLE_CANDIDATES = 1
     ASPECT_SOFT_SNAP_STRENGTH = 0.65
 
     def __init__(self, view):
@@ -478,8 +481,17 @@ class ImageEditController:
         if current_point is None:
             return []
 
+        landscape = rect.width() >= rect.height()
+
         for ratio_pair in self.ASPECT_RATIOS:
-            ratio = ratio_pair[0] / ratio_pair[1]
+            if ratio_pair == (1, 1):
+                effective_pair = ratio_pair
+            elif landscape:
+                effective_pair = (max(ratio_pair), min(ratio_pair))
+            else:
+                effective_pair = (min(ratio_pair), max(ratio_pair))
+
+            ratio = effective_pair[0] / effective_pair[1]
             candidate_rect = self._candidate_rect_for_ratio(
                 rect, handle_id, ratio, mouse_pos, forward_scale
             )
@@ -501,8 +513,8 @@ class ImageEditController:
                 continue
 
             candidates.append({
-                "ratio": ratio_pair,
-                "label": f"{ratio_pair[0]}:{ratio_pair[1]}",
+                "ratio": effective_pair,
+                "label": f"{effective_pair[0]}:{effective_pair[1]}",
                 "rect": candidate_rect,
                 "handle_point": handle_point,
                 "distance": distance,
@@ -632,14 +644,28 @@ class ImageEditController:
             return None
 
         if self.aspect_drag_caught_ratio is None:
-            refreshed = self._build_aspect_drag_candidates(
-                raw_rect, handle_id, mouse_pos
-            )
-            self.aspect_drag_candidates = [
+            nearby = [
                 candidate
-                for candidate in refreshed
+                for candidate in self.aspect_drag_candidates
                 if tuple(candidate["ratio"]) not in self.aspect_drag_used_ratios
-            ][:self.ASPECT_VISIBLE_CANDIDATES]
+                and self._distance_to_candidate(candidate, mouse_pos)
+                <= self.ASPECT_SNAP_DISTANCE_PX
+            ]
+            if nearby:
+                caught = min(
+                    nearby,
+                    key=lambda item: self._distance_to_candidate(item, mouse_pos),
+                )
+                self.aspect_drag_caught_ratio = tuple(caught["ratio"])
+            else:
+                refreshed = self._build_aspect_drag_candidates(
+                    raw_rect, handle_id, mouse_pos
+                )
+                self.aspect_drag_candidates = [
+                    candidate
+                    for candidate in refreshed
+                    if tuple(candidate["ratio"]) not in self.aspect_drag_used_ratios
+                ][:self.ASPECT_VISIBLE_CANDIDATES]
 
         if self.aspect_drag_caught_ratio is not None:
             caught = next(
@@ -1145,7 +1171,21 @@ class ImageEditController:
             return True
 
         sp = self.view.mapToScene(event.pos())
-        if self.crop_rect_is_user_defined and self.crop_rect is not None and self.crop_rect.contains(sp):
+        image_bounds = self._aspect_target_bounds()
+        full_image_crop = (
+            image_bounds is not None
+            and self.crop_rect is not None
+            and abs(self.crop_rect.left() - image_bounds.left()) < 0.5
+            and abs(self.crop_rect.top() - image_bounds.top()) < 0.5
+            and abs(self.crop_rect.right() - image_bounds.right()) < 0.5
+            and abs(self.crop_rect.bottom() - image_bounds.bottom()) < 0.5
+        )
+        if (
+            self.crop_rect_is_user_defined
+            and self.crop_rect is not None
+            and self.crop_rect.contains(sp)
+            and not full_image_crop
+        ):
             self.active_crop_move = True
             self.crop_move_start = QPointF(sp)
             self.crop_move_start_rect = QRectF(self.crop_rect)
