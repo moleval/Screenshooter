@@ -209,6 +209,28 @@ def test_rotate_undo_does_not_restore_annotation_handles_as_scene_items(setup_ed
     assert controller.handles.positions == controller._handle_points(
         item.mapRectToScene(item.rect()).normalized(), item)
 
+def test_expand_background_ignores_pasted_image_handles(qapp):
+    scene = QGraphicsScene()
+    view = EditorView(scene)
+
+    pm = QPixmap(120, 100)
+    pm.fill(QColor("gray"))
+    view.set_background_from_pixmap(pm)
+
+    pasted = view.add_pasted_image(
+        QPixmap(120, 100),
+        scene_pos=QPointF(0, 0),
+    )
+    pasted.setPos(0, 0)
+    pasted.setSelected(True)
+    pasted.show_handles()
+    pasted.update_handles()
+
+    old_size = view.background_item.pixmap().size()
+    assert view.expand_background_to_content(margin=0) is False
+    assert view.background_item.pixmap().size() == old_size
+
+
 def test_trim_white_fields_keeps_annotation_moved_outside_background(qapp):
     scene = QGraphicsScene()
     view = EditorView(scene)
