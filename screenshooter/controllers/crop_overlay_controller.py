@@ -222,7 +222,7 @@ class CropOverlayController:
             label.setAcceptedMouseButtons(Qt.NoButton)
             label.setFlag(QGraphicsItem.ItemIgnoresTransformations)
             font = QFont()
-            font.setPointSize(12 if is_caught else 11)
+            font.setPointSize(11)
             font.setBold(True)
             label.setFont(font)
             self.view.scene().addItem(label)
