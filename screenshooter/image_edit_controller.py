@@ -42,7 +42,7 @@ class ImageEditController:
     )
     ASPECT_SNAP_DISTANCE_PX = 18.0
     ASPECT_RELEASE_DISTANCE_PX = 30.0
-    ASPECT_VISIBLE_CANDIDATES = 1
+    ASPECT_VISIBLE_CANDIDATES = 3
     ASPECT_SOFT_SNAP_STRENGTH = 0.65
 
     def __init__(self, view):
@@ -614,6 +614,9 @@ class ImageEditController:
                 self.aspect_drag_candidates.append(candidate)
                 break
 
+        self.aspect_drag_candidates.sort(
+            key=lambda item: self._distance_to_candidate(item, mouse_pos)
+        )
         self.aspect_drag_candidates.sort(
             key=lambda item: self._distance_to_candidate(item, mouse_pos)
         )
