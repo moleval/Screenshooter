@@ -350,10 +350,18 @@ class ImageEditController:
         candidates_x = (
             (abs(rect.left() - bounds.left()), bounds.left() - rect.left()),
             (abs(rect.right() - bounds.right()), bounds.right() - rect.right()),
+            (
+                abs(rect.center().x() - bounds.center().x()),
+                bounds.center().x() - rect.center().x(),
+            ),
         )
         candidates_y = (
             (abs(rect.top() - bounds.top()), bounds.top() - rect.top()),
             (abs(rect.bottom() - bounds.bottom()), bounds.bottom() - rect.bottom()),
+            (
+                abs(rect.center().y() - bounds.center().y()),
+                bounds.center().y() - rect.center().y(),
+            ),
         )
 
         near_x = min(candidates_x, key=lambda item: item[0])
