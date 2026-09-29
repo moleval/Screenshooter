@@ -533,3 +533,36 @@ def test_crop_handle_cursor_uses_resize_cursor(setup_editor):
     controller.handle_mouse_move(Event())
 
     assert view.cursor().shape() == controller.overlay.handles.get_cursor_for_handle("br")
+
+
+def test_crop_full_image_allows_starting_new_arbitrary_selection(setup_editor):
+    view = setup_editor
+    controller = view.image_editor
+
+    view.start_crop_mode()
+    controller.crop_rect_is_user_defined = True
+
+    image_bounds = controller._aspect_target_bounds()
+    controller.crop_rect = QRectF(image_bounds)
+
+    class Event:
+        def pos(self):
+            return view.mapFromScene(
+                QPointF(image_bounds.center().x(), image_bounds.center().y())
+            )
+
+    controller.handle_mouse_press(Event())
+
+    assert controller.temp_crop_start is not None
+    assert controller.active_crop_move is False
+
+
+def test_crop_shows_only_one_aspect_candidate(setup_editor):
+    view = setup_editor
+    controller = view.image_editor
+
+    view.start_crop_mode()
+    controller.crop_rect = QRectF(10, 10, 80, 60)
+    controller._begin_aspect_drag("br", controller.crop_rect.bottomRight())
+
+    assert len(controller.aspect_drag_candidates) == 1
