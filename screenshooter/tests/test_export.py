@@ -16,10 +16,15 @@ class SpyScene(QGraphicsScene):
     def __init__(self):
         super().__init__()
         self.visible_items_during_render = []
+        self.rendering_items_during_render = []
 
     def render(self, painter, target, source):
         self.visible_items_during_render = [
             item for item in self.items() if item.isVisible()
+        ]
+        self.rendering_items_during_render = [
+            item for item in self.items()
+            if getattr(item, "_rendering", False)
         ]
         self.selected_items_during_render = self.selectedItems()
         return super().render(painter, target, source)
@@ -98,7 +103,8 @@ def test_export_keeps_blur_but_hides_blur_ui(qapp):
     assert exported is not None
     assert not exported.isNull()
     assert blur_item in scene.visible_items_during_render
-    assert blur_item.handles is None
+    assert blur_item in scene.rendering_items_during_render
+    assert not any(item.zValue() == 2000 for item in scene.visible_items_during_render)
     assert not blur_item._rendering
     assert exported.pixelColor(59, 40) != QColor("black")
     assert exported.pixelColor(60, 40) != QColor("white")
