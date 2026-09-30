@@ -59,8 +59,8 @@ def test_snap_to_background_center_shows_vertical_guide(qapp):
     expected = 98 + (background.sceneBoundingRect().center().x() - group.left())
     assert snapped.x() == pytest.approx(expected)
     assert snapped.y() == pytest.approx(0)
-    # Линия + два перекрестья по два луча каждое.
-    assert len(controller.guides) == 5
+    # Для магнитной привязки остаётся только направляющая без крестиков.
+    assert len(controller.guides) == 1
 
     controller.clear_guides()
     assert not controller.guides
@@ -88,7 +88,7 @@ def test_snap_to_other_object_center(qapp):
     # с правой гранью перемещаемого объекта.
     expected = 98 + (target.center().x() - group.right())
     assert snapped.x() == pytest.approx(expected)
-    assert len(controller.guides) == 5
+    assert len(controller.guides) == 1
 
     controller.clear_guides()
     view.close()
