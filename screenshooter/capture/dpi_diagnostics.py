@@ -22,6 +22,13 @@ def collect_dpi_diagnostics(screens=None, grabber=grab_screen_physical):
         physical = get_screen_physical_geometry(screen)
         pixmap = grabber(screen)
 
+        dpr = float(screen.devicePixelRatio() or 1.0)
+        expected_size = [
+            round(logical.width() * dpr),
+            round(logical.height() * dpr),
+        ]
+        captured_size = [pixmap.width(), pixmap.height()]
+
         result.append(
             {
                 "name": screen.name(),
@@ -31,21 +38,21 @@ def collect_dpi_diagnostics(screens=None, grabber=grab_screen_physical):
                     logical.width(),
                     logical.height(),
                 ],
-                "device_pixel_ratio": float(
-                    screen.devicePixelRatio() or 1.0
-                ),
+                "device_pixel_ratio": dpr,
+                "expected_physical_size": expected_size,
                 "physical_geometry": [
                     physical.x(),
                     physical.y(),
                     physical.width(),
                     physical.height(),
                 ],
-                "captured_size": [
-                    pixmap.width(),
-                    pixmap.height(),
-                ],
+                "captured_size": captured_size,
                 "captured_dpr": float(
                     pixmap.devicePixelRatio() or 1.0
+                ),
+                "logical_scale_matches_capture": (
+                    not pixmap.isNull()
+                    and captured_size == expected_size
                 ),
                 "physical_size_matches": (
                     not pixmap.isNull()
