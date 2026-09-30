@@ -23,6 +23,7 @@ if platform.system() == "Windows":
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from screenshooter.dpi import configure_windows_dpi_awareness
 from screenshooter.app import ScreenshotApp
 from screenshooter.window_manager import WindowManager
 from screenshooter.hotkey_manager import HotkeyManager
@@ -56,6 +57,9 @@ def try_acquire_lock():
 
 
 def main():
+    # DPI-awareness процесса должен быть установлен до создания QApplication.
+    configure_windows_dpi_awareness()
+
     # Пытаемся получить блокировку ДО создания QApplication
     lock_file, success, error_message = try_acquire_lock()
 
