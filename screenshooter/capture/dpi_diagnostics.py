@@ -8,6 +8,8 @@ import json
 
 from PyQt5.QtGui import QGuiApplication
 
+from screenshooter.dpi import configure_windows_dpi_awareness
+
 from .virtual_screen import get_screen_physical_geometry, grab_screen_physical
 
 
@@ -67,6 +69,9 @@ def collect_dpi_diagnostics(screens=None, grabber=grab_screen_physical):
 
 def main():
     """Запускает консольную диагностику физических размеров захвата."""
+    if QGuiApplication.instance() is None:
+        configure_windows_dpi_awareness()
+
     app = QGuiApplication.instance() or QGuiApplication([])
     print(
         json.dumps(
