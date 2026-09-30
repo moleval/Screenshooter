@@ -62,7 +62,9 @@ class SettingsDialog(QDialog):
         enhancer_layout = QFormLayout(enhancer_group)
 
         self.enhancer_enabled_check = QCheckBox("Использовать адаптивное улучшение")
-        self.enhancer_enabled_check.setChecked(self.settings.enhancer_enabled)
+        self.enhancer_enabled_check.setChecked(
+            getattr(self.settings, "enhancer_enabled", False)
+        )
         enhancer_layout.addRow(self.enhancer_enabled_check)
 
         self.enhancer_scale_combo = QComboBox()
@@ -70,32 +72,44 @@ class SettingsDialog(QDialog):
         self.enhancer_scale_combo.addItem("1,5×", 1.5)
         self.enhancer_scale_combo.addItem("2×", 2.0)
         self.enhancer_scale_combo.addItem("3×", 3.0)
-        index = self.enhancer_scale_combo.findData(self.settings.enhancer_scale)
+        index = self.enhancer_scale_combo.findData(
+            getattr(self.settings, "enhancer_scale", "auto")
+        )
         if index >= 0:
             self.enhancer_scale_combo.setCurrentIndex(index)
         enhancer_layout.addRow("Масштаб:", self.enhancer_scale_combo)
 
         self.enhancer_text_check = QCheckBox("Текст")
-        self.enhancer_text_check.setChecked(self.settings.enhancer_text)
+        self.enhancer_text_check.setChecked(
+            getattr(self.settings, "enhancer_text", True)
+        )
         enhancer_layout.addRow("Оптимизация:", self.enhancer_text_check)
 
         self.enhancer_lines_check = QCheckBox("Тонкие линии")
-        self.enhancer_lines_check.setChecked(self.settings.enhancer_lines)
+        self.enhancer_lines_check.setChecked(
+            getattr(self.settings, "enhancer_lines", True)
+        )
         enhancer_layout.addRow("", self.enhancer_lines_check)
 
         self.enhancer_ui_check = QCheckBox("Интерфейс")
-        self.enhancer_ui_check.setChecked(self.settings.enhancer_ui)
+        self.enhancer_ui_check.setChecked(
+            getattr(self.settings, "enhancer_ui", True)
+        )
         enhancer_layout.addRow("", self.enhancer_ui_check)
 
         self.enhancer_geometry_check = QCheckBox("Геометрия")
-        self.enhancer_geometry_check.setChecked(self.settings.enhancer_geometry)
+        self.enhancer_geometry_check.setChecked(
+            getattr(self.settings, "enhancer_geometry", True)
+        )
         enhancer_layout.addRow("", self.enhancer_geometry_check)
 
         self.enhancer_color_combo = QComboBox()
         self.enhancer_color_combo.addItem("Автоматически", "auto")
         self.enhancer_color_combo.addItem("Сохранять оригинал", "original")
         self.enhancer_color_combo.addItem("Инвертировать", "invert")
-        index = self.enhancer_color_combo.findData(self.settings.enhancer_color_mode)
+        index = self.enhancer_color_combo.findData(
+            getattr(self.settings, "enhancer_color_mode", "auto")
+        )
         if index >= 0:
             self.enhancer_color_combo.setCurrentIndex(index)
         enhancer_layout.addRow("Цветовая схема:", self.enhancer_color_combo)
