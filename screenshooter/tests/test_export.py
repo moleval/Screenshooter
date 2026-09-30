@@ -3,7 +3,7 @@
 в итоговый QImage.
 """
 
-from PyQt5.QtCore import QRectF
+from PyQt5.QtCore import QRectF, QPointF
 from PyQt5.QtGui import QColor, QPixmap, QPen
 from PyQt5.QtWidgets import QGraphicsRectItem, QGraphicsScene
 
@@ -70,3 +70,37 @@ def test_export_hides_annotation_and_crop_ui(qapp):
         for item in view.image_editor.overlay.aspect_guide_items
     )
     assert annotation.isSelected()
+
+
+def test_export_keeps_blur_but_hides_blur_ui(qapp):
+    scene = SpyScene()
+    view = EditorView(scene)
+
+    pixmap = QPixmap(120, 80)
+    image = pixmap.toImage().convertToFormat(pixmap.toImage().format())
+    for x in range(120):
+        color = QColor("black") if x < 60 else QColor("white")
+        for y in range(80):
+            image.setPixelColor(x, y, color)
+    pixmap = QPixmap.fromImage(image)
+    view.set_background_from_pixmap(pixmap)
+
+    view.blur_controller.apply_blur(QRectF(45, 20, 30, 40))
+    blur_item = view.blur_controller.blur_region_items[0]
+    assert not blur_item.blurred_pixmap.isNull()
+    blur_item.setSelected(True)
+    blur_item.set_mode("active")
+    assert blur_item.handles is not None
+
+    exporter = Exporter(view, scene)
+    exported = exporter.render_scene_to_image()
+
+    assert exported is not None
+    assert not exported.isNull()
+    assert blur_item in scene.visible_items_during_render
+    assert blur_item.handles is None
+    assert not blur_item._rendering
+    assert exported.pixelColor(59, 40) != QColor("black")
+    assert exported.pixelColor(60, 40) != QColor("white")
+    assert blur_item.isSelected()
+    assert blur_item.handles is not None
