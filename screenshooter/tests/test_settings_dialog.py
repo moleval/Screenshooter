@@ -1,5 +1,5 @@
 import pytest
-from PyQt5.QtWidgets import QApplication, QGroupBox
+from PyQt5.QtWidgets import QApplication, QDialogButtonBox, QGroupBox
 
 from screenshooter.settings_dialog import SettingsDialog
 
@@ -46,5 +46,24 @@ def test_settings_dialog_has_adaptive_enhancer_section(qapp):
         widget.title() == "Адаптивный улучшайзер"
         for widget in dialog.findChildren(QGroupBox)
     )
+
+    dialog.reject()
+
+
+def test_settings_dialog_uses_save_and_cancel_labels(qapp):
+    class FakeSettings:
+        theme = "system"
+        save_directory = ""
+
+        @staticmethod
+        def is_autostart_enabled():
+            return False
+
+    dialog = SettingsDialog(FakeSettings())
+
+    buttons = dialog.findChildren(QDialogButtonBox)
+    assert buttons
+    assert buttons[0].button(QDialogButtonBox.Ok).text() == "Сохранить"
+    assert buttons[0].button(QDialogButtonBox.Cancel).text() == "Отмена"
 
     dialog.reject()
