@@ -26,4 +26,4 @@ def test_dpi_configuration_uses_per_monitor_v2_on_windows():
     with patch("screenshooter.dpi.platform.system", return_value="Windows"), \
          patch("screenshooter.dpi.ctypes.windll.user32", fake_user32):
         assert configure_windows_dpi_awareness() is True
-        assert fake_user32.context.value == ctypes.c_void_p(-4).value
+        assert fake_user32.SetProcessDpiAwarenessContext.context.value == ctypes.c_void_p(-4).value
