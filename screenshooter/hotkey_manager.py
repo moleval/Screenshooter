@@ -497,7 +497,7 @@ class HotkeyManager(QObject):
 
     def _capture_specific_screen_into_window(self, screen, target):
         try:
-            pixmap = screen.grabWindow(0)
+            pixmap = grab_screen_physical(screen)
             if not pixmap.isNull():
                 self._deliver(target, pixmap, screen_capture=True)
         except Exception as error:
