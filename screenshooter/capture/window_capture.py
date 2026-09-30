@@ -9,7 +9,7 @@ import os
 import win32gui
 import win32process
 from PyQt5.QtCore import QRect
-from .virtual_screen import grab_virtual_screen, get_virtual_screen_geometry
+from .virtual_screen import grab_physical_rect
 
 
 def capture_active_window(hwnd=None):
@@ -49,11 +49,4 @@ def capture_active_window(hwnd=None):
     if width <= 0 or height <= 0:
         return None
 
-    full = grab_virtual_screen()
-    if full.isNull():
-        return None
-
-    total_rect = get_virtual_screen_geometry()
-    offset = total_rect.topLeft()
-    local_rect = QRect(x - offset.x(), y - offset.y(), width, height)
-    return full.copy(local_rect)
+    return grab_physical_rect(QRect(x, y, width, height))
