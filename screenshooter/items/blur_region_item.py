@@ -18,6 +18,7 @@ class BlurRegionItem(QGraphicsRectItem):
         self.handles = None
         self.layer = 1
         self.blurred_pixmap = QPixmap()
+        self._rendering = False
 
         self.set_layer(self.layer)
         self.setAcceptedMouseButtons(Qt.LeftButton)
@@ -43,12 +44,13 @@ class BlurRegionItem(QGraphicsRectItem):
             painter.drawPixmap(self.rect().toRect(), self.blurred_pixmap)
             painter.restore()
 
-        painter.save()
-        painter.setRenderHint(QPainter.Antialiasing, True)
-        painter.setBrush(Qt.NoBrush)
-        painter.setPen(self.pen())
-        painter.drawRect(self.rect())
-        painter.restore()
+        if not self._rendering:
+            painter.save()
+            painter.setRenderHint(QPainter.Antialiasing, True)
+            painter.setBrush(Qt.NoBrush)
+            painter.setPen(self.pen())
+            painter.drawRect(self.rect())
+            painter.restore()
 
     def _apply_mode(self):
         if self.mode == 'drawing':
@@ -79,6 +81,15 @@ class BlurRegionItem(QGraphicsRectItem):
         if self.handles:
             self.handles.remove_handles()
             self.handles = None
+
+    def set_rendering(self, rendering: bool):
+        """Переключает режим экспорта без отключения самого размытия."""
+        self._rendering = bool(rendering)
+        if self._rendering:
+            self._remove_handles()
+        else:
+            self._apply_mode()
+        self.update()
 
     def set_mode(self, mode: str):
         if mode != self.mode:
