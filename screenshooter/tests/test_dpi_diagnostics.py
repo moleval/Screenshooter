@@ -33,5 +33,8 @@ def test_dpi_diagnostics_reports_physical_capture_size(qapp, monkeypatch):
     )
 
     assert result[0]["device_pixel_ratio"] == 1.5
+    assert result[0]["expected_physical_size"] == [1920, 1080]
     assert result[0]["captured_size"] == [1920, 1080]
     assert result[0]["captured_dpr"] == 1.0
+    assert result[0]["logical_scale_matches_capture"] is True
+    assert result[0]["physical_size_matches"] is True
