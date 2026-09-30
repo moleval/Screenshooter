@@ -59,13 +59,47 @@ class SettingsDialog(QDialog):
         layout.addWidget(general_group)
 
         enhancer_group = QGroupBox("Адаптивный улучшайзер")
-        enhancer_layout = QVBoxLayout(enhancer_group)
-        enhancer_layout.addWidget(
-            QLabel("Настройки улучшения качества будут добавлены следующим этапом.")
-        )
-        enhancer_layout.addWidget(
-            QLabel("На этом этапе существующий захват и обработка изображения не изменяются.")
-        )
+        enhancer_layout = QFormLayout(enhancer_group)
+
+        self.enhancer_enabled_check = QCheckBox("Использовать адаптивное улучшение")
+        self.enhancer_enabled_check.setChecked(self.settings.enhancer_enabled)
+        enhancer_layout.addRow(self.enhancer_enabled_check)
+
+        self.enhancer_scale_combo = QComboBox()
+        self.enhancer_scale_combo.addItem("Автоматически", "auto")
+        self.enhancer_scale_combo.addItem("1,5×", 1.5)
+        self.enhancer_scale_combo.addItem("2×", 2.0)
+        self.enhancer_scale_combo.addItem("3×", 3.0)
+        index = self.enhancer_scale_combo.findData(self.settings.enhancer_scale)
+        if index >= 0:
+            self.enhancer_scale_combo.setCurrentIndex(index)
+        enhancer_layout.addRow("Масштаб:", self.enhancer_scale_combo)
+
+        self.enhancer_text_check = QCheckBox("Текст")
+        self.enhancer_text_check.setChecked(self.settings.enhancer_text)
+        enhancer_layout.addRow("Оптимизация:", self.enhancer_text_check)
+
+        self.enhancer_lines_check = QCheckBox("Тонкие линии")
+        self.enhancer_lines_check.setChecked(self.settings.enhancer_lines)
+        enhancer_layout.addRow("", self.enhancer_lines_check)
+
+        self.enhancer_ui_check = QCheckBox("Интерфейс")
+        self.enhancer_ui_check.setChecked(self.settings.enhancer_ui)
+        enhancer_layout.addRow("", self.enhancer_ui_check)
+
+        self.enhancer_geometry_check = QCheckBox("Геометрия")
+        self.enhancer_geometry_check.setChecked(self.settings.enhancer_geometry)
+        enhancer_layout.addRow("", self.enhancer_geometry_check)
+
+        self.enhancer_color_combo = QComboBox()
+        self.enhancer_color_combo.addItem("Автоматически", "auto")
+        self.enhancer_color_combo.addItem("Сохранять оригинал", "original")
+        self.enhancer_color_combo.addItem("Инвертировать", "invert")
+        index = self.enhancer_color_combo.findData(self.settings.enhancer_color_mode)
+        if index >= 0:
+            self.enhancer_color_combo.setCurrentIndex(index)
+        enhancer_layout.addRow("Цветовая схема:", self.enhancer_color_combo)
+
         layout.addWidget(enhancer_group)
 
         layout.addStretch(1)
@@ -91,6 +125,13 @@ class SettingsDialog(QDialog):
         theme = self.theme_combo.currentData()
         self.settings.theme = theme
         self.settings.save_directory = self.save_directory_edit.text().strip()
+        self.settings.enhancer_enabled = self.enhancer_enabled_check.isChecked()
+        self.settings.enhancer_scale = self.enhancer_scale_combo.currentData()
+        self.settings.enhancer_text = self.enhancer_text_check.isChecked()
+        self.settings.enhancer_lines = self.enhancer_lines_check.isChecked()
+        self.settings.enhancer_ui = self.enhancer_ui_check.isChecked()
+        self.settings.enhancer_geometry = self.enhancer_geometry_check.isChecked()
+        self.settings.enhancer_color_mode = self.enhancer_color_combo.currentData()
         self.settings.save()
 
         enabled = self.autostart_check.isChecked()
