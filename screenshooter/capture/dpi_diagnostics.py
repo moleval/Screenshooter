@@ -82,7 +82,27 @@ def _get_process_dpi_awareness():
         return None
 
     try:
+        user32 = ctypes.windll.user32
+        user32.GetThreadDpiAwarenessContext.argtypes = []
+        user32.GetThreadDpiAwarenessContext.restype = ctypes.c_void_p
+        user32.GetAwarenessFromDpiAwarenessContext.argtypes = [ctypes.c_void_p]
+        user32.GetAwarenessFromDpiAwarenessContext.restype = ctypes.c_int
+
+        context = user32.GetThreadDpiAwarenessContext()
+        if context:
+            awareness = user32.GetAwarenessFromDpiAwarenessContext(context)
+            if awareness >= 0:
+                return awareness
+    except (AttributeError, OSError):
+        pass
+
+    try:
         shcore = ctypes.windll.shcore
+        shcore.GetProcessDpiAwareness.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_int),
+        ]
+        shcore.GetProcessDpiAwareness.restype = ctypes.c_long
         process = ctypes.windll.kernel32.GetCurrentProcess()
         awareness = ctypes.c_int()
         result = shcore.GetProcessDpiAwareness(
@@ -92,12 +112,9 @@ def _get_process_dpi_awareness():
         if result == 0:
             return awareness.value
     except (AttributeError, OSError):
-        return None
+        pass
 
     return None
-
-from .virtual_screen import get_screen_physical_geometry, grab_screen_physical
-
 
 def collect_dpi_diagnostics(screens=None, grabber=grab_screen_physical):
     """Собирает данные о DPI и фактическом размере снимка каждого экрана."""
@@ -158,13 +175,17 @@ def collect_dpi_diagnostics(screens=None, grabber=grab_screen_physical):
 
 def main():
     """Запускает консольную диагностику физических размеров захвата."""
+    configured = False
     if QGuiApplication.instance() is None:
-        configure_windows_dpi_awareness()
+        configured = configure_windows_dpi_awareness()
 
     app = QGuiApplication.instance() or QGuiApplication([])
     print(
         json.dumps(
-            collect_dpi_diagnostics(),
+            {
+                "dpi_awareness_configured": configured,
+                "diagnostics": collect_dpi_diagnostics(),
+            },
             ensure_ascii=False,
             indent=2,
         )
