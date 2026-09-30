@@ -1,3 +1,4 @@
+import ctypes
 from unittest.mock import patch
 
 from screenshooter.dpi import configure_windows_dpi_awareness
@@ -11,7 +12,7 @@ def test_dpi_configuration_is_noop_on_non_windows():
 def test_dpi_configuration_uses_per_monitor_v2_on_windows():
     class FakeUser32:
         def SetProcessDpiAwarenessContext(self, context):
-            assert context.value == -4
+            assert context.value == ctypes.c_void_p(-4).value
             return True
 
     with patch("screenshooter.dpi.platform.system", return_value="Windows"), \
