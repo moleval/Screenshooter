@@ -70,7 +70,10 @@ class RegionCaptureOverlay(QDialog):
             QApplication.processEvents()  # даём системе скрыть окно
 
             # Захват области сразу в физических пикселях.
-            pixmap = grab_virtual_screen_region(self._selection_rect)
+            logical_rect = self._selection_rect.translated(
+                self.geometry().topLeft()
+            )
+            pixmap = grab_virtual_screen_region(logical_rect)
             if not pixmap.isNull():
                 self._pixmap = pixmap
                 self.accept()
