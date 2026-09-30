@@ -43,6 +43,7 @@ class ImageEditController:
     ASPECT_SNAP_DISTANCE_PX = 18.0
     ASPECT_RELEASE_DISTANCE_PX = 30.0
     ASPECT_VISIBLE_CANDIDATES = 3
+    ASPECT_CANDIDATE_ACTIVATION_FRACTION = 0.25
     ASPECT_SOFT_SNAP_STRENGTH = 0.65
 
     def __init__(self, view):
@@ -595,6 +596,18 @@ class ImageEditController:
 
         candidates.sort(key=lambda item: item["distance"])
         visible = candidates[:self.ASPECT_VISIBLE_CANDIDATES]
+
+        # Квадрат 1:1 должен оставаться доступным даже тогда,
+        # когда три ближайшие цели заняли остальные места.
+        square = next(
+            (item for item in candidates if item["ratio"] == (1, 1)),
+            None,
+        )
+        if square is not None and square not in visible:
+            if visible:
+                visible[-1] = square
+            else:
+                visible = [square]
         if not visible:
             return []
 
@@ -623,7 +636,7 @@ class ImageEditController:
         self.aspect_drag_last_distance = (math.hypot(mouse_pos.x() - anchor.x(), mouse_pos.y() - anchor.y()) if anchor is not None else None)
         bounds = self._aspect_target_bounds()
         self.aspect_drag_activation_area = (
-            bounds.width() * bounds.height() * 0.5
+            bounds.width() * bounds.height() * self.ASPECT_CANDIDATE_ACTIVATION_FRACTION
             if bounds is not None
             else None
         )
