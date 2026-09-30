@@ -8,7 +8,7 @@ from PyQt5.QtGui import QPixmap
 from screenshooter.capture.dpi_diagnostics import collect_dpi_diagnostics
 
 
-def test_dpi_diagnostics_reports_physical_capture_size(qapp):
+def test_dpi_diagnostics_reports_physical_capture_size(qapp, monkeypatch):
     class FakeScreen:
         def name(self):
             return "DISPLAY1"
@@ -18,6 +18,11 @@ def test_dpi_diagnostics_reports_physical_capture_size(qapp):
 
         def devicePixelRatio(self):
             return 1.5
+
+    monkeypatch.setattr(
+        "screenshooter.capture.dpi_diagnostics.get_screen_physical_geometry",
+        lambda _screen: QRect(0, 0, 1920, 1080),
+    )
 
     source = QPixmap(1920, 1080)
     source.setDevicePixelRatio(1.0)
