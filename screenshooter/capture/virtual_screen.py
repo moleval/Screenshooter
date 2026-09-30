@@ -60,12 +60,12 @@ def _logical_rect_to_physical(screen, logical_rect):
     geometry = screen.geometry()
     dpr = float(screen.devicePixelRatio() or 1.0)
 
-    left = round((logical_rect.left() - geometry.left()) * dpr)
-    top = round((logical_rect.top() - geometry.top()) * dpr)
-    right = round((logical_rect.right() - geometry.left()) * dpr)
-    bottom = round((logical_rect.bottom() - geometry.top()) * dpr)
+    left = round((logical_rect.x() - geometry.x()) * dpr)
+    top = round((logical_rect.y() - geometry.y()) * dpr)
+    width = round(logical_rect.width() * dpr)
+    height = round(logical_rect.height() * dpr)
 
-    return QRect(left, top, max(0, right - left), max(0, bottom - top))
+    return QRect(left, top, max(0, width), max(0, height))
 
 
 def grab_virtual_screen():
