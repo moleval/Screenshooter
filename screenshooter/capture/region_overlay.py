@@ -8,7 +8,7 @@
 from PyQt5.QtCore import Qt, QRect, QPoint, pyqtSignal
 from PyQt5.QtGui import QPainter, QPen, QColor, QFont
 from PyQt5.QtWidgets import QDialog, QApplication
-from .virtual_screen import grab_virtual_screen, get_virtual_screen_geometry
+from .virtual_screen import grab_virtual_screen_region, get_virtual_screen_geometry
 
 
 class RegionCaptureOverlay(QDialog):
@@ -69,10 +69,10 @@ class RegionCaptureOverlay(QDialog):
             self.hide()
             QApplication.processEvents()  # даём системе скрыть окно
 
-            # Захват области из виртуального скриншота (оверлей уже скрыт)
-            full_pixmap = grab_virtual_screen()
-            if not full_pixmap.isNull():
-                self._pixmap = full_pixmap.copy(self._selection_rect)
+            # Захват области сразу в физических пикселях.
+            pixmap = grab_virtual_screen_region(self._selection_rect)
+            if not pixmap.isNull():
+                self._pixmap = pixmap
                 self.accept()
             else:
                 self.reject()
