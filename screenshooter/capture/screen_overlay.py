@@ -9,7 +9,7 @@ from PyQt5.QtCore import Qt, QRect, pyqtSignal
 from PyQt5.QtGui import (QPainter, QPen, QColor, QFont, QGuiApplication,
                          QPainterPath, QPainterPathStroker)
 from PyQt5.QtWidgets import QDialog, QApplication
-from .virtual_screen import get_virtual_screen_geometry
+from .virtual_screen import get_virtual_screen_geometry, grab_screen_physical
 
 
 class ScreenCaptureOverlay(QDialog):
@@ -88,7 +88,7 @@ class ScreenCaptureOverlay(QDialog):
                 QApplication.processEvents()  # даём системе скрыть окно
 
                 # Захватываем экран напрямую
-                self._selected_pixmap = screen.grabWindow(0)
+                self._selected_pixmap = grab_screen_physical(screen)
                 self.accept()  # закрываем диалог
             else:
                 event.ignore()

@@ -10,13 +10,17 @@ def test_dpi_configuration_is_noop_on_non_windows():
 
 
 def test_dpi_configuration_uses_per_monitor_v2_on_windows():
-    class FakeDpiApi:
+    class FakeDpiFunction:
         def __init__(self):
             self.context = None
 
-        def SetProcessDpiAwarenessContext(self, context):
+        def __call__(self, context):
             self.context = context
             return True
+
+    class FakeDpiApi:
+        def __init__(self):
+            self.SetProcessDpiAwarenessContext = FakeDpiFunction()
 
     fake_user32 = FakeDpiApi()
     with patch("screenshooter.dpi.platform.system", return_value="Windows"), \

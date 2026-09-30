@@ -18,6 +18,7 @@ from PyQt5.QtWidgets import QApplication, QDialog
 from .capture.screen_overlay import ScreenCaptureOverlay
 from .capture.region_overlay import RegionCaptureOverlay
 from .capture.window_capture import capture_active_window
+from .capture.virtual_screen import grab_screen_physical
 
 
 class HotkeyManager(QObject):
@@ -470,7 +471,7 @@ class HotkeyManager(QObject):
         target = None
         try:
             target = self._target()
-            pixmap = screen.grabWindow(0)
+            pixmap = grab_screen_physical(screen)
             if not pixmap.isNull():
                 target = (
                     target

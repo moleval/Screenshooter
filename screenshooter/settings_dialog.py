@@ -122,6 +122,8 @@ class SettingsDialog(QDialog):
             QDialogButtonBox.Ok | QDialogButtonBox.Cancel,
             parent=self,
         )
+        buttons.button(QDialogButtonBox.Ok).setText("Сохранить")
+        buttons.button(QDialogButtonBox.Cancel).setText("Отмена")
         buttons.accepted.connect(self._accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)

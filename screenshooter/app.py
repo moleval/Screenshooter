@@ -20,6 +20,7 @@ from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPu
                              QStyle, QMenu, QLabel, QShortcut, QTextBrowser)
 
 from .screen_capture import ScreenCapture
+from .capture.virtual_screen import grab_screen_physical
 from .export import Exporter
 from .view import EditorView
 from .widgets.thickness import ThicknessWidget
@@ -853,7 +854,7 @@ class ScreenshotApp(QMainWindow):
 
         # Запасной путь: если менеджер горячих клавиш ещё не подключён,
         # снимаем экран напрямую и добавляем его как обычное изображение.
-        pixmap = screen.grabWindow(0)
+        pixmap = grab_screen_physical(screen)
         if pixmap.isNull():
             return
 
