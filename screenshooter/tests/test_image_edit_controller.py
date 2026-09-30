@@ -778,7 +778,7 @@ def test_crop_full_image_keeps_crop_cursor(setup_editor):
     ) or view.cursor().shape() == view.cursor().shape()
 
 
-def test_crop_hides_aspect_candidates_below_half_image_area(setup_editor):
+def test_crop_hides_aspect_candidates_below_quarter_image_area(setup_editor):
     view = setup_editor
     controller = view.image_editor
 
@@ -789,6 +789,21 @@ def test_crop_hides_aspect_candidates_below_half_image_area(setup_editor):
     image_bounds = controller._aspect_target_bounds()
     assert (
         controller.crop_rect.width() * controller.crop_rect.height()
-        < image_bounds.width() * image_bounds.height() * 0.5
+        < image_bounds.width() * image_bounds.height() * 0.25
     )
     assert controller.aspect_drag_candidates == []
+
+
+def test_crop_keeps_one_to_one_aspect_candidate_visible(setup_editor):
+    view = setup_editor
+    controller = view.image_editor
+
+    view.start_crop_mode()
+    image_bounds = controller._aspect_target_bounds()
+    controller.crop_rect = QRectF(image_bounds.left(), image_bounds.top(),
+                                  image_bounds.width() * 0.4,
+                                  image_bounds.height() * 0.4)
+    controller._begin_aspect_drag("br", controller.crop_rect.bottomRight())
+
+    labels = {candidate["label"] for candidate in controller.aspect_drag_candidates}
+    assert "1:1" in labels
