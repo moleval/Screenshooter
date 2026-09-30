@@ -521,14 +521,16 @@ class BlurController:
     # ==============================================================
 
     def hide_blur_regions_for_render(self):
+        """Скрывает только рамки и ручки blur, сохраняя сам эффект."""
         for item in self.blur_region_items:
             if not sip.isdeleted(item):
-                item.setVisible(False)
+                item.set_rendering(True)
 
     def show_blur_regions_after_render(self):
+        """Восстанавливает обычное отображение зон blur после экспорта."""
         for item in self.blur_region_items:
             if not sip.isdeleted(item):
-                item.setVisible(True)
+                item.set_rendering(False)
 
     # ==============================================================
     # Режим размытия
