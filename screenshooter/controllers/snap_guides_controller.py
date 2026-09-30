@@ -242,8 +242,6 @@ class SnapGuidesController:
             self._guides.append(line)
 
             center_y = group_rect.center().y()
-            self._add_cross(x_value, center_y, color)
-            self._add_cross(x_target, center_y, color)
             self._add_guide_label(
                 x_target,
                 rect.top(),
@@ -261,8 +259,6 @@ class SnapGuidesController:
             self._guides.append(line)
 
             center_x = group_rect.center().x()
-            self._add_cross(center_x, y_value, color)
-            self._add_cross(center_x, y_target, color)
             self._add_guide_label(
                 rect.left(),
                 y_target,
