@@ -7,7 +7,8 @@
 import platform
 
 import win32api
-from PyQt5.QtCore import Qt, QRect, QGuiApplication
+from PyQt5.QtCore import Qt, QRect
+from PyQt5.QtGui import QGuiApplication
 from PyQt5.QtGui import QPixmap, QPainter
 
 
