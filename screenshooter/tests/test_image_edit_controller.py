@@ -783,7 +783,7 @@ def test_crop_hides_aspect_candidates_below_quarter_image_area(setup_editor):
     controller = view.image_editor
 
     view.start_crop_mode()
-    controller.crop_rect = QRectF(10, 10, 70, 50)
+    controller.crop_rect = QRectF(10, 10, 40, 30)
     controller._begin_aspect_drag("br", controller.crop_rect.bottomRight())
 
     image_bounds = controller._aspect_target_bounds()
@@ -801,8 +801,8 @@ def test_crop_keeps_one_to_one_aspect_candidate_visible(setup_editor):
     view.start_crop_mode()
     image_bounds = controller._aspect_target_bounds()
     controller.crop_rect = QRectF(image_bounds.left(), image_bounds.top(),
-                                  image_bounds.width() * 0.4,
-                                  image_bounds.height() * 0.4)
+                                  image_bounds.width() * 0.6,
+                                  image_bounds.height() * 0.6)
     controller._begin_aspect_drag("br", controller.crop_rect.bottomRight())
 
     labels = {candidate["label"] for candidate in controller.aspect_drag_candidates}
