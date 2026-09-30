@@ -80,6 +80,28 @@ class AppSettings:
         )
         self.theme = self.config.get('Theme', 'theme', fallback='system')
 
+        # Настройки адаптивного улучшайзера.
+        self.enhancer_enabled = self.config.getboolean(
+            'Enhancer', 'enabled', fallback=False
+        )
+        scale_raw = self.config.get('Enhancer', 'scale', fallback='auto')
+        self.enhancer_scale = 'auto' if scale_raw == 'auto' else float(scale_raw)
+        self.enhancer_text = self.config.getboolean(
+            'Enhancer', 'text', fallback=True
+        )
+        self.enhancer_lines = self.config.getboolean(
+            'Enhancer', 'lines', fallback=True
+        )
+        self.enhancer_ui = self.config.getboolean(
+            'Enhancer', 'ui', fallback=True
+        )
+        self.enhancer_geometry = self.config.getboolean(
+            'Enhancer', 'geometry', fallback=True
+        )
+        self.enhancer_color_mode = self.config.get(
+            'Enhancer', 'color_mode', fallback='auto'
+        )
+
         # Автозагрузка определяется наличием ярлыка
         self.autostart = self.is_autostart_enabled()
 
@@ -93,6 +115,16 @@ class AppSettings:
         self.config.set('General', 'save_directory', self.save_directory)
         self.config.set('Theme', 'theme', self.theme)
 
+        if not self.config.has_section('Enhancer'):
+            self.config.add_section('Enhancer')
+        self.config.set('Enhancer', 'enabled', str(self.enhancer_enabled))
+        self.config.set('Enhancer', 'scale', str(self.enhancer_scale))
+        self.config.set('Enhancer', 'text', str(self.enhancer_text))
+        self.config.set('Enhancer', 'lines', str(self.enhancer_lines))
+        self.config.set('Enhancer', 'ui', str(self.enhancer_ui))
+        self.config.set('Enhancer', 'geometry', str(self.enhancer_geometry))
+        self.config.set('Enhancer', 'color_mode', self.enhancer_color_mode)
+
         with open(self.config_path, 'w', encoding='utf-8') as f:
             self.config.write(f)
 
@@ -103,6 +135,15 @@ class AppSettings:
         config = configparser.ConfigParser()
         config['General'] = {'save_directory': ''}
         config['Theme'] = {'theme': 'system'}
+        config['Enhancer'] = {
+            'enabled': 'False',
+            'scale': 'auto',
+            'text': 'True',
+            'lines': 'True',
+            'ui': 'True',
+            'geometry': 'True',
+            'color_mode': 'auto',
+        }
 
         with open(self.config_path, 'w', encoding='utf-8') as f:
             f.write("; ============================================\n")
