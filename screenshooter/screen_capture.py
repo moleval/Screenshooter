@@ -7,6 +7,7 @@ import win32gui
 from .capture.screen_overlay import ScreenCaptureOverlay
 from .capture.region_overlay import RegionCaptureOverlay
 from .capture.window_capture import capture_active_window
+from .capture.virtual_screen import grab_screen_physical
 
 
 class ScreenCapture:
@@ -22,7 +23,7 @@ class ScreenCapture:
         """Захватывает указанный монитор или основной монитор."""
         screen = screen or QApplication.primaryScreen()
         if screen:
-            self.app.screenshot_pixmap = screen.grabWindow(0)
+            self.app.screenshot_pixmap = grab_screen_physical(screen)
             self.app.display_screenshot()
 
     def capture_monitor(self):
