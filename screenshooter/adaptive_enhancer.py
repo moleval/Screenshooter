@@ -104,6 +104,11 @@ def enhance_image(image, options):
     alpha = rgba[:, :, 3].copy()
     bgr = cv2.cvtColor(rgba[:, :, :3], cv2.COLOR_RGB2BGR)
 
+    # Инверсия является самостоятельным режимом цветовой схемы и должна
+    # выполняться над исходными цветами, а не над уже изменённым контрастом.
+    if options.color_mode == "invert":
+        bgr = cv2.bitwise_not(bgr)
+
     scale = _choose_scale(image.width(), image.height(), options.scale)
     if scale != 1.0:
         bgr = cv2.resize(
@@ -174,7 +179,9 @@ def enhance_image(image, options):
                 + sharpened.astype(np.float32) * mask
             ).clip(0, 255).astype(np.uint8)
 
-    bgr = _apply_color_mode(bgr, options.color_mode)
+    if options.color_mode != "invert":
+        bgr = _apply_color_mode(bgr, options.color_mode)
+
     rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
     result = np.dstack((rgb, alpha))
     return _rgba_to_qimage(result)
