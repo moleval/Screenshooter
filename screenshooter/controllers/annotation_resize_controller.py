@@ -648,6 +648,7 @@ class AnnotationResizeController:
             if old_rotation != new_rotation:
                 self.view.history.push(ResizeAnnotationCommand(
                     item, old_rotation=old_rotation, new_rotation=new_rotation))
+            self.sync_handles()
         elif isinstance(item, TextItem):
             old_scale = self._start_scale
             new_scale = item.scale()
