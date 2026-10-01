@@ -11,6 +11,8 @@ from PyQt5.QtCore import Qt, QRectF, QDir
 from PyQt5.QtGui import QImage, QPainter
 from PyQt5.QtWidgets import QFileDialog, QMenu, QApplication
 
+from .adaptive_enhancer import EnhancerOptions, enhance_image
+
 
 class Exporter:
     """
@@ -95,6 +97,21 @@ class Exporter:
             p.setRenderHint(QPainter.SmoothPixmapTransform)
             self.scene.render(p, QRectF(img.rect()), QRectF(target_rect))
             p.end()
+
+            if getattr(self.settings, "enhancer_enabled", False):
+                options = EnhancerOptions(
+                    enabled=True,
+                    scale=getattr(self.settings, "enhancer_scale", "auto"),
+                    text=getattr(self.settings, "enhancer_text", True),
+                    lines=getattr(self.settings, "enhancer_lines", True),
+                    ui=getattr(self.settings, "enhancer_ui", True),
+                    geometry=getattr(self.settings, "enhancer_geometry", True),
+                    color_mode=getattr(
+                        self.settings, "enhancer_color_mode", "auto"
+                    ),
+                )
+                img = enhance_image(img, options)
+
             return img
         finally:
             # Восстанавливаем служебные элементы даже при ошибке рендера.
