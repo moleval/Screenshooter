@@ -11,6 +11,7 @@ import platform
 from PyQt5.QtGui import QGuiApplication
 
 from screenshooter.dpi import configure_windows_dpi_awareness
+from .virtual_screen import get_screen_physical_geometry, grab_screen_physical
 
 
 def _get_windows_monitor_dpi(screen_name):
