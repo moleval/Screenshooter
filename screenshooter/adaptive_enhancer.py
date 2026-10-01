@@ -1,4 +1,4 @@
-"""
+""" 
 Модуль: adaptive_enhancer.py
 Описание: Адаптивное улучшение готового изображения перед экспортом.
 """
@@ -40,15 +40,19 @@ def _choose_scale(width, height, requested):
 
 
 def _qimage_to_rgba(image):
-    """Преобразует QImage в непрерывный массив RGBA."""
+    """Преобразует QImage в непрерывный массив RGBA с учётом шага строки."""
     source = image.convertToFormat(QImage.Format_RGBA8888)
     width = source.width()
     height = source.height()
+    stride = source.bytesPerLine()
+
     data = source.bits()
-    data.setsize(source.bytesPerLine() * height)
+    data.setsize(stride * height)
     array = np.frombuffer(data, dtype=np.uint8)
-    array = array.reshape((height, source.bytesPerLine(), 4))
-    return np.ascontiguousarray(array[:, :width, :])
+    array = array.reshape((height, stride))
+    array = array[:, :width * 4]
+    array = array.reshape((height, width, 4))
+    return np.ascontiguousarray(array)
 
 
 def _rgba_to_qimage(array):
