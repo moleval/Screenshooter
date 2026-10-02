@@ -133,7 +133,7 @@ class AnnotationResizeController:
         if bg is None or sip.isdeleted(bg):
             return QColor("#FFFFFF")
 
-        scene_point = self._rotation_handle_point(item)
+        scene_point = self._text_rotation_handle_point(item)
         local = bg.mapFromScene(scene_point)
         image = bg.pixmap().toImage()
         x = max(0, min(image.width() - 1, round(local.x())))
@@ -146,15 +146,19 @@ class AnnotationResizeController:
         )
         return QColor("#FFFFFF" if luminance < 160 else "#202020")
 
-    def _rotation_handle_point(self, item):
-        """Возвращает положение ручки поворота над верхней границей элемента."""
-        rect = item.boundingRect().normalized()
+    def _text_rotation_handle_point(self, item):
+        rect = item.rect()
         zoom = max(abs(self.view.transform().m11()), 1e-6)
         scale = max(abs(item.scale()), 1e-6)
         offset = 24.0 / (zoom * scale)
-        return item.mapToScene(
-            QPointF(rect.center().x(), rect.top() - offset)
-        )
+        return item.mapToScene(QPointF(rect.center().x(), rect.top() - offset))
+
+    def _text_rotation_handle_point(self, item):
+        rect = item.rect()
+        zoom = max(abs(self.view.transform().m11()), 1e-6)
+        scale = max(abs(item.scale()), 1e-6)
+        offset = 24.0 / (zoom * scale)
+        return item.mapToScene(QPointF(rect.center().x(), rect.top() - offset))
 
     def _line_handle_points(self, item):
         start, end = self._scene_line_geometry(item)
@@ -176,6 +180,8 @@ class AnnotationResizeController:
                 self.remove_handles()
                 return
             points = self._text_handle_points(item)
+            points['rotate'] = self._text_rotation_handle_point(item)
+            rotate_color = self._rotation_handle_color(item)
             show_midpoints = False
         elif isinstance(item, CurvedArrowItem):
             points = self._curve_handle_points(item)
@@ -208,7 +214,8 @@ class AnnotationResizeController:
                 self.handles.set_rotate_color(rotate_color)
         else:
             self.handles.update_handles(points)
-            self.handles.set_rotate_color(rotate_color)
+            if isinstance(item, TextItem):
+                self.handles.set_rotate_color(rotate_color)
 
     def remove_handles(self):
         if self.handles is not None:
@@ -465,24 +472,16 @@ class AnnotationResizeController:
             return False
 
         if handle_id == 'rotate':
-            if isinstance(item, TextItem) and item._editable:
+            if not isinstance(item, TextItem) or item._editable:
                 return False
-
-            local_rect = item.boundingRect().normalized()
-            origin = local_rect.center()
-            item.setTransformOriginPoint(origin)
-
             scene_pos = self.view.mapToScene(event.pos())
-            center = item.mapToScene(origin)
+            center = item.mapToScene(item.rect().center())
             vector = scene_pos - center
             if vector.manhattanLength() <= 1e-6:
                 return False
-
             self._handle_id = 'rotate'
             self._rotation_start = float(item.rotation())
-            self._rotation_start_angle = math.degrees(
-                math.atan2(vector.y(), vector.x())
-            )
+            self._rotation_start_angle = math.degrees(math.atan2(vector.y(), vector.x()))
             self._rotation_press_pos = QPointF(event.pos())
             self._old_pos = QPointF(item.pos())
             self.view._interaction_dragging = True
@@ -547,18 +546,29 @@ class AnnotationResizeController:
         item = self._item
 
         if self._handle_id == 'rotate':
-            center = item.mapToScene(item.boundingRect().normalized().center())
-            vector = cursor_scene - center
+            vector = cursor_scene - item.mapToScene(item.rect().center())
             if vector.manhattanLength() <= 1e-6:
                 return True
-
             angle = math.degrees(math.atan2(vector.y(), vector.x()))
             delta = angle - self._rotation_start_angle
             while delta > 180.0:
                 delta -= 360.0
             while delta < -180.0:
                 delta += 360.0
+            item.setRotation(self._rotation_start + delta)
+            self.sync_handles()
+            return True
 
+        if self._handle_id == 'rotate':
+            vector = cursor_scene - item.mapToScene(item.rect().center())
+            if vector.manhattanLength() <= 1e-6:
+                return True
+            angle = math.degrees(math.atan2(vector.y(), vector.x()))
+            delta = angle - self._rotation_start_angle
+            while delta > 180.0:
+                delta -= 360.0
+            while delta < -180.0:
+                delta += 360.0
             item.setRotation(self._rotation_start + delta)
             self.sync_handles()
             return True
@@ -653,7 +663,6 @@ class AnnotationResizeController:
             if old_rotation != new_rotation:
                 self.view.history.push(ResizeAnnotationCommand(
                     item, old_rotation=old_rotation, new_rotation=new_rotation))
-            self.sync_handles()
         elif isinstance(item, TextItem):
             old_scale = self._start_scale
             new_scale = item.scale()
