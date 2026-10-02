@@ -292,11 +292,13 @@ def enhance_image(image, options):
         bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
 
     if invert:
-        scaled_rgba = np.dstack((rgb, alpha))
-        result = _rgba_to_qimage(scaled_rgba)
-        result = result.convertToFormat(QImage.Format_ARGB32).copy()
-        result.invertPixels(QImage.InvertRgb)
-        return result
+        rgb = np.subtract(
+            np.uint8(255),
+            rgb,
+            dtype=np.uint8,
+        )
+        result = np.dstack((rgb, alpha))
+        return _rgba_to_qimage(result)
 
     gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
     masks = _build_feature_masks(gray, options)
