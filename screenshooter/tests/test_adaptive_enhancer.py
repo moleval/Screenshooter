@@ -3,8 +3,7 @@
 """
 
 import numpy as np
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QColor, QFont, QImage, QPainter
+from PyQt5.QtGui import QColor, QImage
 
 from screenshooter.adaptive_enhancer import (
     EnhancerOptions,
@@ -26,28 +25,38 @@ def _gray_array(image):
     gray_image = image.convertToFormat(QImage.Format_Grayscale8)
     data = gray_image.bits()
     data.setsize(gray_image.bytesPerLine() * gray_image.height())
-    return np.frombuffer(data, dtype=np.uint8).reshape(
+    array = np.frombuffer(data, dtype=np.uint8).reshape(
         (gray_image.height(), gray_image.bytesPerLine())
-    )[:, :gray_image.width()]
+    )
+    return np.ascontiguousarray(array[:, :gray_image.width()])
 
 
 def _feature_image():
     image = QImage(320, 200, QImage.Format_RGBA8888)
     image.fill(QColor("white"))
 
-    painter = QPainter(image)
-    painter.setRenderHint(QPainter.Antialiasing, False)
-    painter.setPen(QColor("black"))
-    painter.setBrush(Qt.NoBrush)
+    array = np.zeros((200, 320, 4), dtype=np.uint8)
+    array[:, :, :3] = 255
+    array[:, :, 3] = 255
 
-    painter.drawLine(20, 20, 300, 20)
-    painter.drawLine(160, 35, 160, 170)
-    painter.drawRect(210, 70, 80, 50)
+    array[19:22, 20:301, :3] = 0
+    array[35:171, 159:162, :3] = 0
+    array[69:72, 210:291, :3] = 0
+    array[119:122, 210:291, :3] = 0
+    array[70:121, 209:212, :3] = 0
+    array[70:121, 289:292, :3] = 0
 
-    painter.setFont(QFont("Arial", 18))
-    painter.drawText(25, 90, "Test")
-    painter.end()
-    return image
+    for x in range(25, 85):
+        y = 82 + ((x * 7) % 12)
+        array[y:y + 3, x:x + 5, :3] = 0
+
+    return QImage(
+        np.ascontiguousarray(array).data,
+        320,
+        200,
+        320 * 4,
+        QImage.Format_RGBA8888,
+    ).copy()
 
 
 def test_disabled_enhancer_keeps_image_size():
@@ -129,12 +138,7 @@ def test_line_detector_finds_thin_horizontal_and_vertical_lines():
 
 def test_geometry_detector_finds_long_segments():
     source = _feature_image()
-    gray_image = source.convertToFormat(QImage.Format_Grayscale8)
-    data = gray_image.bits()
-    data.setsize(gray_image.bytesPerLine() * gray_image.height())
-    gray = np.frombuffer(data, dtype=np.uint8).reshape(
-        (gray_image.height(), gray_image.bytesPerLine())
-    )[:, :gray_image.width()]
+    gray = _gray_array(source)
 
     masks = _build_feature_masks(
         gray,
@@ -147,12 +151,7 @@ def test_geometry_detector_finds_long_segments():
 
 def test_ui_detector_finds_rectangular_control():
     source = _feature_image()
-    gray_image = source.convertToFormat(QImage.Format_Grayscale8)
-    data = gray_image.bits()
-    data.setsize(gray_image.bytesPerLine() * gray_image.height())
-    gray = np.frombuffer(data, dtype=np.uint8).reshape(
-        (gray_image.height(), gray_image.bytesPerLine())
-    )[:, :gray_image.width()]
+    gray = _gray_array(source)
 
     masks = _build_feature_masks(
         gray,
