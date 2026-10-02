@@ -207,6 +207,21 @@ def _rgba_array(image):
 
 def test_invert_mode_enhances_after_inversion():
     source = _feature_image()
+    source_array = _rgba_array(source)
+    # Реальный CAD-скриншот содержит антиалиасинг и промежуточные тона.
+    # Добавляем серые пиксели на границе геометрии, чтобы тест проверял
+    # именно enhancement, а не бинарный чёрно-белый случай, где CLAHE
+    # и sharpening закономерно могут не изменить пиксели.
+    source_array[18:19, 20:301, :3] = 224
+    source_array[22:23, 20:301, :3] = 224
+    source = QImage(
+        np.ascontiguousarray(source_array).data,
+        320,
+        200,
+        320 * 4,
+        QImage.Format_RGBA8888,
+    ).copy()
+
     result = enhance_image(
         source,
         EnhancerOptions(
