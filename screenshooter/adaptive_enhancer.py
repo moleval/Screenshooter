@@ -292,8 +292,7 @@ def enhance_image(image, options):
         bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
 
     if invert:
-        bgr = cv2.bitwise_not(bgr)
-        rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+        rgb = cv2.bitwise_not(rgb)
         result = np.dstack((rgb, alpha))
         return _rgba_to_qimage(result)
 
