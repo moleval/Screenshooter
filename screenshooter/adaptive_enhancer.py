@@ -292,7 +292,9 @@ def enhance_image(image, options):
         bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
 
     if invert:
-        result = image.convertToFormat(QImage.Format_ARGB32).copy()
+        scaled_rgba = np.dstack((rgb, alpha))
+        result = _rgba_to_qimage(scaled_rgba)
+        result = result.convertToFormat(QImage.Format_ARGB32).copy()
         result.invertPixels(QImage.InvertRgb)
         return result
 

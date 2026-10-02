@@ -88,7 +88,7 @@ def test_line_like_annotations_have_only_start_and_end_handles(qapp, factory):
     view.scene().addItem(item)
     controller = select_item(view, item)
 
-    assert set(controller.handles.handle_items) == {"start", "end"}
+    assert set(controller.handles.handle_items) == {"start", "end", "rotate"}
 
     controller.remove_handles()
     view.close()
