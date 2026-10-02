@@ -292,11 +292,9 @@ def enhance_image(image, options):
         bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
 
     if invert:
-        rgb = np.subtract(
-            np.uint8(255),
-            rgb,
-            dtype=np.uint8,
-        )
+        # Инверсия — отдельная RGB-операция без участия адаптивного
+        # улучшения. Считаем в знаковом типе, затем явно возвращаем uint8.
+        rgb = (255 - rgb.astype(np.int16)).astype(np.uint8)
         result = np.dstack((rgb, alpha))
         return _rgba_to_qimage(result)
 
