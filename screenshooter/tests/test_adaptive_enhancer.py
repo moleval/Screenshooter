@@ -319,4 +319,5 @@ def test_enhancer_preserves_uniform_cad_fill():
     assert np.max(np.abs(
         result_array[55:70, 95:145, :3].astype(np.int16) - 145
     )) <= 1
-    assert np.array_equal(result_array[:, :, 3], array[:, :, 3])
+    source_array = _rgba_array(source)
+    assert np.array_equal(result_array[:, :, 3], source_array[:, :, 3])
