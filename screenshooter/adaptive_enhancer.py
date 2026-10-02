@@ -61,14 +61,18 @@ def _rgba_to_qimage(array):
     """Преобразует массив RGBA обратно в независимый QImage."""
     array = np.ascontiguousarray(array, dtype=np.uint8)
     height, width, _ = array.shape
-    image = QImage(
-        array.data,
-        width,
-        height,
-        width * 4,
-        QImage.Format_RGBA8888,
+    image = QImage(width, height, QImage.Format_RGBA8888)
+    image.fill(0)
+    destination = image.bits()
+    destination.setsize(image.bytesPerLine() * height)
+    destination_array = np.frombuffer(
+        destination,
+        dtype=np.uint8,
+    ).reshape((height, image.bytesPerLine()))
+    destination_array[:, :width * 4] = array.reshape(
+        (height, width * 4)
     )
-    return image.copy()
+    return image
 
 
 def _normalise_mask(mask, blur=1.0):

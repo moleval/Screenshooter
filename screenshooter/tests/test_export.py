@@ -98,7 +98,17 @@ def test_export_keeps_blur_but_hides_blur_ui(qapp):
     blur_item.set_mode("active")
     assert blur_item.handles is not None
 
-    exporter = Exporter(view, scene)
+    settings = SimpleNamespace(
+        save_directory="",
+        enhancer_enabled=False,
+        enhancer_scale=1.0,
+        enhancer_text=True,
+        enhancer_lines=True,
+        enhancer_ui=True,
+        enhancer_geometry=True,
+        enhancer_color_mode="auto",
+    )
+    exporter = Exporter(view, scene, settings)
     exported = exporter.render_scene_to_image()
 
     assert exported is not None
