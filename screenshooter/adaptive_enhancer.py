@@ -48,7 +48,10 @@ def _qimage_to_rgba(image):
 
     data = source.bits()
     data.setsize(stride * height)
-    array = np.frombuffer(data, dtype=np.uint8).reshape((height, stride))
+    # Копируем Qt-буфер в Python bytes до передачи в NumPy.
+    # Это исключает зависимость массива от времени жизни sip-объекта.
+    raw = bytes(data)
+    array = np.frombuffer(raw, dtype=np.uint8).reshape((height, stride))
     array = array[:, :width * 4]
     array = array.reshape((height, width, 4))
     return np.ascontiguousarray(array)
