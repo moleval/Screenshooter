@@ -205,6 +205,99 @@ def _rgba_array(image):
     )
 
 
+def test_cad_monochrome_maps_colored_dark_cad_to_dark_on_white():
+    source = QImage(80, 50, QImage.Format_RGBA8888)
+    source.fill(QColor(0, 0, 0, 255))
+
+    array = np.zeros((50, 80, 4), dtype=np.uint8)
+    array[:, :, 3] = 255
+    array[20:23, 10:70, :3] = (255, 0, 0)
+    array[30:33, 15:65, :3] = (0, 255, 0)
+    array[10:13, 25:55, :3] = (0, 0, 255)
+    source = QImage(
+        np.ascontiguousarray(array).data,
+        80,
+        50,
+        80 * 4,
+        QImage.Format_RGBA8888,
+    ).copy()
+
+    result = enhance_image(
+        source,
+        EnhancerOptions(
+            enabled=True,
+            scale=1.0,
+            text=False,
+            lines=False,
+            ui=False,
+            geometry=False,
+            color_mode="cad_mono",
+        ),
+    )
+
+    result_array = _rgba_array(result)
+    assert result.size() == source.size()
+    assert result.pixelColor(0, 0).red() >= 250
+    assert result.pixelColor(0, 0).green() >= 250
+    assert result.pixelColor(0, 0).blue() >= 250
+    assert int(result_array[21, 20, 0]) <= 10
+    assert int(result_array[31, 20, 0]) <= 10
+    assert int(result_array[11, 30, 0]) <= 10
+    assert np.all(result_array[:, :, 0] == result_array[:, :, 1])
+    assert np.all(result_array[:, :, 1] == result_array[:, :, 2])
+    assert np.all(result_array[:, :, 3] == 255)
+
+
+def test_cad_monochrome_uses_structural_enhancement():
+    source = QImage(160, 100, QImage.Format_RGBA8888)
+    source.fill(QColor(0, 0, 0, 255))
+
+    array = np.zeros((100, 160, 4), dtype=np.uint8)
+    array[:, :, 3] = 255
+    array[45:47, 20:140, :3] = (255, 255, 0)
+    array[30:70, 79:81, :3] = (0, 220, 255)
+    source = QImage(
+        np.ascontiguousarray(array).data,
+        160,
+        100,
+        160 * 4,
+        QImage.Format_RGBA8888,
+    ).copy()
+
+    direct = enhance_image(
+        source,
+        EnhancerOptions(
+            enabled=True,
+            scale=1.0,
+            text=False,
+            lines=False,
+            ui=False,
+            geometry=False,
+            color_mode="cad_mono",
+        ),
+    )
+    enhanced = enhance_image(
+        source,
+        EnhancerOptions(
+            enabled=True,
+            scale=1.0,
+            text=False,
+            lines=True,
+            ui=False,
+            geometry=True,
+            color_mode="cad_mono",
+        ),
+    )
+
+    assert enhanced.size() == direct.size()
+    # Результат остаётся монохромным, а включение CAD-детекторов не меняет
+    # полярность: фон белый, структура тёмная.
+    assert enhanced.pixelColor(0, 0).red() >= 250
+    assert enhanced.pixelColor(80, 46).red() <= 20
+    assert enhanced.pixelColor(80, 46).red() == enhanced.pixelColor(80, 46).green()
+    assert enhanced.pixelColor(80, 46).green() == enhanced.pixelColor(80, 46).blue()
+
+
 def test_invert_mode_runs_enhancement_after_inversion(monkeypatch):
     source = _feature_image()
     calls = {}
