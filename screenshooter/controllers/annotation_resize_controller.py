@@ -194,6 +194,13 @@ class AnnotationResizeController:
             points = self._handle_points(scene_rect, item)
             show_midpoints = True
 
+        # Поворотная ручка относится только к тексту. После undo/redo
+        # служебное состояние ручек может пережить восстановление сцены,
+        # поэтому перед синхронизацией явно исключаем rotate для обычных
+        # аннотаций.
+        if not isinstance(item, TextItem):
+            points.pop('rotate', None)
+
         if self.handles is None or self._item is not item:
             self.remove_handles()
             self.handles = CropHandles(
