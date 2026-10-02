@@ -343,7 +343,8 @@ def enhance_image(image, options):
             + sharpened.astype(np.float32) * mask
         ).clip(0, 255).astype(np.uint8)
 
-    bgr = _apply_color_mode(bgr, options.color_mode)
+    if not invert:
+        bgr = _apply_color_mode(bgr, options.color_mode)
 
     rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
     result = np.dstack((rgb, alpha))
