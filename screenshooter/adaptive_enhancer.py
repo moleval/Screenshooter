@@ -271,8 +271,19 @@ def _cad_monochrome_gray(rgb):
     dark_background = float(np.median(border)) < 110.0
 
     if dark_background:
-        return value.copy()
-    return 255 - value
+        structural = value
+    else:
+        structural = 255 - value
+
+    # Поднимаем слабые серые/цветные линии, сохраняя максимум ярких линий.
+    # Это особенно важно для тонких CAD-линий, которые в обычном grayscale
+    # теряют контраст из-за оттенка.
+    normalised = structural.astype(np.float32) / 255.0
+    return np.clip(
+        255.0 * np.power(normalised, 0.65),
+        0,
+        255,
+    ).astype(np.uint8)
 
 
 def _enhance_monochrome(gray, combined):
