@@ -1,4 +1,4 @@
-""" 
+"""
 Модуль: adaptive_enhancer.py
 Описание: Адаптивное улучшение готового изображения перед экспортом.
 """
@@ -69,16 +69,182 @@ def _rgba_to_qimage(array):
     return image.copy()
 
 
-def _edge_mask(gray, strength):
-    """Строит мягкую маску для тонких деталей и геометрических контуров."""
-    if strength <= 0:
-        return None
+def _normalise_mask(mask, blur=1.0):
+    """Преобразует бинарную или градиентную маску в мягкую шкалу 0..1."""
+    mask = np.asarray(mask, dtype=np.float32)
+    if mask.size == 0 or float(mask.max()) <= 0:
+        return np.zeros(mask.shape, dtype=np.float32)
 
+    if blur > 0:
+        mask = cv2.GaussianBlur(mask, (0, 0), blur)
+
+    maximum = float(mask.max())
+    return np.clip(mask / maximum, 0.0, 1.0)
+
+
+def _text_mask(gray):
+    """Находит компактные штрихи, характерные для мелкого текста."""
+    height, width = gray.shape[:2]
+    kernel_size = max(3, min(21, int(round(min(height, width) / 35)) | 1))
+    kernel = cv2.getStructuringElement(
+        cv2.MORPH_RECT,
+        (kernel_size, kernel_size),
+    )
+
+    blackhat = cv2.morphologyEx(gray, cv2.MORPH_BLACKHAT, kernel)
+    tophat = cv2.morphologyEx(gray, cv2.MORPH_TOPHAT, kernel)
+    response = np.maximum(blackhat, tophat)
+
+    threshold = max(8.0, float(np.percentile(response, 88)))
+    binary = (response >= threshold).astype(np.uint8) * 255
+
+    close_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 2))
+    binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, close_kernel)
+
+    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(
+        binary,
+        connectivity=8,
+    )
+    accepted = np.zeros_like(binary)
+    image_area = height * width
+
+    for label in range(1, num_labels):
+        x, y, w, h, area = stats[label]
+        if area < 2:
+            continue
+        if area > max(256, image_area // 80):
+            continue
+        if w > max(4, width // 3) or h > max(4, height // 3):
+            continue
+
+        fill_ratio = area / float(max(1, w * h))
+        if 0.03 <= fill_ratio <= 0.80:
+            accepted[labels == label] = 255
+
+    return _normalise_mask(accepted, 0.8)
+
+
+def _line_mask(gray):
+    """Находит тонкие длинные горизонтальные и вертикальные линии."""
     edges = cv2.Canny(gray, 40, 120)
-    kernel = np.ones((3, 3), np.uint8)
-    edges = cv2.dilate(edges, kernel, iterations=1)
-    mask = cv2.GaussianBlur(edges, (0, 0), 1.2)
-    return (mask.astype(np.float32) / 255.0) * strength
+
+    height, width = gray.shape[:2]
+    horizontal_length = max(5, width // 18)
+    vertical_length = max(5, height // 18)
+
+    horizontal_kernel = cv2.getStructuringElement(
+        cv2.MORPH_RECT,
+        (horizontal_length, 1),
+    )
+    vertical_kernel = cv2.getStructuringElement(
+        cv2.MORPH_RECT,
+        (1, vertical_length),
+    )
+
+    horizontal = cv2.morphologyEx(
+        edges,
+        cv2.MORPH_OPEN,
+        horizontal_kernel,
+    )
+    vertical = cv2.morphologyEx(
+        edges,
+        cv2.MORPH_OPEN,
+        vertical_kernel,
+    )
+
+    lines = cv2.bitwise_or(horizontal, vertical)
+    lines = cv2.dilate(
+        lines,
+        np.ones((3, 3), np.uint8),
+        iterations=1,
+    )
+    return _normalise_mask(lines, 0.9)
+
+
+def _geometry_mask(gray):
+    """Находит длинные прямые сегменты и угловые геометрические контуры."""
+    edges = cv2.Canny(gray, 50, 150)
+    height, width = gray.shape[:2]
+    min_length = max(12, min(width, height) // 8)
+
+    segments = cv2.HoughLinesP(
+        edges,
+        1,
+        np.pi / 180,
+        threshold=max(12, min(width, height) // 12),
+        minLineLength=min_length,
+        maxLineGap=max(3, min(width, height) // 60),
+    )
+
+    mask = np.zeros_like(gray)
+    if segments is not None:
+        for segment in segments[:, 0]:
+            x1, y1, x2, y2 = map(int, segment)
+            cv2.line(mask, (x1, y1), (x2, y2), 255, 2)
+
+    return _normalise_mask(mask, 1.0)
+
+
+def _ui_mask(gray):
+    """Находит небольшие прямоугольные области, характерные для UI."""
+    edges = cv2.Canny(gray, 40, 120)
+    contours, _ = cv2.findContours(
+        edges,
+        cv2.RETR_LIST,
+        cv2.CHAIN_APPROX_SIMPLE,
+    )
+
+    height, width = gray.shape[:2]
+    image_area = height * width
+    mask = np.zeros_like(gray)
+
+    for contour in contours:
+        area = cv2.contourArea(contour)
+        if area < 16 or area > image_area * 0.35:
+            continue
+
+        perimeter = cv2.arcLength(contour, True)
+        if perimeter <= 0:
+            continue
+
+        polygon = cv2.approxPolyDP(contour, 0.04 * perimeter, True)
+        if len(polygon) != 4 or not cv2.isContourConvex(polygon):
+            continue
+
+        x, y, w, h = cv2.boundingRect(polygon)
+        if w < 6 or h < 6:
+            continue
+        if w > width * 0.8 or h > height * 0.8:
+            continue
+
+        aspect = w / float(h)
+        if aspect < 0.15 or aspect > 8.0:
+            continue
+
+        cv2.drawContours(mask, [contour], -1, 255, 2)
+
+    return _normalise_mask(mask, 1.0)
+
+
+def _build_feature_masks(gray, options):
+    """Строит независимые маски текста, линий, UI и геометрии."""
+    masks = {
+        "text": np.zeros_like(gray, dtype=np.float32),
+        "lines": np.zeros_like(gray, dtype=np.float32),
+        "ui": np.zeros_like(gray, dtype=np.float32),
+        "geometry": np.zeros_like(gray, dtype=np.float32),
+    }
+
+    if options.text:
+        masks["text"] = _text_mask(gray)
+    if options.lines:
+        masks["lines"] = _line_mask(gray)
+    if options.ui:
+        masks["ui"] = _ui_mask(gray)
+    if options.geometry:
+        masks["geometry"] = _geometry_mask(gray)
+
+    return masks
 
 
 def _apply_color_mode(bgr, mode):
@@ -130,57 +296,51 @@ def enhance_image(image, options):
         return _rgba_to_qimage(result)
 
     gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+    masks = _build_feature_masks(gray, options)
 
-    # Базовое локальное улучшение контраста применяется только при
-    # наличии включённых режимов, чтобы выключение всех оптимизаций
-    # не меняло изображение неожиданно.
-    if options.text or options.ui:
+    combined = np.zeros_like(gray, dtype=np.float32)
+    strengths = {
+        "text": 0.55,
+        "lines": 0.75,
+        "ui": 0.40,
+        "geometry": 0.65,
+    }
+    for name, mask in masks.items():
+        combined = np.maximum(combined, mask * strengths[name])
+
+    if float(combined.max()) > 0:
         lab = cv2.cvtColor(bgr, cv2.COLOR_BGR2LAB)
         l_channel, a_channel, b_channel = cv2.split(lab)
-        clip_limit = 1.4 if options.text else 1.15
-        clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=(8, 8))
-        l_channel = clahe.apply(l_channel)
-        bgr = cv2.cvtColor(
+
+        contrast_mask = np.clip(combined * 0.55, 0.0, 0.55)
+        local = cv2.createCLAHE(
+            clipLimit=1.35,
+            tileGridSize=(8, 8),
+        ).apply(l_channel)
+        l_channel = (
+            l_channel.astype(np.float32) * (1.0 - contrast_mask)
+            + local.astype(np.float32) * contrast_mask
+        ).clip(0, 255).astype(np.uint8)
+
+        enhanced = cv2.cvtColor(
             cv2.merge((l_channel, a_channel, b_channel)),
             cv2.COLOR_LAB2BGR,
         )
 
-    gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
-    detail_strength = 0.0
-    if options.text:
-        detail_strength += 0.30
-    if options.lines:
-        detail_strength += 0.35
-    if options.ui:
-        detail_strength += 0.15
-    if options.geometry:
-        detail_strength += 0.20
-
-    if detail_strength > 0:
-        blurred = cv2.GaussianBlur(bgr, (0, 0), 1.0)
+        blurred = cv2.GaussianBlur(enhanced, (0, 0), 0.9)
         sharpened = cv2.addWeighted(
-            bgr,
-            1.0 + detail_strength,
+            enhanced,
+            1.0 + 0.65 * combined,
             blurred,
-            -detail_strength,
+            -0.65 * combined,
             0,
         )
 
-        mask_strength = 0.0
-        if options.lines:
-            mask_strength += 0.45
-        if options.geometry:
-            mask_strength += 0.35
-        if options.text:
-            mask_strength += 0.20
-
-        mask = _edge_mask(gray, mask_strength)
-        if mask is not None:
-            mask = mask[:, :, None]
-            bgr = (
-                bgr.astype(np.float32) * (1.0 - mask)
-                + sharpened.astype(np.float32) * mask
-            ).clip(0, 255).astype(np.uint8)
+        mask = combined[:, :, None]
+        bgr = (
+            bgr.astype(np.float32) * (1.0 - mask)
+            + sharpened.astype(np.float32) * mask
+        ).clip(0, 255).astype(np.uint8)
 
     bgr = _apply_color_mode(bgr, options.color_mode)
 
