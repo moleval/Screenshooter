@@ -99,9 +99,9 @@ def test_invert_mode_inverts_pixels():
         EnhancerOptions(enabled=True, scale=1.0, color_mode="invert"),
     )
 
-    assert result.pixelColor(0, 0).red() < 10
-    assert result.pixelColor(0, 0).green() < 10
-    assert result.pixelColor(0, 0).blue() < 10
+    assert result.pixelColor(0, 0).red() == 0
+    assert result.pixelColor(0, 0).green() == 0
+    assert result.pixelColor(0, 0).blue() == 0
 
 
 def test_invert_mode_respects_scale():
@@ -113,9 +113,27 @@ def test_invert_mode_respects_scale():
 
     assert result.size().width() == 160
     assert result.size().height() == 100
-    assert result.pixelColor(0, 0).red() < 10
-    assert result.pixelColor(0, 0).green() < 10
-    assert result.pixelColor(0, 0).blue() < 10
+    # (10, 10) остаётся внутри однородного белого поля после масштабирования.
+    assert result.pixelColor(10, 10).red() == 0
+    assert result.pixelColor(10, 10).green() == 0
+    assert result.pixelColor(10, 10).blue() == 0
+
+
+def test_invert_mode_preserves_alpha():
+    source = QImage(20, 20, QImage.Format_RGBA8888)
+    source.fill(QColor(255, 255, 255, 73))
+
+    result = enhance_image(
+        source,
+        EnhancerOptions(enabled=True, scale=1.0, color_mode="invert"),
+    )
+
+    color = result.pixelColor(0, 0)
+    assert color.red() == 0
+    assert color.green() == 0
+    assert color.blue() == 0
+    assert color.alpha() == 73
+
 
 def test_disabled_feature_flags_do_not_build_feature_masks():
     source = _feature_image()
