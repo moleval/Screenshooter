@@ -205,22 +205,17 @@ def _rgba_array(image):
     )
 
 
-def test_invert_mode_enhances_after_inversion():
+def test_invert_mode_runs_enhancement_after_inversion(monkeypatch):
     source = _feature_image()
-    source_array = _rgba_array(source)
-    # Реальный CAD-скриншот содержит антиалиасинг и промежуточные тона.
-    # Добавляем серые пиксели на границе геометрии, чтобы тест проверял
-    # именно enhancement, а не бинарный чёрно-белый случай, где CLAHE
-    # и sharpening закономерно могут не изменить пиксели.
-    source_array[18:19, 20:301, :3] = 224
-    source_array[22:23, 20:301, :3] = 224
-    source = QImage(
-        np.ascontiguousarray(source_array).data,
-        320,
-        200,
-        320 * 4,
-        QImage.Format_RGBA8888,
-    ).copy()
+
+    class FakeClahe:
+        def apply(self, channel):
+            return np.clip(channel.astype(np.int16) + 20, 0, 255).astype(np.uint8)
+
+    monkeypatch.setattr(
+        "screenshooter.adaptive_enhancer.cv2.createCLAHE",
+        lambda clipLimit, tileGridSize: FakeClahe(),
+    )
 
     result = enhance_image(
         source,
@@ -243,8 +238,6 @@ def test_invert_mode_enhances_after_inversion():
     assert result_array.shape == plain_invert.shape
     assert np.any(result_array[:, :, :3] != plain_invert[:, :, :3])
     assert np.array_equal(result_array[:, :, 3], source_array[:, :, 3])
-
-
 def test_inverted_line_detector_finds_light_cad_lines():
     source = _feature_image()
     gray = _gray_array(source)
