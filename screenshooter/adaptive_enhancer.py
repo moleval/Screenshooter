@@ -126,10 +126,10 @@ def _text_mask(gray):
     return _normalise_mask(accepted, 0.8)
 
 
-def _line_mask(gray):
+def _line_mask(gray, inverted=False):
     """Находит тонкие длинные горизонтальные и вертикальные линии."""
     height, width = gray.shape[:2]
-    dark = (gray < 128).astype(np.uint8) * 255
+    dark = ((gray > 128) if inverted else (gray < 128)).astype(np.uint8) * 255
 
     horizontal_length = max(5, width // 18)
     vertical_length = max(5, height // 18)
@@ -228,7 +228,7 @@ def _ui_mask(gray):
     return _normalise_mask(mask, 1.0)
 
 
-def _build_feature_masks(gray, options):
+def _build_feature_masks(gray, options, inverted=False):
     """Строит независимые маски текста, линий, UI и геометрии."""
     masks = {
         "text": np.zeros_like(gray, dtype=np.float32),
@@ -240,7 +240,7 @@ def _build_feature_masks(gray, options):
     if options.text:
         masks["text"] = _text_mask(gray)
     if options.lines:
-        masks["lines"] = _line_mask(gray)
+        masks["lines"] = _line_mask(gray, inverted=inverted)
     if options.ui:
         masks["ui"] = _ui_mask(gray)
     if options.geometry:
@@ -291,17 +291,15 @@ def enhance_image(image, options):
             fy=scale,
             interpolation=cv2.INTER_NEAREST,
         )
-        bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
 
+    # Для CAD-скриншотов инверсия является частью pipeline улучшения:
+    # детекторы работают уже со светлой геометрией на тёмном фоне.
     if invert:
-        # Инверсия — отдельная RGB-операция без участия адаптивного
-        # улучшения. Считаем в знаковом типе, затем явно возвращаем uint8.
         rgb = (255 - rgb.astype(np.int16)).astype(np.uint8)
-        result = np.dstack((rgb, alpha))
-        return _rgba_to_qimage(result)
 
+    bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
     gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
-    masks = _build_feature_masks(gray, options)
+    masks = _build_feature_masks(gray, options, inverted=invert)
 
     combined = np.zeros_like(gray, dtype=np.float32)
     strengths = {
@@ -345,7 +343,8 @@ def enhance_image(image, options):
             + sharpened.astype(np.float32) * mask
         ).clip(0, 255).astype(np.uint8)
 
-    bgr = _apply_color_mode(bgr, options.color_mode)
+    if not invert:
+        bgr = _apply_color_mode(bgr, options.color_mode)
 
     rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
     result = np.dstack((rgb, alpha))
