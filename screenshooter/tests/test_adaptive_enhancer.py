@@ -191,3 +191,62 @@ def test_ui_detector_finds_rectangular_control():
     )
 
     assert float(masks["ui"].max()) > 0.0
+
+
+def _rgba_array(image):
+    source = image.convertToFormat(QImage.Format_RGBA8888)
+    data = source.bits()
+    data.setsize(source.bytesPerLine() * source.height())
+    array = np.frombuffer(data, dtype=np.uint8).reshape(
+        (source.height(), source.bytesPerLine())
+    )
+    return np.ascontiguousarray(array[:, :source.width() * 4]).reshape(
+        (source.height(), source.width(), 4)
+    )
+
+
+def test_invert_mode_enhances_after_inversion():
+    source = _feature_image()
+    result = enhance_image(
+        source,
+        EnhancerOptions(
+            enabled=True,
+            scale=1.0,
+            text=False,
+            lines=True,
+            ui=False,
+            geometry=True,
+            color_mode="invert",
+        ),
+    )
+
+    source_array = _rgba_array(source)
+    result_array = _rgba_array(result)
+    plain_invert = source_array.copy()
+    plain_invert[:, :, :3] = 255 - plain_invert[:, :, :3]
+
+    assert result_array.shape == plain_invert.shape
+    assert np.any(result_array[:, :, :3] != plain_invert[:, :, :3])
+    assert np.array_equal(result_array[:, :, 3], source_array[:, :, 3])
+
+
+def test_inverted_line_detector_finds_light_cad_lines():
+    source = _feature_image()
+    gray = _gray_array(source)
+    inverted_gray = 255 - gray
+
+    masks = _build_feature_masks(
+        inverted_gray,
+        EnhancerOptions(
+            enabled=True,
+            scale=1.0,
+            text=False,
+            lines=True,
+            ui=False,
+            geometry=False,
+            color_mode="invert",
+        ),
+        inverted=True,
+    )
+
+    assert float(masks["lines"].max()) > 0.0
