@@ -90,15 +90,19 @@ class CropHandles:
         else:
             points = self._normalize_points(points)
 
-        changed = False
+        # Набор ручек может меняться при переключении типа аннотации
+        # (например, появление/исчезновение rotate). В таком случае старые
+        # служебные маркеры нельзя оставлять в positions/scene.
+        if set(self.handle_items) != set(points):
+            self.create_handles(points)
+            return
+
         for handle_id, pos in points.items():
-            if handle_id in self.handle_items:
-                handle = self.handle_items[handle_id]
-                if handle.pos() != pos:
-                    handle.setPos(pos)
-                    changed = True
-                self.positions[handle_id] = pos
-                handle.update()
+            handle = self.handle_items[handle_id]
+            if handle.pos() != pos:
+                handle.setPos(pos)
+            self.positions[handle_id] = pos
+            handle.update()
 
         # setPos() сам планирует перерисовку изменённого QGraphicsItem.
         # Принудительная перерисовка всей сцены на каждом движении мыши
