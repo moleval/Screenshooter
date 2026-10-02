@@ -6,6 +6,7 @@
 from PyQt5.QtCore import QRectF, QPointF
 from PyQt5.QtGui import QColor, QPixmap, QPen
 from PyQt5.QtWidgets import QGraphicsRectItem, QGraphicsScene
+from types import SimpleNamespace
 
 from screenshooter.export import Exporter
 from screenshooter.items.shape_items import RectangleItem
@@ -120,11 +121,18 @@ def test_export_applies_enhancer_to_rendered_scene(qapp):
     pixmap.fill(QColor("white"))
     view.set_background_from_pixmap(pixmap)
 
-    view.settings.enhancer_enabled = True
-    view.settings.enhancer_scale = 1.0
-    view.settings.enhancer_color_mode = "invert"
+    settings = SimpleNamespace(
+        save_directory="",
+        enhancer_enabled=True,
+        enhancer_scale=1.0,
+        enhancer_text=True,
+        enhancer_lines=True,
+        enhancer_ui=True,
+        enhancer_geometry=True,
+        enhancer_color_mode="invert",
+    )
 
-    exporter = Exporter(view, scene, view.settings)
+    exporter = Exporter(view, scene, settings)
     exported = exporter.render_scene_to_image()
 
     assert exported is not None
@@ -142,11 +150,18 @@ def test_export_skips_enhancer_when_disabled(qapp):
     pixmap.fill(QColor("white"))
     view.set_background_from_pixmap(pixmap)
 
-    view.settings.enhancer_enabled = False
-    view.settings.enhancer_scale = 1.0
-    view.settings.enhancer_color_mode = "invert"
+    settings = SimpleNamespace(
+        save_directory="",
+        enhancer_enabled=False,
+        enhancer_scale=1.0,
+        enhancer_text=True,
+        enhancer_lines=True,
+        enhancer_ui=True,
+        enhancer_geometry=True,
+        enhancer_color_mode="invert",
+    )
 
-    exporter = Exporter(view, scene, view.settings)
+    exporter = Exporter(view, scene, settings)
     exported = exporter.render_scene_to_image()
 
     assert exported is not None
