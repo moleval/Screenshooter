@@ -22,6 +22,15 @@ def _image(width=80, height=50):
     return image
 
 
+def _gray_array(image):
+    gray_image = image.convertToFormat(QImage.Format_Grayscale8)
+    data = gray_image.bits()
+    data.setsize(gray_image.bytesPerLine() * gray_image.height())
+    return np.frombuffer(data, dtype=np.uint8).reshape(
+        (gray_image.height(), gray_image.bytesPerLine())
+    )[:, :gray_image.width()]
+
+
 def _feature_image():
     image = QImage(320, 200, QImage.Format_RGBA8888)
     image.fill(QColor("white"))
@@ -88,11 +97,7 @@ def test_invert_mode_inverts_pixels():
 
 def test_disabled_feature_flags_do_not_build_feature_masks():
     source = _feature_image()
-    gray = np.asarray(
-        source.convertToFormat(QImage.Format_Grayscale8).bits(),
-        dtype=np.uint8,
-    )
-    gray = gray.reshape((source.height(), source.width()))
+    gray = _gray_array(source)
 
     masks = _build_feature_masks(
         gray,
@@ -111,12 +116,7 @@ def test_disabled_feature_flags_do_not_build_feature_masks():
 
 def test_line_detector_finds_thin_horizontal_and_vertical_lines():
     source = _feature_image()
-    gray_image = source.convertToFormat(QImage.Format_Grayscale8)
-    data = gray_image.bits()
-    data.setsize(gray_image.bytesPerLine() * gray_image.height())
-    gray = np.frombuffer(data, dtype=np.uint8).reshape(
-        (gray_image.height(), gray_image.bytesPerLine())
-    )[:, :gray_image.width()]
+    gray = _gray_array(source)
 
     masks = _build_feature_masks(
         gray,
