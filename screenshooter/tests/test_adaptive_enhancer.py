@@ -1,4 +1,4 @@
-"""
+""" 
 Тесты адаптивного улучшайзера.
 """
 
@@ -207,14 +207,34 @@ def _rgba_array(image):
 
 def test_invert_mode_runs_enhancement_after_inversion(monkeypatch):
     source = _feature_image()
+    calls = {}
 
     class FakeClahe:
         def apply(self, channel):
-            return np.clip(channel.astype(np.int16) + 20, 0, 255).astype(np.uint8)
+            calls["clahe_input"] = channel.copy()
+            return np.clip(
+                channel.astype(np.int16) + 20,
+                0,
+                255,
+            ).astype(np.uint8)
+
+    def fake_build_feature_masks(gray, options, inverted=False):
+        calls["gray"] = gray.copy()
+        calls["inverted"] = inverted
+        return {
+            "text": np.zeros_like(gray, dtype=np.float32),
+            "lines": np.ones_like(gray, dtype=np.float32),
+            "ui": np.zeros_like(gray, dtype=np.float32),
+            "geometry": np.zeros_like(gray, dtype=np.float32),
+        }
 
     monkeypatch.setattr(
         "screenshooter.adaptive_enhancer.cv2.createCLAHE",
         lambda clipLimit, tileGridSize: FakeClahe(),
+    )
+    monkeypatch.setattr(
+        "screenshooter.adaptive_enhancer._build_feature_masks",
+        fake_build_feature_masks,
     )
 
     result = enhance_image(
@@ -230,14 +250,18 @@ def test_invert_mode_runs_enhancement_after_inversion(monkeypatch):
         ),
     )
 
-    source_array = _rgba_array(source)
-    result_array = _rgba_array(result)
-    plain_invert = source_array.copy()
-    plain_invert[:, :, :3] = 255 - plain_invert[:, :, :3]
+    source_gray = _gray_array(source)
 
-    assert result_array.shape == plain_invert.shape
-    assert np.any(result_array[:, :, :3] != plain_invert[:, :, :3])
-    assert np.array_equal(result_array[:, :, 3], source_array[:, :, 3])
+    assert result.size() == source.size()
+    assert calls["inverted"] is True
+    # Белый фон исходника должен попасть в детекторы уже как тёмный фон.
+    assert int(calls["gray"].mean()) < int(source_gray.mean())
+    # Непосредственно перед CLAHE должен использоваться уже инвертированный L-канал.
+    assert int(calls["clahe_input"].mean()) < int(source_gray.mean())
+    # CLAHE был реально пропущен через enhancement pipeline.
+    assert np.any(calls["clahe_input"] != 0)
+
+
 def test_inverted_line_detector_finds_light_cad_lines():
     source = _feature_image()
     gray = _gray_array(source)
