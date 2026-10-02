@@ -249,6 +249,83 @@ def _build_feature_masks(gray, options, inverted=False):
     return masks
 
 
+def _cad_monochrome_gray(rgb):
+    """Строит структурный серый канал для CAD-монорежима.
+
+    Канал всегда ориентирован так, чтобы фон был тёмным, а линии и текст —
+    светлыми. Для тёмного CAD используем Value из HSV: это сохраняет яркие
+    красные, зелёные, синие и жёлтые линии, которые обычный grayscale может
+    сильно ослабить. Для светлого CAD направление инвертируется.
+    """
+    hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
+    value = hsv[:, :, 2]
+
+    # Определяем полярность по рамке изображения: у CAD-чертежа фон обычно
+    # занимает большую площадь и поэтому хорошо представлен по краям.
+    border = np.concatenate((
+        value[0, :],
+        value[-1, :],
+        value[:, 0],
+        value[:, -1],
+    ))
+    dark_background = float(np.median(border)) < 110.0
+
+    if dark_background:
+        structural = value
+    else:
+        structural = 255 - value
+
+    # Поднимаем слабые серые/цветные линии, сохраняя максимум ярких линий.
+    # Это особенно важно для тонких CAD-линий, которые в обычном grayscale
+    # теряют контраст из-за оттенка.
+    normalised = structural.astype(np.float32) / 255.0
+    return np.clip(
+        255.0 * np.power(normalised, 0.65),
+        0,
+        255,
+    ).astype(np.uint8)
+
+
+def _enhance_monochrome(gray, combined):
+    """Усиливает CAD-структуру в одном канале без усиления пустого фона."""
+    if float(combined.max()) <= 0:
+        return gray
+
+    # В монохромном режиме контраст усиливаем непосредственно в структурном
+    # канале, поэтому цвет исходной линии больше не влияет на результат.
+    local = cv2.createCLAHE(
+        clipLimit=1.15,
+        tileGridSize=(8, 8),
+    ).apply(gray)
+
+    gx = cv2.Sobel(gray, cv2.CV_32F, 1, 0, ksize=3)
+    gy = cv2.Sobel(gray, cv2.CV_32F, 0, 1, ksize=3)
+    gradient = cv2.magnitude(gx, gy)
+    edge_reference = float(np.percentile(gradient, 92))
+    if edge_reference > 1.0:
+        edge_gate = np.clip(gradient / edge_reference, 0.0, 1.0)
+        edge_gate = cv2.GaussianBlur(edge_gate, (0, 0), 0.55)
+    else:
+        edge_gate = np.zeros_like(combined)
+
+    delta = local.astype(np.float32) - gray.astype(np.float32)
+    contrast_mask = combined * edge_gate * 0.55
+    enhanced = (
+        gray.astype(np.float32) + delta * contrast_mask
+    ).clip(0, 255).astype(np.uint8)
+
+    # Контролируемое восстановление мелких деталей. В однородной заливке
+    # high-pass близок к нулю, поэтому фон не превращается в ореол.
+    blurred = cv2.GaussianBlur(enhanced, (0, 0), 0.9)
+    detail = enhanced.astype(np.float32) - blurred.astype(np.float32)
+    detail_strength = (
+        combined * np.maximum(edge_gate, 0.20) * 0.65
+    )
+    return (
+        enhanced.astype(np.float32) + detail * detail_strength
+    ).clip(0, 255).astype(np.uint8)
+
+
 def _apply_color_mode(bgr, mode):
     """Применяет явно выбранный режим цветовой схемы."""
     if mode == "invert":
@@ -271,8 +348,8 @@ def enhance_image(image, options):
     rgba = _qimage_to_rgba(image)
     alpha = rgba[:, :, 3].copy()
     rgb = rgba[:, :, :3].copy()
-    bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
 
+    cad_monochrome = options.color_mode == "cad_mono"
     invert = options.color_mode == "invert"
 
     scale = _choose_scale(image.width(), image.height(), options.scale)
@@ -296,6 +373,27 @@ def enhance_image(image, options):
     # детекторы работают уже со светлой геометрией на тёмном фоне.
     if invert:
         rgb = (255 - rgb.astype(np.int16)).astype(np.uint8)
+
+    if cad_monochrome:
+        # В CAD-монохроме сначала строим структурный канал из HSV Value.
+        # Это сохраняет яркие цветные линии независимо от их оттенка.
+        gray = _cad_monochrome_gray(rgb)
+        masks = _build_feature_masks(gray, options, inverted=True)
+        combined = np.zeros_like(gray, dtype=np.float32)
+        strengths = {
+            "text": 0.68,
+            "lines": 0.90,
+            "ui": 0.20,
+            "geometry": 0.78,
+        }
+        for name, mask in masks.items():
+            combined = np.maximum(combined, mask * strengths[name])
+
+        gray = _enhance_monochrome(gray, combined)
+        # Всегда выдаём белый фон и тёмную структуру.
+        rgb = np.repeat((255 - gray)[:, :, None], 3, axis=2)
+        result = np.dstack((rgb, alpha))
+        return _rgba_to_qimage(result)
 
     bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
     gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
