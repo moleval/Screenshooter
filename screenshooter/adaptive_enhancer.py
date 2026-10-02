@@ -126,9 +126,9 @@ def _text_mask(gray):
 
 def _line_mask(gray):
     """Находит тонкие длинные горизонтальные и вертикальные линии."""
-    edges = cv2.Canny(gray, 40, 120)
-
     height, width = gray.shape[:2]
+    dark = (gray < 128).astype(np.uint8) * 255
+
     horizontal_length = max(5, width // 18)
     vertical_length = max(5, height // 18)
 
@@ -142,12 +142,12 @@ def _line_mask(gray):
     )
 
     horizontal = cv2.morphologyEx(
-        edges,
+        dark,
         cv2.MORPH_OPEN,
         horizontal_kernel,
     )
     vertical = cv2.morphologyEx(
-        edges,
+        dark,
         cv2.MORPH_OPEN,
         vertical_kernel,
     )
@@ -292,7 +292,8 @@ def enhance_image(image, options):
         bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
 
     if invert:
-        rgb = cv2.bitwise_not(rgb)
+        bgr = cv2.bitwise_not(bgr)
+        rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
         result = np.dstack((rgb, alpha))
         return _rgba_to_qimage(result)
 
@@ -329,13 +330,11 @@ def enhance_image(image, options):
         )
 
         blurred = cv2.GaussianBlur(enhanced, (0, 0), 0.9)
-        sharpened = cv2.addWeighted(
-            enhanced,
-            1.0 + 0.65 * combined,
-            blurred,
-            -0.65 * combined,
-            0,
-        )
+        strength = combined[:, :, None] * 0.65
+        sharpened = (
+            enhanced.astype(np.float32) * (1.0 + strength)
+            + blurred.astype(np.float32) * (-strength)
+        ).clip(0, 255).astype(np.uint8)
 
         mask = combined[:, :, None]
         bgr = (
