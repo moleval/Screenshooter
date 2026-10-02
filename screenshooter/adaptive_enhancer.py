@@ -178,7 +178,7 @@ def _geometry_mask(gray):
 
     mask = np.zeros_like(gray)
     if segments is not None:
-        for segment in segments[:, 0]:
+        for segment in segments:
             x1, y1, x2, y2 = map(int, segment)
             cv2.line(mask, (x1, y1), (x2, y2), 255, 2)
 
@@ -268,14 +268,15 @@ def enhance_image(image, options):
 
     rgba = _qimage_to_rgba(image)
     alpha = rgba[:, :, 3].copy()
-    bgr = cv2.cvtColor(rgba[:, :, :3], cv2.COLOR_RGB2BGR)
+    rgb = rgba[:, :, :3].copy()
+    bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
 
     invert = options.color_mode == "invert"
 
     scale = _choose_scale(image.width(), image.height(), options.scale)
     if scale != 1.0:
-        bgr = cv2.resize(
-            bgr,
+        rgb = cv2.resize(
+            rgb,
             None,
             fx=scale,
             fy=scale,
@@ -288,10 +289,10 @@ def enhance_image(image, options):
             fy=scale,
             interpolation=cv2.INTER_NEAREST,
         )
+        bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
 
     if invert:
-        bgr = cv2.bitwise_not(bgr)
-        rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+        rgb = cv2.bitwise_not(rgb)
         result = np.dstack((rgb, alpha))
         return _rgba_to_qimage(result)
 
