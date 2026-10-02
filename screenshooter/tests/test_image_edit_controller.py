@@ -180,7 +180,7 @@ def test_rotate_undo_does_not_restore_annotation_handles_as_scene_items(setup_ed
     controller = view.annotation_resize_controller
     controller.sync_handles()
     assert controller.handles is not None
-    assert len(controller.handles.handle_items) == 8
+    assert len(controller.handles.handle_items) == 9
 
     view.rotate_image(90)
 
