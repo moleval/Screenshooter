@@ -104,6 +104,19 @@ def test_invert_mode_inverts_pixels():
     assert result.pixelColor(0, 0).blue() < 10
 
 
+def test_invert_mode_respects_scale():
+    source = _image(80, 50)
+    result = enhance_image(
+        source,
+        EnhancerOptions(enabled=True, scale=2.0, color_mode="invert"),
+    )
+
+    assert result.size().width() == 160
+    assert result.size().height() == 100
+    assert result.pixelColor(0, 0).red() < 10
+    assert result.pixelColor(0, 0).green() < 10
+    assert result.pixelColor(0, 0).blue() < 10
+
 def test_disabled_feature_flags_do_not_build_feature_masks():
     source = _feature_image()
     gray = _gray_array(source)
