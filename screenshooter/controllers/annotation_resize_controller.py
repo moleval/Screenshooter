@@ -204,7 +204,8 @@ class AnnotationResizeController:
             )
             self._item = item
             self.handles.create_handles(points)
-            self.handles.set_rotate_color(rotate_color)
+            if isinstance(item, TextItem):
+                self.handles.set_rotate_color(rotate_color)
         else:
             self.handles.update_handles(points)
             self.handles.set_rotate_color(rotate_color)
