@@ -82,7 +82,7 @@ def test_curved_arrow_has_three_handles(qapp):
     view.scene().addItem(item)
     controller = select_item(view, item)
 
-    assert set(controller.handles.handle_items) == {"start", "end", "ctrl"}
+    assert set(controller.handles.handle_items) == {"start", "end", "ctrl", "rotate"}
 
     controller.remove_handles()
     view.close()
