@@ -282,3 +282,41 @@ def test_inverted_line_detector_finds_light_cad_lines():
     )
 
     assert float(masks["lines"].max()) > 0.0
+
+    
+def test_enhancer_preserves_uniform_cad_fill():
+    source = QImage(240, 160, QImage.Format_RGBA8888)
+    source.fill(QColor(235, 235, 235, 255))
+
+    array = np.zeros((160, 240, 4), dtype=np.uint8)
+    array[:, :, :3] = 235
+    array[:, :, 3] = 255
+    array[40:120, 70:170, :3] = 145
+    array[78:82, 80:160, :3] = 35
+
+    source = QImage(
+        np.ascontiguousarray(array).data,
+        240,
+        160,
+        240 * 4,
+        QImage.Format_RGBA8888,
+    ).copy()
+
+    result = enhance_image(
+        source,
+        EnhancerOptions(
+            enabled=True,
+            scale=1.0,
+            text=False,
+            lines=True,
+            ui=False,
+            geometry=True,
+        ),
+    )
+
+    result_array = _rgba_array(result)
+    # Центр однородной CAD-заливки не должен получить контрастный сдвиг.
+    assert np.max(np.abs(
+        result_array[55:70, 95:145, :3].astype(np.int16) - 145
+    )) <= 1
+    assert np.array_equal(result_array[:, :, 3], array[:, :, 3])

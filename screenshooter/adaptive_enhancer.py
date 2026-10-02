@@ -155,12 +155,8 @@ def _line_mask(gray, inverted=False):
     )
 
     lines = cv2.bitwise_or(horizontal, vertical)
-    lines = cv2.dilate(
-        lines,
-        np.ones((3, 3), np.uint8),
-        iterations=1,
-    )
-    return _normalise_mask(lines, 0.9)
+    # Не расширяем линии на 3x3: для CAD это создавало ореолы.
+    return _normalise_mask(lines, 0.65)
 
 
 def _geometry_mask(gray):
@@ -182,9 +178,9 @@ def _geometry_mask(gray):
     if segments is not None:
         for segment in segments:
             x1, y1, x2, y2 = map(int, segment)
-            cv2.line(mask, (x1, y1), (x2, y2), 255, 2)
+            cv2.line(mask, (x1, y1), (x2, y2), 255, 1)
 
-    return _normalise_mask(mask, 1.0)
+    return _normalise_mask(mask, 0.75)
 
 
 def _ui_mask(gray):
@@ -303,10 +299,10 @@ def enhance_image(image, options):
 
     combined = np.zeros_like(gray, dtype=np.float32)
     strengths = {
-        "text": 0.55,
-        "lines": 0.75,
-        "ui": 0.40,
-        "geometry": 0.65,
+        "text": 0.60,
+        "lines": 0.82,
+        "ui": 0.35,
+        "geometry": 0.70,
     }
     for name, mask in masks.items():
         combined = np.maximum(combined, mask * strengths[name])
@@ -315,14 +311,25 @@ def enhance_image(image, options):
         lab = cv2.cvtColor(bgr, cv2.COLOR_BGR2LAB)
         l_channel, a_channel, b_channel = cv2.split(lab)
 
-        contrast_mask = np.clip(combined * 0.55, 0.0, 0.55)
+        # Контраст повышаем только там, где есть локальная граница.
+        gx = cv2.Sobel(l_channel, cv2.CV_32F, 1, 0, ksize=3)
+        gy = cv2.Sobel(l_channel, cv2.CV_32F, 0, 1, ksize=3)
+        gradient = cv2.magnitude(gx, gy)
+        edge_reference = float(np.percentile(gradient, 92))
+        if edge_reference > 1.0:
+            edge_gate = np.clip(gradient / edge_reference, 0.0, 1.0)
+            edge_gate = cv2.GaussianBlur(edge_gate, (0, 0), 0.55)
+        else:
+            edge_gate = np.zeros_like(combined)
+
         local = cv2.createCLAHE(
-            clipLimit=1.35,
+            clipLimit=1.20,
             tileGridSize=(8, 8),
         ).apply(l_channel)
+        clahe_delta = local.astype(np.float32) - l_channel.astype(np.float32)
+        contrast_mask = combined * edge_gate * 0.45
         l_channel = (
-            l_channel.astype(np.float32) * (1.0 - contrast_mask)
-            + local.astype(np.float32) * contrast_mask
+            l_channel.astype(np.float32) + clahe_delta * contrast_mask
         ).clip(0, 255).astype(np.uint8)
 
         enhanced = cv2.cvtColor(
@@ -330,11 +337,16 @@ def enhance_image(image, options):
             cv2.COLOR_LAB2BGR,
         )
 
-        blurred = cv2.GaussianBlur(enhanced, (0, 0), 0.9)
-        strength = combined[:, :, None] * 0.65
+        # High-pass практически равен нулю в однородной заливке.
+        blurred = cv2.GaussianBlur(enhanced, (0, 0), 1.05)
+        detail = enhanced.astype(np.float32) - blurred.astype(np.float32)
+        detail_strength = (
+            combined[:, :, None]
+            * np.maximum(edge_gate[:, :, None], 0.25)
+            * 0.45
+        )
         sharpened = (
-            enhanced.astype(np.float32) * (1.0 + strength)
-            + blurred.astype(np.float32) * (-strength)
+            enhanced.astype(np.float32) + detail * detail_strength
         ).clip(0, 255).astype(np.uint8)
 
         mask = combined[:, :, None]
