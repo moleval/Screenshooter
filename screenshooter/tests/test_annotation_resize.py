@@ -72,7 +72,7 @@ def test_rectangle_still_has_eight_handles_and_anchor_resize(qapp):
     controller = select_item(view, item)
 
     assert set(controller.handles.handle_items) == {
-        "tl", "tm", "tr", "lm", "rm", "bl", "bm", "br"
+        "tl", "tm", "tr", "lm", "rm", "bl", "bm", "br", "rotate"
     }
 
     old = QRectF(item.rect())
@@ -97,7 +97,7 @@ def test_filled_rect_has_eight_handles_and_resizes(qapp):
     controller = select_item(view, item)
 
     assert set(controller.handles.handle_items) == {
-        "tl", "tm", "tr", "lm", "rm", "bl", "bm", "br"
+        "tl", "tm", "tr", "lm", "rm", "bl", "bm", "br", "rotate"
     }
 
     old = QRectF(item.rect())
@@ -125,7 +125,7 @@ def test_cloud_has_eight_handles_and_rebuilds_path(qapp):
     controller = select_item(view, item)
 
     assert set(controller.handles.handle_items) == {
-        "tl", "tm", "tr", "lm", "rm", "bl", "bm", "br"
+        "tl", "tm", "tr", "lm", "rm", "bl", "bm", "br", "rotate"
     }
 
     old = QRectF(item.rect())
@@ -149,7 +149,7 @@ def test_ellipse_has_eight_handles(qapp):
     controller = select_item(view, item)
 
     assert set(controller.handles.handle_items) == {
-        "tl", "tm", "tr", "lm", "rm", "bl", "bm", "br"
+        "tl", "tm", "tr", "lm", "rm", "bl", "bm", "br", "rotate"
     }
 
     old = QRectF(item.rect())
