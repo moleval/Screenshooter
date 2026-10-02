@@ -110,3 +110,47 @@ def test_export_keeps_blur_but_hides_blur_ui(qapp):
     assert exported.pixelColor(60, 40) != QColor("white")
     assert blur_item.isSelected()
     assert blur_item.handles is not None
+
+
+def test_export_applies_enhancer_to_rendered_scene(qapp):
+    scene = SpyScene()
+    view = EditorView(scene)
+
+    pixmap = QPixmap(40, 30)
+    pixmap.fill(QColor("white"))
+    view.set_background_from_pixmap(pixmap)
+
+    view.settings.enhancer_enabled = True
+    view.settings.enhancer_scale = 1.0
+    view.settings.enhancer_color_mode = "invert"
+
+    exporter = Exporter(view, scene, view.settings)
+    exported = exporter.render_scene_to_image()
+
+    assert exported is not None
+    assert exported.size() == pixmap.size()
+    assert exported.pixelColor(0, 0).red() == 0
+    assert exported.pixelColor(0, 0).green() == 0
+    assert exported.pixelColor(0, 0).blue() == 0
+
+
+def test_export_skips_enhancer_when_disabled(qapp):
+    scene = SpyScene()
+    view = EditorView(scene)
+
+    pixmap = QPixmap(40, 30)
+    pixmap.fill(QColor("white"))
+    view.set_background_from_pixmap(pixmap)
+
+    view.settings.enhancer_enabled = False
+    view.settings.enhancer_scale = 1.0
+    view.settings.enhancer_color_mode = "invert"
+
+    exporter = Exporter(view, scene, view.settings)
+    exported = exporter.render_scene_to_image()
+
+    assert exported is not None
+    assert exported.size() == pixmap.size()
+    assert exported.pixelColor(0, 0).red() == 255
+    assert exported.pixelColor(0, 0).green() == 255
+    assert exported.pixelColor(0, 0).blue() == 255
