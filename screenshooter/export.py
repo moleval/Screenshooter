@@ -9,6 +9,7 @@ import time
 from PyQt5 import sip
 from PyQt5.QtCore import Qt, QRectF, QDir
 from PyQt5.QtGui import QImage, QPainter
+from PyQt5.QtPrintSupport import QPrinter, QPrintDialog
 from PyQt5.QtWidgets import QFileDialog, QMenu, QApplication
 
 from .adaptive_enhancer import EnhancerOptions, enhance_image
@@ -137,6 +138,52 @@ class Exporter:
                     except RuntimeError:
                         annotation_item = None
                 annotation_controller.sync_handles(force=True)
+
+    def print_image(self):
+        """Печатает текущий результат через стандартный диалог Windows/Qt."""
+        img = self.render_scene_to_image()
+        if img is None:
+            self.view.show_status_message("Нет изображения для печати.", 5000)
+            return False
+
+        printer = QPrinter(QPrinter.HighResolution)
+        if img.width() > img.height():
+            printer.setOrientation(QPrinter.Landscape)
+        else:
+            printer.setOrientation(QPrinter.Portrait)
+
+        dialog = QPrintDialog(printer, self.view)
+        dialog.setWindowTitle("Печать")
+        if dialog.exec_() != QPrintDialog.Accepted:
+            return False
+
+        page_rect = printer.pageRect(QPrinter.DevicePixel)
+        if page_rect.isEmpty():
+            return False
+
+        scale = min(
+            page_rect.width() / float(img.width()),
+            page_rect.height() / float(img.height()),
+        )
+        target_width = img.width() * scale
+        target_height = img.height() * scale
+        target_x = page_rect.x() + (page_rect.width() - target_width) / 2.0
+        target_y = page_rect.y() + (page_rect.height() - target_height) / 2.0
+
+        painter = QPainter(printer)
+        if not painter.isActive():
+            return False
+        try:
+            painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
+            painter.fillRect(page_rect, Qt.white)
+            painter.drawImage(
+                QRectF(target_x, target_y, target_width, target_height),
+                img,
+            )
+        finally:
+            painter.end()
+
+        return True
 
     def save_image(self):
         """Сохраняет изображение в файл через диалог выбора."""
