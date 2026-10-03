@@ -103,7 +103,7 @@ class Exporter:
                 (
                     getattr(self.settings, "enhancer_enabled", False)
                     or getattr(self.settings, "enhancer_color_mode", "auto")
-                    in ("invert", "monochrome")
+                    == "monochrome"
                 )
                 and not getattr(self.view.window(), "_background_enhanced", False)
             ):
