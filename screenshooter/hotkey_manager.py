@@ -445,7 +445,11 @@ class HotkeyManager(QObject):
     @staticmethod
     def _deliver(target, pixmap, screen_capture=False):
         if target.is_empty():
-            target.view.set_background_from_pixmap(pixmap)
+            # Для нового скриншота используем тот же путь, что и обычный
+            # захват через ScreenshotApp.display_screenshot(): это гарантирует,
+            # что настройки enhancer (включая инверсию) применяются до показа.
+            target.screenshot_pixmap = pixmap
+            target.display_screenshot()
         else:
             target.view.add_pasted_image(pixmap, screen_capture=screen_capture)
 
