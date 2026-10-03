@@ -100,7 +100,11 @@ class Exporter:
             p.end()
 
             if (
-                getattr(self.settings, "enhancer_enabled", False)
+                (
+                    getattr(self.settings, "enhancer_enabled", False)
+                    or getattr(self.settings, "enhancer_color_mode", "auto")
+                    in ("invert", "monochrome")
+                )
                 and not getattr(self.view.window(), "_background_enhanced", False)
             ):
                 options = EnhancerOptions(
