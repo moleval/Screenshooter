@@ -286,15 +286,24 @@ def _cad_monochrome_gray(rgb):
     ).astype(np.uint8)
 
 
-def _enhance_monochrome(gray, combined):
-    """Усиливает CAD-структуру в одном канале без усиления пустого фона."""
+def _enhance_monochrome(gray, masks):
+    """Усиливает CAD-текст и линии без усиления пустого фона."""
+    combined = np.zeros_like(gray, dtype=np.float32)
+    strengths = {
+        "text": 0.88,
+        "lines": 0.96,
+        "ui": 0.18,
+        "geometry": 0.72,
+    }
+    for name, mask in masks.items():
+        combined = np.maximum(combined, mask * strengths[name])
+
     if float(combined.max()) <= 0:
         return gray
 
-    # В монохромном режиме контраст усиливаем непосредственно в структурном
-    # канале, поэтому цвет исходной линии больше не влияет на результат.
+    # Контраст усиливаем непосредственно в структурном канале.
     local = cv2.createCLAHE(
-        clipLimit=1.15,
+        clipLimit=1.10,
         tileGridSize=(8, 8),
     ).apply(gray)
 
@@ -304,22 +313,39 @@ def _enhance_monochrome(gray, combined):
     edge_reference = float(np.percentile(gradient, 92))
     if edge_reference > 1.0:
         edge_gate = np.clip(gradient / edge_reference, 0.0, 1.0)
-        edge_gate = cv2.GaussianBlur(edge_gate, (0, 0), 0.55)
+        edge_gate = cv2.GaussianBlur(edge_gate, (0, 0), 0.45)
     else:
         edge_gate = np.zeros_like(combined)
 
-    delta = local.astype(np.float32) - gray.astype(np.float32)
-    contrast_mask = combined * edge_gate * 0.55
+    # Важнее не "перешарпить" линию, а сделать её действительно чёрной
+    # после инверсии. Поднимаем только уже найденную структуру к белому
+    # полю исходного структурного канала. Однородный фон остаётся нулевым.
+    structure_boost = (
+        masks["lines"] * 0.58
+        + masks["text"] * 0.68
+        + masks["geometry"] * 0.42
+        + masks["ui"] * 0.10
+    )
+    structure_boost = np.clip(structure_boost, 0.0, 1.0)
+    structure_boost *= np.maximum(edge_gate, 0.35)
+
+    gray_float = gray.astype(np.float32)
+    boosted = gray_float + (255.0 - gray_float) * structure_boost
+    boosted = boosted.clip(0, 255).astype(np.uint8)
+
+    # CLAHE добавляет локальный контраст, но только по существующим границам.
+    delta = local.astype(np.float32) - boosted.astype(np.float32)
+    contrast_mask = combined * edge_gate * 0.42
     enhanced = (
-        gray.astype(np.float32) + delta * contrast_mask
+        boosted.astype(np.float32) + delta * contrast_mask
     ).clip(0, 255).astype(np.uint8)
 
     # Контролируемое восстановление мелких деталей. В однородной заливке
     # high-pass близок к нулю, поэтому фон не превращается в ореол.
-    blurred = cv2.GaussianBlur(enhanced, (0, 0), 0.9)
+    blurred = cv2.GaussianBlur(enhanced, (0, 0), 0.82)
     detail = enhanced.astype(np.float32) - blurred.astype(np.float32)
     detail_strength = (
-        combined * np.maximum(edge_gate, 0.20) * 0.65
+        combined * np.maximum(edge_gate, 0.16) * 0.48
     )
     return (
         enhanced.astype(np.float32) + detail * detail_strength
@@ -379,17 +405,7 @@ def enhance_image(image, options):
         # Это сохраняет яркие цветные линии независимо от их оттенка.
         gray = _cad_monochrome_gray(rgb)
         masks = _build_feature_masks(gray, options, inverted=True)
-        combined = np.zeros_like(gray, dtype=np.float32)
-        strengths = {
-            "text": 0.68,
-            "lines": 0.90,
-            "ui": 0.20,
-            "geometry": 0.78,
-        }
-        for name, mask in masks.items():
-            combined = np.maximum(combined, mask * strengths[name])
-
-        gray = _enhance_monochrome(gray, combined)
+        gray = _enhance_monochrome(gray, masks)
         # Всегда выдаём белый фон и тёмную структуру.
         rgb = np.repeat((255 - gray)[:, :, None], 3, axis=2)
         result = np.dstack((rgb, alpha))
