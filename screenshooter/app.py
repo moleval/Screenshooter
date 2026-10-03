@@ -22,6 +22,7 @@ from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPu
 from .screen_capture import ScreenCapture
 from .capture.virtual_screen import grab_screen_physical
 from .export import Exporter
+from .adaptive_enhancer import EnhancerOptions, enhance_image
 from .view import EditorView
 from .widgets.thickness import ThicknessWidget
 from .widgets.color_palette import ColorPaletteWidget
@@ -369,6 +370,9 @@ class ScreenshotApp(QMainWindow):
 
         self.color_palette.set_current_color(QColor("#D25145"))
         self.screenshot_pixmap = None
+        # Текущая подложка уже обработана при захвате и не должна
+        # повторно проходить через enhancer при экспорте.
+        self._background_enhanced = False
         self.user_zoomed = False
         self.thickness_widget.set_value_silent(2)
 
@@ -635,6 +639,7 @@ class ScreenshotApp(QMainWindow):
             pixmap = QPixmap(path)
             if not pixmap.isNull():
                 if self.view.background_item is None or sip.isdeleted(self.view.background_item):
+                    self._background_enhanced = False
                     self.view.set_background_from_pixmap(pixmap)
                 else:
                     self.view.add_pasted_image(pixmap)
@@ -915,7 +920,30 @@ class ScreenshotApp(QMainWindow):
     # --------------------------------------------------------------
     # Отображение скриншота
     # --------------------------------------------------------------
+    def _prepare_captured_pixmap(self):
+        """Применяет enhancer к свежему скриншоту до показа в редакторе."""
+        self._background_enhanced = False
+        if self.screenshot_pixmap is None or self.screenshot_pixmap.isNull():
+            return
+        if not getattr(self.settings, "enhancer_enabled", False):
+            return
+
+        options = EnhancerOptions(
+            enabled=True,
+            scale=getattr(self.settings, "enhancer_scale", "auto"),
+            text=getattr(self.settings, "enhancer_text", True),
+            lines=getattr(self.settings, "enhancer_lines", True),
+            ui=getattr(self.settings, "enhancer_ui", True),
+            geometry=getattr(self.settings, "enhancer_geometry", True),
+            color_mode=getattr(self.settings, "enhancer_color_mode", "auto"),
+        )
+        enhanced = enhance_image(self.screenshot_pixmap.toImage(), options)
+        if enhanced is not None and not enhanced.isNull():
+            self.screenshot_pixmap = QPixmap.fromImage(enhanced)
+            self._background_enhanced = True
+
     def display_screenshot(self):
+        self._prepare_captured_pixmap()
         self.view.clear_pasted_images()
         self.scene.clear()
         self.view.active_text_item = None
