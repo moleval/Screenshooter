@@ -274,6 +274,7 @@ def enhance_image(image, options):
     bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
 
     invert = options.color_mode == "invert"
+    monochrome = options.color_mode == "monochrome"
 
     scale = _choose_scale(image.width(), image.height(), options.scale)
     if scale != 1.0:
@@ -292,14 +293,23 @@ def enhance_image(image, options):
             interpolation=cv2.INTER_NEAREST,
         )
 
-    # Для CAD-скриншотов инверсия является частью pipeline улучшения:
-    # детекторы работают уже со светлой геометрией на тёмном фоне.
+    # В монохромном режиме сначала убираем цвет, но не меняем яркость.
+    # Для CAD детекторы при этом ищут светлую геометрию на тёмном фоне.
     if invert:
         rgb = (255 - rgb.astype(np.int16)).astype(np.uint8)
 
     bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
-    gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
-    masks = _build_feature_masks(gray, options, inverted=invert)
+    if monochrome:
+        gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+        bgr = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+    else:
+        gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+
+    masks = _build_feature_masks(
+        gray,
+        options,
+        inverted=(invert or monochrome),
+    )
 
     combined = np.zeros_like(gray, dtype=np.float32)
     strengths = {
@@ -359,7 +369,10 @@ def enhance_image(image, options):
             + sharpened.astype(np.float32) * mask
         ).clip(0, 255).astype(np.uint8)
 
-    if not invert:
+    if monochrome:
+        gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+        bgr = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+    elif not invert:
         bgr = _apply_color_mode(bgr, options.color_mode)
 
     rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
