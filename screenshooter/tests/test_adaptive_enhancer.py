@@ -341,3 +341,51 @@ def test_invert_mode_works_without_general_enhancer_toggle():
     result_gray = _gray_array(result)
     assert int(source_gray.mean()) > 200
     assert int(result_gray.mean()) < 60
+
+
+def test_monochrome_mode_removes_color_without_rgb_inversion():
+    source = QImage(20, 20, QImage.Format_RGBA8888)
+    source.fill(QColor(255, 255, 0, 255))
+    source.setPixelColor(0, 0, QColor(0, 0, 0, 255))
+
+    result = enhance_image(
+        source,
+        EnhancerOptions(
+            enabled=True,
+            scale=1.0,
+            text=False,
+            lines=False,
+            ui=False,
+            geometry=False,
+            color_mode="monochrome",
+        ),
+    )
+
+    yellow = result.pixelColor(10, 10)
+    black = result.pixelColor(0, 0)
+    assert yellow.red() == yellow.green() == yellow.blue()
+    assert yellow.red() > 0
+    assert black.red() == black.green() == black.blue() == 0
+
+
+def test_monochrome_mode_detects_light_cad_lines():
+    source = QImage(320, 200, QImage.Format_RGBA8888)
+    source.fill(QColor(20, 20, 20, 255))
+    for x in range(20, 301):
+        source.setPixelColor(x, 80, QColor(255, 255, 0, 255))
+
+    gray = _gray_array(source)
+    masks = _build_feature_masks(
+        gray,
+        EnhancerOptions(
+            enabled=True,
+            scale=1.0,
+            text=False,
+            lines=True,
+            ui=False,
+            geometry=False,
+            color_mode="monochrome",
+        ),
+        inverted=True,
+    )
+    assert float(masks["lines"].max()) > 0.0
