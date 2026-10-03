@@ -106,7 +106,7 @@ class SettingsDialog(QDialog):
         self.enhancer_color_combo = QComboBox()
         self.enhancer_color_combo.addItem("Автоматически", "auto")
         self.enhancer_color_combo.addItem("Сохранять оригинал", "original")
-        self.enhancer_color_combo.addItem("Монохромное", "monochrome")
+        self.enhancer_color_combo.addItem("Монохромное инвертированное", "monochrome")
         # Старое значение "invert" отображаем как новый монохромный режим.
         color_mode = getattr(self.settings, "enhancer_color_mode", "auto")
         if color_mode == "invert":
