@@ -50,6 +50,7 @@ class IconManager:
         "save": (EDITING, "save.svg"),
         "help": (SELECTION, "circle-question-mark.svg"),
         "settings": (EDITING, "settings.svg"),
+        "printer": (EDITING, "printer.svg"),
         "pipette": (EDITING, "pipette.svg"),
         "palette": (EDITING, "palette.svg"),
         "rotate-handle": (EDITING, "rotate-ccw.svg"),
@@ -74,7 +75,7 @@ class IconManager:
         if name in {
             "undo", "redo", "screen-1", "screen-2", "clear",
             "clipboard-copy", "clipboard-copy-mirrored", "image-plus", "clipboard-paste",
-            "save-all", "save", "help", "settings",
+            "save-all", "save", "help", "settings", "printer",
         }:
             return QColor("#FFFFFF" if theme_manager.effective_theme == "dark" else "#333333")
         return cls._color_for_category(category)
