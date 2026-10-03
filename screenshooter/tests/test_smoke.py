@@ -16,6 +16,7 @@ def test_app_starts_and_tools_switch(qapp, tool_name):
     app.set_tool(tool_name)
 
     assert app.view.scene().items() is not None
+    assert app.print_btn.isEnabled()
 
     app.close()
 
