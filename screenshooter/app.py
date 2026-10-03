@@ -212,6 +212,13 @@ class ScreenshotApp(QMainWindow):
         self.quick_save_btn.customContextMenuRequested.connect(self.show_quick_save_menu)
         right_group_layout.addWidget(self.quick_save_btn)
 
+        # Кнопка печати — стандартный системный диалог принтера.
+        self.print_btn = QPushButton()
+        self.print_btn.setIcon(IconManager.icon("printer", size=MAIN_ACTION_ICON_SIZE))
+        self.print_btn.setToolTip("Печать")
+        self.print_btn.clicked.connect(self.print_image)
+        right_group_layout.addWidget(self.print_btn)
+
         # Кнопка настроек
         self.settings_btn = QPushButton()
         self.settings_btn.setIcon(IconManager.icon("settings", size=MAIN_ACTION_ICON_SIZE))
@@ -240,6 +247,7 @@ class ScreenshotApp(QMainWindow):
             self.insert_clipboard_btn,
             self.save_as_btn,
             self.quick_save_btn,
+            self.print_btn,
             self.settings_btn,
             self.help_btn,
         )
@@ -719,6 +727,7 @@ class ScreenshotApp(QMainWindow):
         self.rotate_ccw_action.setEnabled(has_bg)
         self.blur_action.setEnabled(has_bg)
         self.trim_action.setEnabled(has_bg)
+        self.print_btn.setEnabled(has_bg)
 
     # --------------------------------------------------------------
     # Обработчики режимов изображения
@@ -892,6 +901,10 @@ class ScreenshotApp(QMainWindow):
 
     def quick_save(self):
         self.exporter.quick_save()
+
+    def print_image(self):
+        """Печатает текущий результат через системный диалог принтера."""
+        self.exporter.print_image()
 
     def choose_save_directory(self):
         return self.exporter.choose_save_directory()
