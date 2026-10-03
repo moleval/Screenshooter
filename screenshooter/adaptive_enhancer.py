@@ -293,9 +293,9 @@ def enhance_image(image, options):
             interpolation=cv2.INTER_NEAREST,
         )
 
-    # В монохромном режиме сначала убираем цвет, но не меняем яркость.
-    # Для CAD детекторы при этом ищут светлую геометрию на тёмном фоне.
-    if invert:
+    # В монохромном режиме CAD-снимок сначала инвертируется,
+    # затем переводится в оттенки серого: белая геометрия на тёмном фоне.
+    if invert or monochrome:
         rgb = (255 - rgb.astype(np.int16)).astype(np.uint8)
 
     bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
