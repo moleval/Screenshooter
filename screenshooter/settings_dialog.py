@@ -107,9 +107,6 @@ class SettingsDialog(QDialog):
         self.enhancer_color_combo.addItem("Автоматически", "auto")
         self.enhancer_color_combo.addItem("Сохранять оригинал", "original")
         self.enhancer_color_combo.addItem("Инвертировать", "invert")
-        self.enhancer_color_combo.addItem(
-            "CAD: инвертированный монохром", "cad_mono"
-        )
         index = self.enhancer_color_combo.findData(
             getattr(self.settings, "enhancer_color_mode", "auto")
         )
