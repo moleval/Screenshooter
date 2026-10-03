@@ -73,6 +73,11 @@ class TrayManager(QObject):
         self.show_hide_action.triggered.connect(self._toggle_all_windows)
         self.menu.addAction(self.show_hide_action)
 
+        self.new_window_action = QAction("Новое окно", self)
+        self.new_window_action.setToolTip("Создать новое пустое окно редактора")
+        self.new_window_action.triggered.connect(self._create_new_window)
+        self.menu.addAction(self.new_window_action)
+
         self.menu.addSeparator()
 
         if self.window_manager is None or not self.window_manager.windows:
@@ -203,6 +208,13 @@ class TrayManager(QObject):
 
         self._last_system_theme = theme_manager.detect_system_theme()
         self.update_windows_menu()
+
+    def _create_new_window(self):
+        """Создаёт новое независимое пустое окно редактора."""
+        if self.window_manager is None:
+            return
+        window = self.window_manager.create_editor_window(reusable=True, show=True)
+        self._activate_window(window)
 
     def _toggle_all_windows(self):
         if self.window_manager is None:
