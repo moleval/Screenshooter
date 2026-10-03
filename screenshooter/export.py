@@ -99,7 +99,10 @@ class Exporter:
             self.scene.render(p, QRectF(img.rect()), QRectF(target_rect))
             p.end()
 
-            if getattr(self.settings, "enhancer_enabled", False):
+            if (
+                getattr(self.settings, "enhancer_enabled", False)
+                and not getattr(self.view.parent(), "_background_enhanced", False)
+            ):
                 options = EnhancerOptions(
                     enabled=True,
                     scale=getattr(self.settings, "enhancer_scale", "auto"),
