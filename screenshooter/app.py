@@ -925,7 +925,8 @@ class ScreenshotApp(QMainWindow):
         self._background_enhanced = False
         if self.screenshot_pixmap is None or self.screenshot_pixmap.isNull():
             return
-        if not getattr(self.settings, "enhancer_enabled", False):
+        color_mode = getattr(self.settings, "enhancer_color_mode", "auto")
+        if not getattr(self.settings, "enhancer_enabled", False) and color_mode != "invert":
             return
 
         options = EnhancerOptions(
@@ -935,7 +936,7 @@ class ScreenshotApp(QMainWindow):
             lines=getattr(self.settings, "enhancer_lines", True),
             ui=getattr(self.settings, "enhancer_ui", True),
             geometry=getattr(self.settings, "enhancer_geometry", True),
-            color_mode=getattr(self.settings, "enhancer_color_mode", "auto"),
+            color_mode=color_mode,
         )
         enhanced = enhance_image(self.screenshot_pixmap.toImage(), options)
         if enhanced is not None and not enhanced.isNull():
