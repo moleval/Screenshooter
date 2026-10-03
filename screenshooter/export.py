@@ -101,7 +101,7 @@ class Exporter:
 
             if (
                 getattr(self.settings, "enhancer_enabled", False)
-                and not getattr(self.view.parent(), "_background_enhanced", False)
+                and not getattr(self.view.window(), "_background_enhanced", False)
             ):
                 options = EnhancerOptions(
                     enabled=True,
