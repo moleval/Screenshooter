@@ -34,3 +34,43 @@ def test_undo_redo_after_add_item(qapp):
     app.redo_action()
 
     app.close()
+
+def test_captured_screenshot_is_preprocessed_and_not_enhanced_twice(qapp, monkeypatch):
+    import screenshooter.app as app_module
+    import screenshooter.export as export_module
+    from PyQt5.QtGui import QImage
+
+    app = ScreenshotApp()
+    app.settings.enhancer_enabled = True
+    app.settings.enhancer_scale = 1.0
+    app.settings.enhancer_text = False
+    app.settings.enhancer_lines = False
+    app.settings.enhancer_ui = False
+    app.settings.enhancer_geometry = False
+    app.settings.enhancer_color_mode = "invert"
+
+    calls = {"count": 0}
+
+    def fake_enhance(image, options):
+        calls["count"] += 1
+        result = image.convertToFormat(QImage.Format_ARGB32)
+        result.invertPixels()
+        return result
+
+    monkeypatch.setattr(app_module, "enhance_image", fake_enhance)
+    monkeypatch.setattr(export_module, "enhance_image", fake_enhance)
+
+    pm = QPixmap(20, 10)
+    pm.fill(QColor("black"))
+    app.screenshot_pixmap = pm
+    app.display_screenshot()
+
+    shown = app.view.background_item.pixmap().toImage()
+    assert QColor(shown.pixel(0, 0)) == QColor("white")
+    assert calls["count"] == 1
+
+    rendered = app.exporter.render_scene_to_image()
+    assert not rendered.isNull()
+    assert calls["count"] == 1
+
+    app.close()
