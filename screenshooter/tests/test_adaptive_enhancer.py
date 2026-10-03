@@ -298,6 +298,57 @@ def test_cad_monochrome_uses_structural_enhancement():
     assert enhanced.pixelColor(80, 46).green() == enhanced.pixelColor(80, 46).blue()
 
 
+def test_cad_monochrome_darkens_detected_thin_structure():
+    source = QImage(180, 100, QImage.Format_RGBA8888)
+    source.fill(QColor(0, 0, 0, 255))
+
+    array = np.zeros((100, 180, 4), dtype=np.uint8)
+    array[:, :, 3] = 255
+    # Яркая тонкая жёлтая линия на чёрном CAD-фоне.
+    array[48:50, 20:160, :3] = (180, 180, 0)
+    source = QImage(
+        np.ascontiguousarray(array).data,
+        180,
+        100,
+        180 * 4,
+        QImage.Format_RGBA8888,
+    ).copy()
+
+    baseline = enhance_image(
+        source,
+        EnhancerOptions(
+            enabled=True,
+            scale=1.0,
+            text=False,
+            lines=False,
+            ui=False,
+            geometry=False,
+            color_mode="cad_mono",
+        ),
+    )
+    enhanced = enhance_image(
+        source,
+        EnhancerOptions(
+            enabled=True,
+            scale=1.0,
+            text=False,
+            lines=True,
+            ui=False,
+            geometry=True,
+            color_mode="cad_mono",
+        ),
+    )
+
+    baseline_value = int(baseline.pixelColor(80, 48).red())
+    enhanced_value = int(enhanced.pixelColor(80, 48).red())
+
+    assert enhanced_value < baseline_value
+    assert enhanced_value <= 25
+    assert enhanced.pixelColor(0, 0).red() >= 250
+    assert enhanced.pixelColor(0, 0).red() == enhanced.pixelColor(0, 0).green()
+    assert enhanced.pixelColor(0, 0).green() == enhanced.pixelColor(0, 0).blue()
+
+
 def test_invert_mode_runs_enhancement_after_inversion(monkeypatch):
     source = _feature_image()
     calls = {}
