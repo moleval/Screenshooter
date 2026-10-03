@@ -926,7 +926,7 @@ class ScreenshotApp(QMainWindow):
         if self.screenshot_pixmap is None or self.screenshot_pixmap.isNull():
             return
         color_mode = getattr(self.settings, "enhancer_color_mode", "auto")
-        if not getattr(self.settings, "enhancer_enabled", False) and color_mode != "invert":
+        if not getattr(self.settings, "enhancer_enabled", False) and color_mode not in ("invert", "monochrome"):
             return
 
         options = EnhancerOptions(
