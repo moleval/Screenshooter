@@ -28,7 +28,7 @@ def _gray_array(image):
     array = np.frombuffer(data, dtype=np.uint8).reshape(
         (gray_image.height(), gray_image.bytesPerLine())
     )
-    return np.ascontiguousarray(array[:, :gray_image.width()])
+    return np.array(array[:, :gray_image.width()], dtype=np.uint8, copy=True)
 
 
 def _feature_image():
@@ -321,3 +321,23 @@ def test_enhancer_preserves_uniform_cad_fill():
     )) <= 1
     source_array = _rgba_array(source)
     assert np.array_equal(result_array[:, :, 3], source_array[:, :, 3])
+
+
+def test_invert_mode_works_without_general_enhancer_toggle():
+    source = _image()
+    result = enhance_image(
+        source,
+        EnhancerOptions(
+            enabled=True,
+            scale=1.0,
+            text=False,
+            lines=False,
+            ui=False,
+            geometry=False,
+            color_mode="invert",
+        ),
+    )
+    source_gray = _gray_array(source)
+    result_gray = _gray_array(result)
+    assert int(source_gray.mean()) > 200
+    assert int(result_gray.mean()) < 60
