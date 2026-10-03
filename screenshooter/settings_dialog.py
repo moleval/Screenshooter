@@ -107,13 +107,11 @@ class SettingsDialog(QDialog):
         self.enhancer_color_combo.addItem("Автоматически", "auto")
         self.enhancer_color_combo.addItem("Сохранять оригинал", "original")
         self.enhancer_color_combo.addItem("Монохромное", "monochrome")
-        # Старое значение "invert" сохраняем для совместимости с уже
-        # сохранёнными настройками, но в новом интерфейсе предлагаем mono.
-        if getattr(self.settings, "enhancer_color_mode", "auto") == "invert":
-            self.settings.enhancer_color_mode = "monochrome"
-        index = self.enhancer_color_combo.findData(
-            getattr(self.settings, "enhancer_color_mode", "auto")
-        )
+        # Старое значение "invert" отображаем как новый монохромный режим.
+        color_mode = getattr(self.settings, "enhancer_color_mode", "auto")
+        if color_mode == "invert":
+            color_mode = "monochrome"
+        index = self.enhancer_color_combo.findData(color_mode)
         if index >= 0:
             self.enhancer_color_combo.setCurrentIndex(index)
         enhancer_layout.addRow("Цветовая схема:", self.enhancer_color_combo)
