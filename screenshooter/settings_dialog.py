@@ -63,7 +63,7 @@ class SettingsDialog(QDialog):
 
         self.enhancer_enabled_check = QCheckBox("Использовать адаптивное улучшение")
         self.enhancer_enabled_check.setChecked(
-            getattr(self.settings, "enhancer_enabled", False)
+            getattr(self.settings, "enhancer_enabled", True)
         )
         enhancer_layout.addRow(self.enhancer_enabled_check)
 
