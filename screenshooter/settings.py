@@ -142,7 +142,7 @@ class AppSettings:
         config['General'] = {'save_directory': ''}
         config['Theme'] = {'theme': 'system'}
         config['Enhancer'] = {
-            'enabled': 'False',
+            'enabled': 'True',
             'scale': 'auto',
             'text': 'True',
             'lines': 'True',
