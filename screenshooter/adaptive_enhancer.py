@@ -257,6 +257,36 @@ def _apply_color_mode(bgr, mode):
     return bgr
 
 
+def is_dark_autocad_scheme(image):
+    """Определяет тёмную цветовую схему AutoCAD по преобладающему фону."""
+    if image is None or image.isNull():
+        return False
+
+    gray = image.convertToFormat(QImage.Format_Grayscale8)
+    width = gray.width()
+    height = gray.height()
+    if width > 128 or height > 128:
+        gray = gray.scaled(128, 128)
+
+    data = gray.bits()
+    data.setsize(gray.bytesPerLine() * gray.height())
+    array = np.frombuffer(data, dtype=np.uint8).reshape(
+        (gray.height(), gray.bytesPerLine())
+    )[:, :gray.width()]
+
+    median = float(np.median(array))
+    dark_fraction = float(np.mean(array < 80))
+    bright_fraction = float(np.mean(array > 180))
+
+    # Тёмная схема CAD имеет преимущественно тёмный фон и сравнительно
+    # небольшую долю светлых элементов. Светлая схема — наоборот.
+    return (
+        dark_fraction >= 0.55
+        and median < 115
+        and bright_fraction < 0.35
+    )
+
+
 def enhance_image(image, options):
     """Адаптивно улучшает QImage и возвращает новый QImage."""
     if image is None or image.isNull():
