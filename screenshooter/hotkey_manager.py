@@ -17,7 +17,7 @@ from PyQt5.QtWidgets import QApplication, QDialog
 
 from .capture.screen_overlay import ScreenCaptureOverlay
 from .capture.region_overlay import RegionCaptureOverlay
-from .capture.window_capture import capture_active_window
+from .capture.window_capture import capture_active_window, is_autocad_window
 from .capture.virtual_screen import grab_screen_physical
 
 
@@ -443,13 +443,13 @@ class HotkeyManager(QObject):
         )
 
     @staticmethod
-    def _deliver(target, pixmap, screen_capture=False):
+    def _deliver(target, pixmap, screen_capture=False, source_is_autocad=False):
         if target.is_empty():
             # Для нового скриншота используем тот же путь, что и обычный
             # захват через ScreenshotApp.display_screenshot(): это гарантирует,
             # что настройки enhancer (включая инверсию) применяются до показа.
             target.screenshot_pixmap = pixmap
-            target.display_screenshot()
+            target.display_screenshot(source_is_autocad=source_is_autocad)
         else:
             target.view.add_pasted_image(pixmap, screen_capture=screen_capture)
 
@@ -580,6 +580,7 @@ class HotkeyManager(QObject):
                     pass
 
             target = self._target()
+            source_is_autocad = is_autocad_window(hwnd)
             pixmap = self._capture_pixmap("active_window", hwnd)
 
             if pixmap is not None:
@@ -587,7 +588,11 @@ class HotkeyManager(QObject):
                     target
                     or self.window_manager.create_editor_window(reusable=False)
                 )
-                self._deliver(target, pixmap)
+                self._deliver(
+                    target,
+                    pixmap,
+                    source_is_autocad=source_is_autocad,
+                )
         except Exception as error:
             print(f"Ошибка захвата окна: {error}")
         finally:
