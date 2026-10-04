@@ -36,6 +36,11 @@ def _choose_scale(width, height, requested):
         return 2.0
     if longest <= 2560:
         return 1.5
+    # CAD-скриншоты часто содержат очень тонкие линии и мелкий текст.
+    # До 3840 px сохраняем запас по детализации без превращения
+    # уже очень больших кадров в чрезмерно тяжёлые 2x изображения.
+    if longest <= 3840:
+        return 1.25
     return 1.0
 
 
@@ -382,12 +387,31 @@ def enhance_image(image, options):
         )
 
         # High-pass практически равен нулю в однородной заливке.
-        blurred = cv2.GaussianBlur(enhanced, (0, 0), 1.05)
+        # Для AutoCAD нужен более узкий high-pass: он подчёркивает
+        # штрих/текст, но меньше создаёт светлые ореолы вокруг длинных линий.
+        cad_profile = monochrome
+        detail_sigma = 0.72 if cad_profile else 1.05
+        detail_gain = 0.72 if cad_profile else 0.45
+        blurred = cv2.GaussianBlur(
+            enhanced,
+            (0, 0),
+            detail_sigma,
+        )
         detail = enhanced.astype(np.float32) - blurred.astype(np.float32)
+
+        # Не усиливаем слабый шум: для CAD полезнее сохранить чистый фон,
+        # чем пытаться "вытянуть" каждый пиксель.
+        detail_threshold = 1.5 if cad_profile else 0.0
+        if detail_threshold > 0:
+            detail = np.sign(detail) * np.maximum(
+                np.abs(detail) - detail_threshold,
+                0.0,
+            )
+
         detail_strength = (
             combined[:, :, None]
             * np.maximum(edge_gate[:, :, None], 0.25)
-            * 0.45
+            * detail_gain
         )
         sharpened = (
             enhanced.astype(np.float32) + detail * detail_strength
