@@ -50,6 +50,28 @@ def test_save_and_load(temp_config):
     assert settings2.enhancer_color_mode == "auto"
 
 
+def test_monochrome_color_mode_is_saved_and_legacy_invert_is_migrated(temp_config):
+    settings = AppSettings()
+    settings.enhancer_color_mode = "monochrome"
+    settings.save()
+
+    settings2 = AppSettings()
+    assert settings2.enhancer_color_mode == "monochrome"
+
+    temp_config.write_text(
+        "[General]\n"
+        "save_directory = \n"
+        "\n"
+        "[Theme]\n"
+        "theme = system\n"
+        "\n"
+        "[Enhancer]\n"
+        "color_mode = invert\n",
+        encoding="utf-8",
+    )
+    settings3 = AppSettings()
+    assert settings3.enhancer_color_mode == "monochrome"
+
 def test_autostart_shortcut_create_and_remove(temp_config, monkeypatch):
     class FakeShortcut:
         def __init__(self, path):
