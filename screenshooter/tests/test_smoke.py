@@ -74,3 +74,39 @@ def test_captured_screenshot_is_preprocessed_and_not_enhanced_twice(qapp, monkey
     assert calls["count"] == 1
 
     app.close()
+
+
+def test_monochrome_capture_is_limited_to_autocad(qapp, monkeypatch):
+    import screenshooter.app as app_module
+    from PyQt5.QtGui import QImage
+
+    app = ScreenshotApp()
+    app.settings.enhancer_enabled = False
+    app.settings.enhancer_color_mode = "monochrome"
+
+    calls = {"count": 0}
+
+    def fake_enhance(image, options):
+        calls["count"] += 1
+        result = image.copy()
+        result.invertPixels()
+        return result
+
+    monkeypatch.setattr(app_module, "enhance_image", fake_enhance)
+
+    pm = QPixmap(20, 10)
+    pm.fill(QColor("black"))
+
+    app.screenshot_pixmap = pm
+    app.display_screenshot(source_is_autocad=False)
+    ordinary = app.view.background_item.pixmap().toImage()
+    assert QColor(ordinary.pixel(0, 0)) == QColor("black")
+    assert calls["count"] == 0
+
+    app.screenshot_pixmap = pm
+    app.display_screenshot(source_is_autocad=True)
+    autocad = app.view.background_item.pixmap().toImage()
+    assert QColor(autocad.pixel(0, 0)) == QColor("white")
+    assert calls["count"] == 1
+
+    app.close()
