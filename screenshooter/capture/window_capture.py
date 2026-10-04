@@ -7,9 +7,42 @@
 import os
 
 import win32gui
+import win32api
+import win32con
+import win32process
 import win32process
 from PyQt5.QtCore import QRect
 from .virtual_screen import grab_physical_rect
+
+
+def is_autocad_window(hwnd):
+    """Возвращает True только для окна AutoCAD."""
+    if not hwnd or not win32gui.IsWindow(hwnd):
+        return False
+
+    try:
+        _, pid = win32process.GetWindowThreadProcessId(hwnd)
+        process_handle = win32api.OpenProcess(
+            win32con.PROCESS_QUERY_INFORMATION | win32con.PROCESS_VM_READ,
+            False,
+            pid,
+        )
+        try:
+            executable = win32process.GetModuleFileNameEx(process_handle, 0)
+        finally:
+            win32api.CloseHandle(process_handle)
+        executable_name = os.path.basename(executable).lower()
+        if executable_name in {"acad.exe", "acadlt.exe"}:
+            return True
+    except Exception:
+        pass
+
+    try:
+        title = win32gui.GetWindowText(hwnd).strip().lower()
+    except Exception:
+        title = ""
+    return "autocad" in title
+
 
 
 def capture_active_window(hwnd=None):
