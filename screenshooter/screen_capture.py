@@ -6,7 +6,7 @@ import win32gui
 
 from .capture.screen_overlay import ScreenCaptureOverlay
 from .capture.region_overlay import RegionCaptureOverlay
-from .capture.window_capture import capture_active_window
+from .capture.window_capture import capture_active_window, is_autocad_window
 from .capture.virtual_screen import grab_screen_physical
 
 
@@ -99,11 +99,12 @@ class ScreenCapture:
                 candidate = win32gui.GetForegroundWindow()
                 if candidate and candidate not in app_hwnds:
                     hwnd = candidate
+            source_is_autocad = is_autocad_window(hwnd)
             pixmap = capture_active_window(hwnd)
             self._restore_main_window()
             if pixmap is not None:
                 self.app.screenshot_pixmap = pixmap
-                self.app.display_screenshot()
+                self.app.display_screenshot(source_is_autocad=source_is_autocad)
             else:
                 self.app.view.show_status_message("Не удалось захватить активное окно.", 15000)
         except Exception as e:
