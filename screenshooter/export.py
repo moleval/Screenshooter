@@ -198,8 +198,11 @@ class Exporter:
         img = self.render_scene_to_image()
         if img is None:
             return
+        default_path = self.save_directory or os.path.expanduser("~")
+        if os.path.isdir(default_path):
+            default_path = os.path.join(default_path, "скриншот.png")
         path, _ = QFileDialog.getSaveFileName(
-            None, "Сохранить изображение", "",
+            None, "Сохранить изображение", default_path,
             "PNG (*.png);;JPEG (*.jpg *.jpeg);;BMP (*.bmp)")
         if path:
             img.save(path)
@@ -220,6 +223,14 @@ class Exporter:
         if not self.save_directory:
             if not self.choose_save_directory():
                 return
+
+        try:
+            os.makedirs(self.save_directory, exist_ok=True)
+        except OSError:
+            self.view.show_status_message(
+                "Не удалось создать папку для сохранения.", 15000
+            )
+            return
 
         timestamp = time.strftime("%Y-%m-%d %H-%M-%S")
         filename = f"{timestamp}.png"
@@ -261,8 +272,8 @@ class Exporter:
     def load_save_directory_from_settings(self):
         """Загружает папку быстрого сохранения из настроек."""
         if self.settings:
+            # Сохраняем путь из настроек даже если папка временно отсутствует.
+            # При быстром сохранении она будет создана автоматически.
             self.save_directory = self.settings.save_directory
-            if self.save_directory and not os.path.isdir(self.save_directory):
-                self.save_directory = ""
         else:
             self.save_directory = ""
