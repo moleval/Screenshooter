@@ -101,6 +101,12 @@ class AppSettings:
         self.enhancer_color_mode = self.config.get(
             'Enhancer', 'color_mode', fallback='auto'
         )
+        # До введения монохромного режима использовалось значение
+        # "invert". Мигрируем его в новое каноническое значение,
+        # чтобы отображаемая в настройках схема совпадала с реально
+        # применяемой обработкой.
+        if self.enhancer_color_mode == 'invert':
+            self.enhancer_color_mode = 'monochrome'
 
         # Автозагрузка определяется наличием ярлыка
         self.autostart = self.is_autostart_enabled()
