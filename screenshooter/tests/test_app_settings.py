@@ -25,7 +25,7 @@ def temp_config(tmp_path, monkeypatch):
 
 def test_default_values(temp_config):
     settings = AppSettings()
-    assert settings.save_directory == ""
+    assert settings.save_directory == "D:/YandexDisk/Скриншоты"
     assert settings.theme == "system"
     assert settings.enhancer_enabled is True
     assert settings.enhancer_scale == "auto"
