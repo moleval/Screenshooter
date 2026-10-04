@@ -926,50 +926,16 @@ class ScreenshotApp(QMainWindow):
         self._background_enhanced = False
         if self.screenshot_pixmap is None or self.screenshot_pixmap.isNull():
             return
+
         color_mode = getattr(self.settings, "enhancer_color_mode", "auto")
-        # Специальный режим «Монохромное инвертированное» предназначен
-        # только для захвата окна AutoCAD. Он не должен менять обычные окна.
-        if color_mode == "monochrome" and not self._captured_window_is_autocad:
-            color_mode = "auto"
-        if not getattr(self.settings, "enhancer_enabled", False) and color_mode != "monochrome":
-            return
-
-    def _prepare_captured_pixmap(self):
-        """Применяет enhancer к свежему скриншоту до показа в редакторе."""
-        self._background_enhanced = False
-        if self.screenshot_pixmap is None or self.screenshot_pixmap.isNull():
-            return
-
-        configured_color_mode = getattr(
-            self.settings, "enhancer_color_mode", "auto"
-        )
         enhancer_enabled = getattr(self.settings, "enhancer_enabled", False)
 
-        # Временная диагностика пути PrintScreen / Ctrl+PrintScreen.
-        print(
-            "[ENHANCER DEBUG] "
-            f"color_mode={configured_color_mode!r} "
-            f"enhancer_enabled={enhancer_enabled!r} "
-            f"captured_window_is_autocad={self._captured_window_is_autocad!r} "
-            f"image={self.screenshot_pixmap.width()}x{self.screenshot_pixmap.height()}",
-            flush=True,
-        )
-
-        color_mode = configured_color_mode
-        # Специальный режим «Монохромное инвертированное» предназначен
-        # только для захвата окна AutoCAD. Он не должен менять обычные окна.
+        # «Монохромное инвертированное» применяется только к захвату окна AutoCAD.
         if color_mode == "monochrome" and not self._captured_window_is_autocad:
-            print(
-                "[ENHANCER DEBUG] monochrome skipped: source is not AutoCAD",
-                flush=True,
-            )
             color_mode = "auto"
 
+
         if not enhancer_enabled and color_mode != "monochrome":
-            print(
-                "[ENHANCER DEBUG] enhance_image skipped",
-                flush=True,
-            )
             return
         options = EnhancerOptions(
             enabled=True,
@@ -979,10 +945,6 @@ class ScreenshotApp(QMainWindow):
             ui=getattr(self.settings, "enhancer_ui", True),
             geometry=getattr(self.settings, "enhancer_geometry", True),
             color_mode=color_mode,
-        )
-        print(
-            f"[ENHANCER DEBUG] enhance_image called color_mode={color_mode!r}",
-            flush=True,
         )
         enhanced = enhance_image(self.screenshot_pixmap.toImage(), options)
         if enhanced is not None and not enhanced.isNull():
