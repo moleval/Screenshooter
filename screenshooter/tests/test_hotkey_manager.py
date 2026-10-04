@@ -31,3 +31,17 @@ def test_deliver_prepares_new_screenshot_before_showing_it():
     assert target.screenshot_pixmap is pixmap
     target.display_screenshot.assert_called_once_with()
     target.view.set_background_from_pixmap.assert_not_called()
+
+
+def test_deliver_passes_autocad_source_to_new_screenshot():
+    target = Mock()
+    target.is_empty.return_value = True
+    pixmap = Mock()
+
+    HotkeyManager._deliver(
+        target,
+        pixmap,
+        source_is_autocad=True,
+    )
+
+    target.display_screenshot.assert_called_once_with(source_is_autocad=True)
