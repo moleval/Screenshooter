@@ -373,6 +373,7 @@ class ScreenshotApp(QMainWindow):
         # Текущая подложка уже обработана при захвате и не должна
         # повторно проходить через enhancer при экспорте.
         self._background_enhanced = False
+        self._captured_window_is_autocad = False
         self.user_zoomed = False
         self.thickness_widget.set_value_silent(2)
 
@@ -926,6 +927,10 @@ class ScreenshotApp(QMainWindow):
         if self.screenshot_pixmap is None or self.screenshot_pixmap.isNull():
             return
         color_mode = getattr(self.settings, "enhancer_color_mode", "auto")
+        # Специальный режим «Монохромное инвертированное» предназначен
+        # только для захвата окна AutoCAD. Он не должен менять обычные окна.
+        if color_mode == "monochrome" and not self._captured_window_is_autocad:
+            color_mode = "auto"
         if not getattr(self.settings, "enhancer_enabled", False) and color_mode != "monochrome":
             return
 
@@ -943,7 +948,8 @@ class ScreenshotApp(QMainWindow):
             self.screenshot_pixmap = QPixmap.fromImage(enhanced)
             self._background_enhanced = True
 
-    def display_screenshot(self):
+    def display_screenshot(self, source_is_autocad=False):
+        self._captured_window_is_autocad = bool(source_is_autocad)
         self._prepare_captured_pixmap()
         self.view.clear_pasted_images()
         self.scene.clear()
