@@ -82,7 +82,7 @@ class AppSettings:
 
         # Настройки адаптивного улучшайзера.
         self.enhancer_enabled = self.config.getboolean(
-            'Enhancer', 'enabled', fallback=False
+            'Enhancer', 'enabled', fallback=True
         )
         scale_raw = self.config.get('Enhancer', 'scale', fallback='auto')
         self.enhancer_scale = 'auto' if scale_raw == 'auto' else float(scale_raw)
