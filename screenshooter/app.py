@@ -980,6 +980,10 @@ class ScreenshotApp(QMainWindow):
             geometry=getattr(self.settings, "enhancer_geometry", True),
             color_mode=color_mode,
         )
+        print(
+            f"[ENHANCER DEBUG] enhance_image called color_mode={color_mode!r}",
+            flush=True,
+        )
         enhanced = enhance_image(self.screenshot_pixmap.toImage(), options)
         if enhanced is not None and not enhanced.isNull():
             self.screenshot_pixmap = QPixmap.fromImage(enhanced)
