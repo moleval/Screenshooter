@@ -44,6 +44,7 @@ class HotkeyManager(QObject):
 
         self._printscreen_down = False
         self._alt_down = False
+        self._capture_source_is_autocad = False
 
         self._key_state_lock = threading.Lock()
 
@@ -200,6 +201,17 @@ class HotkeyManager(QObject):
         ctrl_down, alt_down = self._get_modifier_state()
 
         self._request_pending = True
+
+        # Запоминаем исходное активное окно до открытия overlay/скрытия
+        # окон приложения. Это нужно для PrintScreen и Ctrl+PrintScreen:
+        # их результат физически не является снимком окна AutoCAD, но
+        # инициируется именно из AutoCAD и должен получить его monochrome
+        # режим, если он включён в настройках.
+        try:
+            foreground_hwnd = win32gui.GetForegroundWindow()
+        except Exception:
+            foreground_hwnd = None
+        self._capture_source_is_autocad = is_autocad_window(foreground_hwnd)
 
         # По требованию приложения:
         #   PrintScreen      -> выделение участка экрана
@@ -484,7 +496,11 @@ class HotkeyManager(QObject):
                     target
                     or self.window_manager.create_editor_window(reusable=False)
                 )
-                self._deliver(target, pixmap)
+                self._deliver(
+                    target,
+                    pixmap,
+                    source_is_autocad=self._capture_source_is_autocad,
+                )
         except Exception as error:
             print(f"Ошибка захвата выбранного экрана: {error}")
         finally:
@@ -539,6 +555,7 @@ class HotkeyManager(QObject):
         finally:
             self._finish(target)
             self._show_monitor_capture_result_maximized(target)
+            self._capture_source_is_autocad = False
             self._request_pending = False
 
     @staticmethod
