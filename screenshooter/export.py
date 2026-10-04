@@ -99,13 +99,14 @@ class Exporter:
             self.scene.render(p, QRectF(img.rect()), QRectF(target_rect))
             p.end()
 
+            window = self.view.window()
+            autocad_monochrome = (
+                getattr(self.settings, "enhancer_color_mode", "auto") == "monochrome"
+                and getattr(window, "_captured_window_is_autocad", False)
+            )
             if (
-                (
-                    getattr(self.settings, "enhancer_enabled", False)
-                    or getattr(self.settings, "enhancer_color_mode", "auto")
-                    == "monochrome"
-                )
-                and not getattr(self.view.window(), "_background_enhanced", False)
+                (getattr(self.settings, "enhancer_enabled", False) or autocad_monochrome)
+                and not getattr(window, "_background_enhanced", False)
             ):
                 options = EnhancerOptions(
                     enabled=True,
