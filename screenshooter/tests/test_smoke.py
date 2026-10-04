@@ -47,7 +47,7 @@ def test_captured_screenshot_is_preprocessed_and_not_enhanced_twice(qapp, monkey
     app.settings.enhancer_lines = False
     app.settings.enhancer_ui = False
     app.settings.enhancer_geometry = False
-    app.settings.enhancer_color_mode = "invert"
+    app.settings.enhancer_color_mode = "monochrome"
 
     calls = {"count": 0}
 
@@ -63,7 +63,7 @@ def test_captured_screenshot_is_preprocessed_and_not_enhanced_twice(qapp, monkey
     pm = QPixmap(20, 10)
     pm.fill(QColor("black"))
     app.screenshot_pixmap = pm
-    app.display_screenshot()
+    app.display_screenshot(source_is_autocad=True)
 
     shown = app.view.background_item.pixmap().toImage()
     assert QColor(shown.pixel(0, 0)) == QColor("white")
