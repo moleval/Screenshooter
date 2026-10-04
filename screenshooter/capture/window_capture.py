@@ -10,7 +10,6 @@ import win32gui
 import win32api
 import win32con
 import win32process
-import win32process
 from PyQt5.QtCore import QRect
 from .virtual_screen import grab_physical_rect
 
