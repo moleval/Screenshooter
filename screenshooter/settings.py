@@ -76,13 +76,14 @@ class AppSettings:
 
         # Читаем настройки с значениями по умолчанию
         self.save_directory = self.config.get(
-            'General', 'save_directory', fallback=''
+            'General', 'save_directory',
+            fallback='D:/YandexDisk/Скриншоты'
         )
         self.theme = self.config.get('Theme', 'theme', fallback='system')
 
         # Настройки адаптивного улучшайзера.
         self.enhancer_enabled = self.config.getboolean(
-            'Enhancer', 'enabled', fallback=False
+            'Enhancer', 'enabled', fallback=True
         )
         scale_raw = self.config.get('Enhancer', 'scale', fallback='auto')
         self.enhancer_scale = 'auto' if scale_raw == 'auto' else float(scale_raw)
@@ -139,10 +140,10 @@ class AppSettings:
     def _create_default_config(self):
         """Создаёт новый ini-файл с шапкой и настройками по умолчанию."""
         config = configparser.ConfigParser()
-        config['General'] = {'save_directory': ''}
+        config['General'] = {'save_directory': 'D:/YandexDisk/Скриншоты'}
         config['Theme'] = {'theme': 'system'}
         config['Enhancer'] = {
-            'enabled': 'False',
+            'enabled': 'True',
             'scale': 'auto',
             'text': 'True',
             'lines': 'True',

@@ -63,7 +63,7 @@ class SettingsDialog(QDialog):
 
         self.enhancer_enabled_check = QCheckBox("Использовать адаптивное улучшение")
         self.enhancer_enabled_check.setChecked(
-            getattr(self.settings, "enhancer_enabled", False)
+            getattr(self.settings, "enhancer_enabled", True)
         )
         enhancer_layout.addRow(self.enhancer_enabled_check)
 
@@ -114,7 +114,7 @@ class SettingsDialog(QDialog):
         index = self.enhancer_color_combo.findData(color_mode)
         if index >= 0:
             self.enhancer_color_combo.setCurrentIndex(index)
-        enhancer_layout.addRow("Цветовая схема:", self.enhancer_color_combo)
+        enhancer_layout.addRow("Цветовая схема AutoCAD:", self.enhancer_color_combo)
 
         layout.addWidget(enhancer_group)
 

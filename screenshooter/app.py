@@ -22,7 +22,7 @@ from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPu
 from .screen_capture import ScreenCapture
 from .capture.virtual_screen import grab_screen_physical
 from .export import Exporter
-from .adaptive_enhancer import EnhancerOptions, enhance_image
+from .adaptive_enhancer import EnhancerOptions, enhance_image, is_dark_autocad_scheme
 from .view import EditorView
 from .widgets.thickness import ThicknessWidget
 from .widgets.color_palette import ColorPaletteWidget
@@ -930,10 +930,16 @@ class ScreenshotApp(QMainWindow):
         color_mode = getattr(self.settings, "enhancer_color_mode", "auto")
         enhancer_enabled = getattr(self.settings, "enhancer_enabled", False)
 
-        # «Монохромное инвертированное» применяется только к захвату окна AutoCAD.
+        # В режиме «Автоматически» AutoCAD с тёмной схемой переводим
+        # в монохромное инвертированное представление. Светлая схема
+        # AutoCAD и обычные окна сохраняют исходную цветовую схему.
+        if color_mode == "auto" and self._captured_window_is_autocad:
+            if is_dark_autocad_scheme(self.screenshot_pixmap.toImage()):
+                color_mode = "monochrome"
+
+        # Явный монохромный режим по-прежнему разрешён только для AutoCAD.
         if color_mode == "monochrome" and not self._captured_window_is_autocad:
             color_mode = "auto"
-
 
         if not enhancer_enabled and color_mode != "monochrome":
             return

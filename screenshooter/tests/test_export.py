@@ -179,3 +179,38 @@ def test_export_skips_enhancer_when_disabled(qapp):
     assert exported.pixelColor(0, 0).red() == 255
     assert exported.pixelColor(0, 0).green() == 255
     assert exported.pixelColor(0, 0).blue() == 255
+
+
+def test_quick_save_uses_configured_directory_without_prompt(qapp, tmp_path, monkeypatch):
+    scene = QGraphicsScene()
+    view = EditorView(scene)
+
+    pixmap = QPixmap(20, 20)
+    pixmap.fill(QColor("white"))
+    view.set_background_from_pixmap(pixmap)
+
+    settings = SimpleNamespace(
+        save_directory=str(tmp_path),
+        enhancer_enabled=False,
+        enhancer_scale=1.0,
+        enhancer_text=True,
+        enhancer_lines=True,
+        enhancer_ui=True,
+        enhancer_geometry=True,
+        enhancer_color_mode="auto",
+    )
+    exporter = Exporter(view, scene, settings)
+    exporter.render_scene_to_image = lambda: pixmap.toImage()
+
+    def fail_choose_directory():
+        raise AssertionError("Диалог выбора папки не должен открываться")
+
+    monkeypatch.setattr(exporter, "choose_save_directory", fail_choose_directory)
+    monkeypatch.setattr("screenshooter.export.time.strftime", lambda fmt: "2026-10-05 00-59-00")
+    monkeypatch.setattr("screenshooter.export.os.startfile", lambda path: None, raising=False)
+
+    exporter.quick_save()
+
+    saved_file = tmp_path / "2026-10-05 00-59-00.png"
+    assert saved_file.is_file()
+    assert settings.save_directory == str(tmp_path)
