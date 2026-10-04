@@ -449,7 +449,10 @@ class HotkeyManager(QObject):
             # захват через ScreenshotApp.display_screenshot(): это гарантирует,
             # что настройки enhancer (включая инверсию) применяются до показа.
             target.screenshot_pixmap = pixmap
-            target.display_screenshot(source_is_autocad=source_is_autocad)
+            if source_is_autocad:
+                target.display_screenshot(source_is_autocad=True)
+            else:
+                target.display_screenshot()
         else:
             target.view.add_pasted_image(pixmap, screen_capture=screen_capture)
 
