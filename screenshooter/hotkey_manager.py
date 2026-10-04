@@ -496,11 +496,7 @@ class HotkeyManager(QObject):
                     target
                     or self.window_manager.create_editor_window(reusable=False)
                 )
-                self._deliver(
-                    target,
-                    pixmap,
-                    source_is_autocad=self._capture_source_is_autocad,
-                )
+                self._deliver(target, pixmap)
         except Exception as error:
             print(f"Ошибка захвата выбранного экрана: {error}")
         finally:
@@ -549,7 +545,11 @@ class HotkeyManager(QObject):
                     target
                     or self.window_manager.create_editor_window(reusable=False)
                 )
-                self._deliver(target, pixmap)
+                self._deliver(
+                    target,
+                    pixmap,
+                    source_is_autocad=self._capture_source_is_autocad,
+                )
         except Exception as error:
             print(f"Ошибка захвата экрана: {error}")
         finally:
@@ -640,9 +640,14 @@ class HotkeyManager(QObject):
                     target
                     or self.window_manager.create_editor_window(reusable=False)
                 )
-                self._deliver(target, pixmap)
+                self._deliver(
+                    target,
+                    pixmap,
+                    source_is_autocad=self._capture_source_is_autocad,
+                )
         except Exception as error:
             print(f"Ошибка захвата области: {error}")
         finally:
             self._finish(target)
+            self._capture_source_is_autocad = False
             self._request_pending = False
