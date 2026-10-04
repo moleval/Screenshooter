@@ -27,7 +27,7 @@ def test_default_values(temp_config):
     settings = AppSettings()
     assert settings.save_directory == ""
     assert settings.theme == "system"
-    assert settings.enhancer_enabled is False
+    assert settings.enhancer_enabled is True
     assert settings.enhancer_scale == "auto"
     assert settings.enhancer_text is True
     assert settings.enhancer_lines is True
@@ -45,7 +45,7 @@ def test_save_and_load(temp_config):
     settings2 = AppSettings()
     assert settings2.save_directory == "C:/test"
     assert settings2.theme == "dark"
-    assert settings2.enhancer_enabled is False
+    assert settings2.enhancer_enabled is True
     assert settings2.enhancer_scale == "auto"
     assert settings2.enhancer_color_mode == "auto"
 
