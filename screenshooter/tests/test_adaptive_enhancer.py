@@ -8,6 +8,7 @@ from PyQt5.QtGui import QColor, QImage
 from screenshooter.adaptive_enhancer import (
     EnhancerOptions,
     _build_feature_masks,
+    _choose_scale,
     enhance_image,
     is_dark_autocad_scheme,
 )
@@ -204,6 +205,12 @@ def _rgba_array(image):
     return np.ascontiguousarray(array[:, :source.width() * 4]).reshape(
         (source.height(), source.width(), 4)
     )
+
+
+def test_auto_scale_gives_cad_medium_large_images_a_moderate_upscale():
+    assert _choose_scale(3200, 1800, "auto") == 1.25
+    assert _choose_scale(3840, 2160, "auto") == 1.25
+    assert _choose_scale(4096, 2160, "auto") == 1.0
 
 
 def test_invert_mode_runs_enhancement_after_inversion(monkeypatch):
