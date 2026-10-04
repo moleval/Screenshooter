@@ -9,6 +9,7 @@ from screenshooter.adaptive_enhancer import (
     EnhancerOptions,
     _build_feature_masks,
     enhance_image,
+    is_dark_autocad_scheme,
 )
 
 
@@ -389,3 +390,21 @@ def test_monochrome_mode_detects_light_cad_lines():
         inverted=True,
     )
     assert float(masks["lines"].max()) > 0.0
+
+
+def test_dark_autocad_scheme_is_detected():
+    source = QImage(320, 200, QImage.Format_RGBA8888)
+    source.fill(QColor(20, 20, 20, 255))
+    for x in range(20, 301):
+        source.setPixelColor(x, 80, QColor(255, 255, 0, 255))
+
+    assert is_dark_autocad_scheme(source) is True
+
+
+def test_light_autocad_scheme_is_not_detected_as_dark():
+    source = QImage(320, 200, QImage.Format_RGBA8888)
+    source.fill(QColor(235, 235, 235, 255))
+    for x in range(20, 301):
+        source.setPixelColor(x, 80, QColor(30, 30, 30, 255))
+
+    assert is_dark_autocad_scheme(source) is False
