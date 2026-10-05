@@ -287,6 +287,21 @@ def _apply_directional_cad_detail(bgr, boundary_mask, gain=0.85):
 
 
 
+
+def _compress_cad_highlights(gray, feature_mask, start=170.0, reduction=24.0):
+    """Softly reduce only overly bright CAD strokes after inversion."""
+    gray_float = gray.astype(np.float32)
+    mask = np.clip(feature_mask.astype(np.float32), 0.0, 1.0)
+
+    strength = np.clip(
+        (gray_float - start) / max(255.0 - start, 1.0),
+        0.0,
+        1.0,
+    )
+    strength = np.power(strength, 1.6) * mask
+    delta = reduction * strength
+    return np.clip(gray_float - delta, 0.0, 255.0).astype(np.uint8)
+
 def _geometry_mask(gray):
     """Находит длинные прямые сегменты и угловые геометрические контуры."""
     edges = cv2.Canny(gray, 50, 150)
@@ -455,6 +470,16 @@ def enhance_image(image, options):
     bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
     if monochrome:
         gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+        highlight_geometry = _geometry_mask(gray)
+        highlight_directional = _directional_boundary_mask(gray)
+        highlight_mask = np.maximum(
+            highlight_geometry,
+            highlight_directional,
+        )
+        gray = _compress_cad_highlights(
+            gray,
+            highlight_mask,
+        )
         bgr = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
     else:
         gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
