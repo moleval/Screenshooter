@@ -243,7 +243,6 @@ def test_cad_highlight_compression_leaves_uniform_background_unchanged():
     assert int(result[10, 10]) == 235
     assert int(result[40, 60]) < 235
     assert int(result[40, 60]) >= 225
-    assert int(result[40, 60]) > int(result[10, 10])
 
 def test_geometry_detector_finds_long_segments():
     source = _feature_image()
