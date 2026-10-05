@@ -12,7 +12,9 @@ from screenshooter.adaptive_enhancer import (
     _build_feature_masks,
     _directional_boundary_mask,
     _compress_cad_highlights,
+    _dark_blue_mask,
     _dark_red_mask,
+    _tone_map_dark_blue_after_inversion,
     _tone_map_dark_red_after_inversion,
     _choose_scale,
     enhance_image,
@@ -259,6 +261,61 @@ def test_dark_red_after_inversion_becomes_light_gray_not_white():
 
     assert 190 <= int(result[15, 20]) <= 220
     assert int(result[0, 0]) == 255
+
+
+def test_dark_blue_mask_selects_saturated_blue_but_not_dark_neutral():
+    rgb = np.full((20, 30, 3), 20, dtype=np.uint8)
+    rgb[5:15, 5:20] = (0, 0, 220)
+    rgb[2:4, 2:10] = (20, 20, 20)
+
+    mask = _dark_blue_mask(rgb)
+
+    assert float(mask[8:12, 8:18].mean()) > 0.35
+    assert float(mask[2:4, 2:10].max()) < 0.01
+
+
+def test_dark_blue_after_inversion_becomes_light_gray_not_white():
+    rgb = np.full((30, 40, 3), 20, dtype=np.uint8)
+    rgb[10:20, 10:30] = (0, 0, 220)
+
+    dark_blue_mask = _dark_blue_mask(rgb)
+    inverted_gray = np.full((30, 40), 255, dtype=np.uint8)
+    inverted_gray[10:20, 10:30] = 230
+
+    result = _tone_map_dark_blue_after_inversion(
+        inverted_gray,
+        dark_blue_mask,
+    )
+
+    assert 190 <= int(result[15, 20]) <= 220
+    assert int(result[0, 0]) == 255
+
+
+def test_monochrome_dark_blue_line_becomes_light_gray():
+    source = QImage(40, 30, QImage.Format_RGBA8888)
+    source.fill(QColor(20, 20, 20, 255))
+    for y in range(10, 20):
+        for x in range(10, 30):
+            source.setPixelColor(x, y, QColor(0, 0, 220, 255))
+
+    result = enhance_image(
+        source,
+        EnhancerOptions(
+            enabled=True,
+            scale=1.0,
+            text=False,
+            lines=False,
+            ui=False,
+            geometry=False,
+            color_mode="monochrome",
+        ),
+    )
+
+    line = result.pixelColor(20, 15)
+    background = result.pixelColor(0, 0)
+    assert line.red() == line.green() == line.blue()
+    assert 190 <= line.red() <= 220
+    assert background.red() == background.green() == background.blue() == 255
 
 
 def test_cad_highlight_compression_leaves_uniform_background_unchanged():
