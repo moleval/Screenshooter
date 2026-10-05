@@ -295,10 +295,15 @@ def _dark_red_mask(rgb):
     green = rgb_float[:, :, 1]
     blue = rgb_float[:, :, 2]
 
-    # Для тёмно-красных CAD-штрихов важнее не абсолютный уровень
-    # красного, а сочетание тёмности и уверенного превосходства красного
-    # над зелёным/синим. Это даёт устойчивую маску и для тонких линий.
-    darkness = np.clip((180.0 - red) / 180.0, 0.0, 1.0)
+    # Оцениваем тёмность по воспринимаемой яркости, а цвет — по
+    # доминированию красного. Для нейтрального тёмного фона маска должна
+    # быть нулевой, иначе приглушение затронет весь CAD-снимок.
+    luminance = (
+        0.299 * red
+        + 0.587 * green
+        + 0.114 * blue
+    )
+    darkness = np.clip((140.0 - luminance) / 140.0, 0.0, 1.0)
     red_dominance = np.clip(
         (red - np.maximum(green, blue) - 8.0) / 100.0,
         0.0,
@@ -311,8 +316,42 @@ def _dark_red_mask(rgb):
     )
     mask = (
         darkness
-        * (0.55 + 0.45 * red_dominance)
+        * (0.20 + 0.80 * red_dominance)
         * (0.65 + 0.35 * low_green_blue)
+    )
+    return np.clip(mask, 0.0, 1.0).astype(np.float32)
+
+
+def _dark_blue_mask(rgb):
+    """Выделяет тёмно-синие CAD-объекты до инверсии."""
+    rgb_float = rgb.astype(np.float32)
+    red = rgb_float[:, :, 0]
+    green = rgb_float[:, :, 1]
+    blue = rgb_float[:, :, 2]
+
+    # Для синего важна именно воспринимаемая тёмность: насыщенный синий
+    # с B=255 всё равно выглядит тёмным и после инверсии становится
+    # жёлто-белым. Поэтому нельзя ограничиваться условием blue < N.
+    luminance = (
+        0.299 * red
+        + 0.587 * green
+        + 0.114 * blue
+    )
+    darkness = np.clip((140.0 - luminance) / 140.0, 0.0, 1.0)
+    blue_dominance = np.clip(
+        (blue - np.maximum(red, green) - 8.0) / 100.0,
+        0.0,
+        1.0,
+    )
+    low_red_green = np.clip(
+        (130.0 - np.maximum(red, green)) / 130.0,
+        0.0,
+        1.0,
+    )
+    mask = (
+        darkness
+        * (0.20 + 0.80 * blue_dominance)
+        * (0.65 + 0.35 * low_red_green)
     )
     return np.clip(mask, 0.0, 1.0).astype(np.float32)
 
@@ -328,6 +367,18 @@ def _tone_map_dark_red_after_inversion(gray, dark_red_mask):
     # Сильнее приглушаем уверенно распознанный красный штрих:
     # после инверсии он должен оставаться светло-серым, а не сливаться
     # с почти белым фоном.
+    reduction = 14.0 + 30.0 * mask
+    result = gray_float - reduction * mask
+    return np.clip(result, 0.0, 255.0).astype(np.uint8)
+
+
+def _tone_map_dark_blue_after_inversion(gray, dark_blue_mask):
+    """Уводит инвертированный тёмно-синий цвет в устойчивый светло-серый."""
+    gray_float = gray.astype(np.float32)
+    mask = np.clip(dark_blue_mask.astype(np.float32), 0.0, 1.0)
+
+    # Насыщенный синий на тёмной CAD-подложке после RGB-инверсии
+    # становится жёлто-белым. Приглушаем только распознанный синий штрих.
     reduction = 14.0 + 30.0 * mask
     result = gray_float - reduction * mask
     return np.clip(result, 0.0, 255.0).astype(np.uint8)
@@ -490,6 +541,7 @@ def enhance_image(image, options):
     invert = options.color_mode == "invert"
     monochrome = options.color_mode == "monochrome"
     dark_red_mask = _dark_red_mask(rgb) if monochrome else None
+    dark_blue_mask = _dark_blue_mask(rgb) if monochrome else None
 
     scale = _choose_scale(image.width(), image.height(), options.scale)
     if scale != 1.0:
@@ -503,6 +555,14 @@ def enhance_image(image, options):
         if dark_red_mask is not None:
             dark_red_mask = cv2.resize(
                 dark_red_mask,
+                None,
+                fx=scale,
+                fy=scale,
+                interpolation=cv2.INTER_LINEAR,
+            )
+        if dark_blue_mask is not None:
+            dark_blue_mask = cv2.resize(
+                dark_blue_mask,
                 None,
                 fx=scale,
                 fy=scale,
@@ -532,6 +592,10 @@ def enhance_image(image, options):
         gray = _tone_map_dark_red_after_inversion(
             gray,
             dark_red_mask,
+        )
+        gray = _tone_map_dark_blue_after_inversion(
+            gray,
+            dark_blue_mask,
         )
         highlight_geometry = _geometry_mask(gray)
         highlight_directional = _directional_boundary_mask(gray)
