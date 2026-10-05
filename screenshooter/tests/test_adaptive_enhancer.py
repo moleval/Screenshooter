@@ -2,12 +2,15 @@
 Тесты адаптивного улучшайзера.
 """
 
+import cv2
 import numpy as np
 from PyQt5.QtGui import QColor, QImage
 
 from screenshooter.adaptive_enhancer import (
     EnhancerOptions,
+    _apply_directional_cad_detail,
     _build_feature_masks,
+    _directional_boundary_mask,
     _choose_scale,
     enhance_image,
     is_dark_autocad_scheme,
@@ -167,6 +170,40 @@ def test_line_detector_finds_thin_horizontal_and_vertical_lines():
     )
 
     assert float(masks["lines"].max()) > 0.0
+
+
+
+def test_directional_boundary_mask_detects_horizontal_and_vertical_cad_edges():
+    image = np.full((120, 180), 220, dtype=np.uint8)
+    image[35:37, 20:160] = 30
+    image[55:105, 90:92] = 30
+
+    mask = _directional_boundary_mask(image)
+
+    assert float(mask[35:37, 40:150].max()) > 0.4
+    assert float(mask[65:100, 90:92].max()) > 0.4
+    assert float(mask[75:85, 40:70].max()) < 0.15
+
+
+def test_directional_cad_detail_increases_thin_line_contrast():
+    image = np.full((100, 160), 220, dtype=np.uint8)
+    image[48:50, 20:140] = 50
+    bgr = np.repeat(image[:, :, None], 3, axis=2)
+
+    mask = _directional_boundary_mask(image)
+    result = _apply_directional_cad_detail(bgr, mask, gain=0.85)
+    result_gray = cv2.cvtColor(result, cv2.COLOR_BGR2GRAY)
+
+    source_contrast = (
+        float(image[48:50, 50:120].mean())
+        - float(image[43:45, 50:120].mean())
+    )
+    result_contrast = (
+        float(result_gray[48:50, 50:120].mean())
+        - float(result_gray[43:45, 50:120].mean())
+    )
+
+    assert result_contrast < source_contrast
 
 
 def test_geometry_detector_finds_long_segments():
