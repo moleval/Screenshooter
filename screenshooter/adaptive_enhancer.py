@@ -288,6 +288,41 @@ def _apply_directional_cad_detail(bgr, boundary_mask, gain=0.85):
 
 
 
+def _dark_red_mask(rgb):
+    """Выделяет тёмно-красные CAD-объекты до инверсии."""
+    rgb_float = rgb.astype(np.float32)
+    red = rgb_float[:, :, 0]
+    green = rgb_float[:, :, 1]
+    blue = rgb_float[:, :, 2]
+
+    darkness = np.clip((150.0 - red) / 150.0, 0.0, 1.0)
+    red_dominance = np.clip(
+        (red - np.maximum(green, blue) - 12.0) / 110.0,
+        0.0,
+        1.0,
+    )
+    low_green_blue = np.clip(
+        (115.0 - np.maximum(green, blue)) / 115.0,
+        0.0,
+        1.0,
+    )
+    mask = darkness * red_dominance * low_green_blue
+    return np.clip(mask, 0.0, 1.0).astype(np.float32)
+
+
+def _tone_map_dark_red_after_inversion(gray, dark_red_mask):
+    """Уводит инвертированный тёмно-красный цвет в устойчивый светло-серый."""
+    gray_float = gray.astype(np.float32)
+    mask = np.clip(dark_red_mask.astype(np.float32), 0.0, 1.0)
+
+    # Не превращаем тёмно-красные объекты в белые пятна: после инверсии
+    # слегка приглушаем только их яркость. Это одновременно повышает
+    # различимость тонких красных линий на почти белом фоне.
+    reduction = 10.0 + 18.0 * mask
+    result = gray_float - reduction * mask
+    return np.clip(result, 0.0, 255.0).astype(np.uint8)
+
+
 def _compress_cad_highlights(gray, feature_mask, start=170.0, reduction=24.0):
     """Softly reduce only overly bright CAD strokes after inversion."""
     gray_float = gray.astype(np.float32)
@@ -475,6 +510,13 @@ def enhance_image(image, options):
     bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
     if monochrome:
         gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+        dark_red_mask = _dark_red_mask(
+            cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+        )
+        gray = _tone_map_dark_red_after_inversion(
+            gray,
+            dark_red_mask,
+        )
         highlight_geometry = _geometry_mask(gray)
         highlight_directional = _directional_boundary_mask(gray)
         highlight_mask = np.maximum(
