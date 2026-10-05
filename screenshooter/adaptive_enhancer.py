@@ -201,6 +201,24 @@ def _directional_boundary_mask(gray):
     return np.clip((response - 0.12) / 0.88, 0.0, 1.0).astype(np.float32)
 
 
+def _directional_gaussian_kernel(angle, sigma_t=0.35, sigma_n=1.15, size=9):
+    """Строит анизотропное ядро вдоль заданного направления штриха."""
+    radius = size // 2
+    axis = np.arange(-radius, radius + 1, dtype=np.float32)
+    yy, xx = np.meshgrid(axis, axis)
+
+    tangent = xx * np.cos(angle) + yy * np.sin(angle)
+    normal = -xx * np.sin(angle) + yy * np.cos(angle)
+
+    kernel = np.exp(
+        -0.5 * (
+            (tangent / sigma_t) ** 2
+            + (normal / sigma_n) ** 2
+        )
+    ).astype(np.float32)
+    return kernel / max(float(kernel.sum()), 1e-6)
+
+
 def _apply_directional_cad_detail(bgr, boundary_mask, gain=0.85):
     """Усиливает тонкие CAD-штрихи вдоль их собственной ориентации."""
     gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY).astype(np.float32)
@@ -209,28 +227,62 @@ def _apply_directional_cad_detail(bgr, boundary_mask, gain=0.85):
     gy = cv2.Sobel(gray, cv2.CV_32F, 0, 1, ksize=3)
     gx2 = cv2.GaussianBlur(gx * gx, (0, 0), 1.0)
     gy2 = cv2.GaussianBlur(gy * gy, (0, 0), 1.0)
-    total = gx2 + gy2 + 1e-3
+    gxy = cv2.GaussianBlur(gx * gy, (0, 0), 1.0)
 
-    vertical_edge = gx2 / total
-    horizontal_edge = gy2 / total
-
-    # Для горизонтальной линии граница вертикальна -> размываем поперёк Y.
-    # Для вертикальной линии граница горизонтальна -> размываем поперёк X.
-    horizontal_response = gray - cv2.GaussianBlur(
-        gray, (0, 0), sigmaX=0.35, sigmaY=1.15
+    # Оцениваем ориентацию локального градиента, а затем переводим её
+    # в ориентацию самого штриха. Это позволяет обрабатывать не только
+    # горизонтали/вертикали, но и типичные диагональные CAD-линии.
+    gradient_angle = 0.5 * np.arctan2(
+        2.0 * gxy,
+        gx2 - gy2 + 1e-3,
     )
-    vertical_response = gray - cv2.GaussianBlur(
-        gray, (0, 0), sigmaX=1.15, sigmaY=0.35
-    )
+    line_angle = gradient_angle + (np.pi / 2.0)
 
-    directional = (
-        horizontal_response * horizontal_edge
-        + vertical_response * vertical_edge
+    directions = (
+        0.0,
+        np.pi / 2.0,
+        np.pi / 4.0,
+        -np.pi / 4.0,
+    )
+    orientation_weights = []
+    for direction in directions:
+        weight = (
+            0.5
+            * (
+                1.0
+                + np.cos(2.0 * (line_angle - direction))
+            )
+        )
+        orientation_weights.append(np.power(np.clip(weight, 0.0, 1.0), 4.0))
+
+    weights = np.stack(orientation_weights, axis=0)
+    weights /= np.maximum(weights.sum(axis=0), 1e-3)
+
+    # Анизотропные high-pass для четырёх основных направлений.
+    # Узкое направление вдоль штриха и более широкое поперёк него
+    # помогают не раздувать саму CAD-линию.
+    responses = []
+    for direction in directions:
+        kernel = _directional_gaussian_kernel(direction)
+        blurred = cv2.filter2D(
+            gray,
+            cv2.CV_32F,
+            kernel,
+            borderType=cv2.BORDER_REPLICATE,
+        )
+        responses.append(gray - blurred)
+
+    directional = sum(
+        response * weight
+        for response, weight in zip(responses, weights)
     )
     directional = np.clip(directional, -32.0, 32.0)
 
     strength = boundary_mask * gain
-    result = bgr.astype(np.float32) + directional[:, :, None] * strength[:, :, None]
+    result = (
+        bgr.astype(np.float32)
+        + directional[:, :, None] * strength[:, :, None]
+    )
     return result.clip(0, 255).astype(np.uint8)
 
 
