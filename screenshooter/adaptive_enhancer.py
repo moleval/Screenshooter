@@ -295,18 +295,25 @@ def _dark_red_mask(rgb):
     green = rgb_float[:, :, 1]
     blue = rgb_float[:, :, 2]
 
-    darkness = np.clip((150.0 - red) / 150.0, 0.0, 1.0)
+    # Для тёмно-красных CAD-штрихов важнее не абсолютный уровень
+    # красного, а сочетание тёмности и уверенного превосходства красного
+    # над зелёным/синим. Это даёт устойчивую маску и для тонких линий.
+    darkness = np.clip((180.0 - red) / 180.0, 0.0, 1.0)
     red_dominance = np.clip(
-        (red - np.maximum(green, blue) - 12.0) / 110.0,
+        (red - np.maximum(green, blue) - 8.0) / 100.0,
         0.0,
         1.0,
     )
     low_green_blue = np.clip(
-        (115.0 - np.maximum(green, blue)) / 115.0,
+        (130.0 - np.maximum(green, blue)) / 130.0,
         0.0,
         1.0,
     )
-    mask = darkness * red_dominance * low_green_blue
+    mask = (
+        darkness
+        * (0.55 + 0.45 * red_dominance)
+        * (0.65 + 0.35 * low_green_blue)
+    )
     return np.clip(mask, 0.0, 1.0).astype(np.float32)
 
 
@@ -318,7 +325,10 @@ def _tone_map_dark_red_after_inversion(gray, dark_red_mask):
     # Не превращаем тёмно-красные объекты в белые пятна: после инверсии
     # слегка приглушаем только их яркость. Это одновременно повышает
     # различимость тонких красных линий на почти белом фоне.
-    reduction = 10.0 + 18.0 * mask
+    # Сильнее приглушаем уверенно распознанный красный штрих:
+    # после инверсии он должен оставаться светло-серым, а не сливаться
+    # с почти белым фоном.
+    reduction = 14.0 + 30.0 * mask
     result = gray_float - reduction * mask
     return np.clip(result, 0.0, 255.0).astype(np.uint8)
 
@@ -490,6 +500,14 @@ def enhance_image(image, options):
             fy=scale,
             interpolation=cv2.INTER_LANCZOS4,
         )
+        if dark_red_mask is not None:
+            dark_red_mask = cv2.resize(
+                dark_red_mask,
+                None,
+                fx=scale,
+                fy=scale,
+                interpolation=cv2.INTER_LINEAR,
+            )
         alpha = cv2.resize(
             alpha,
             None,
