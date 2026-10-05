@@ -214,11 +214,17 @@ class TrayManager(QObject):
         self.update_windows_menu()
 
     def _create_new_window(self):
-        """Создаёт новое независимое пустое окно редактора."""
+        """Создаёт новое независимое пустое окно редактора во весь экран."""
         if self.window_manager is None:
             return
         window = self.window_manager.create_editor_window(reusable=True, show=True)
         self._activate_window(window)
+        # Новое пустое окно из двойного клика по трею сразу разворачиваем
+        # на весь доступный экран, не меняя поведение обычного показа окон.
+        window.showMaximized()
+        window.raise_()
+        window.activateWindow()
+        self.update_windows_menu()
 
     def _toggle_all_windows(self):
         if self.window_manager is None:
