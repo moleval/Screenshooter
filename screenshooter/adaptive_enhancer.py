@@ -182,7 +182,15 @@ def _directional_boundary_mask(gray):
     anisotropy = np.abs(gx2 - gy2) / (gx2 + gy2 + 1e-3)
     gradient = np.sqrt(gx2 + gy2)
 
-    reference = float(np.percentile(gradient, 90))
+    # CAD-линии занимают малую долю кадра, поэтому глобальный 90-й
+    # перцентиль часто оказывается равен нулю: почти весь кадр — фон.
+    # Нормируемся по ненулевым градиентам, иначе разреженные тонкие
+    # размерные линии вообще не попадут в directional pass.
+    positive_gradient = gradient[gradient > 1.0]
+    if positive_gradient.size == 0:
+        return np.zeros_like(gray_float)
+
+    reference = float(np.percentile(positive_gradient, 75))
     if reference <= 1.0:
         return np.zeros_like(gray_float)
 
