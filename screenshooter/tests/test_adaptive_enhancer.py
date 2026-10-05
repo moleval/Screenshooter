@@ -207,6 +207,28 @@ def test_directional_cad_detail_increases_thin_line_contrast():
     assert result_edge_contrast > source_edge_contrast
 
 
+def test_directional_cad_detail_increases_diagonal_line_contrast():
+    image = np.full((140, 140), 220, dtype=np.uint8)
+    cv2.line(image, (25, 25), (115, 115), 50, 2)
+    bgr = np.repeat(image[:, :, None], 3, axis=2)
+
+    mask = _directional_boundary_mask(image)
+    result = _apply_directional_cad_detail(bgr, mask, gain=0.85)
+    result_gray = cv2.cvtColor(result, cv2.COLOR_BGR2GRAY)
+
+    source_edge_contrast = abs(
+        float(image[64, 65:100].mean())
+        - float(image[65, 65:100].mean())
+    )
+    result_edge_contrast = abs(
+        float(result_gray[64, 65:100].mean())
+        - float(result_gray[65, 65:100].mean())
+    )
+
+    assert float(mask[45:105, 45:105].max()) > 0.25
+    assert result_edge_contrast > source_edge_contrast
+
+
 def test_geometry_detector_finds_long_segments():
     source = _feature_image()
     gray = _gray_array(source)
