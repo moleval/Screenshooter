@@ -65,6 +65,9 @@ class SettingsDialog(QDialog):
         self.enhancer_enabled_check.setChecked(
             getattr(self.settings, "enhancer_enabled", True)
         )
+        self.enhancer_enabled_check.toggled.connect(
+            self._on_enhancer_enabled_toggled
+        )
         enhancer_layout.addRow(self.enhancer_enabled_check)
 
         self.enhancer_scale_combo = QComboBox()
@@ -129,6 +132,16 @@ class SettingsDialog(QDialog):
         buttons.accepted.connect(self._accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+
+    def _on_enhancer_enabled_toggled(self, enabled):
+        """При включении автоматически активирует все профили улучшения."""
+        if not enabled:
+            return
+
+        self.enhancer_text_check.setChecked(True)
+        self.enhancer_lines_check.setChecked(True)
+        self.enhancer_ui_check.setChecked(True)
+        self.enhancer_geometry_check.setChecked(True)
 
     def _choose_save_directory(self):
         directory = QFileDialog.getExistingDirectory(
