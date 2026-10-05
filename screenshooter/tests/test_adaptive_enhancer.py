@@ -11,6 +11,7 @@ from screenshooter.adaptive_enhancer import (
     _apply_directional_cad_detail,
     _build_feature_masks,
     _directional_boundary_mask,
+    _compress_cad_highlights,
     _choose_scale,
     enhance_image,
     is_dark_autocad_scheme,
@@ -217,17 +218,32 @@ def test_directional_cad_detail_increases_diagonal_line_contrast():
     result_gray = cv2.cvtColor(result, cv2.COLOR_BGR2GRAY)
 
     source_edge_contrast = abs(
-        float(image[64, 65:100].mean())
-        - float(image[65, 65:100].mean())
+        float(image[70, 70])
+        - float(image[70, 66])
     )
     result_edge_contrast = abs(
-        float(result_gray[64, 65:100].mean())
-        - float(result_gray[65, 65:100].mean())
+        float(result_gray[70, 70])
+        - float(result_gray[70, 66])
     )
 
     assert float(mask[45:105, 45:105].max()) > 0.25
     assert result_edge_contrast > source_edge_contrast
 
+
+
+def test_cad_highlight_compression_leaves_uniform_background_unchanged():
+    gray = np.full((80, 120), 235, dtype=np.uint8)
+    gray[39:41, 20:100] = 255
+
+    feature_mask = np.zeros_like(gray, dtype=np.float32)
+    feature_mask[38:42, 20:100] = 1.0
+
+    result = _compress_cad_highlights(gray, feature_mask)
+
+    assert int(result[10, 10]) == 235
+    assert int(result[40, 60]) < 235
+    assert int(result[40, 60]) >= 225
+    assert int(result[40, 60]) > int(result[10, 10])
 
 def test_geometry_detector_finds_long_segments():
     source = _feature_image()
