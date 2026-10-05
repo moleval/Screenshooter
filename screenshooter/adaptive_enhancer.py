@@ -316,7 +316,7 @@ def _dark_red_mask(rgb):
     )
     mask = (
         darkness
-        * (0.20 + 0.80 * red_dominance)
+        * red_dominance
         * (0.65 + 0.35 * low_green_blue)
     )
     return np.clip(mask, 0.0, 1.0).astype(np.float32)
@@ -350,7 +350,7 @@ def _dark_blue_mask(rgb):
     )
     mask = (
         darkness
-        * (0.20 + 0.80 * blue_dominance)
+        * blue_dominance
         * (0.65 + 0.35 * low_red_green)
     )
     return np.clip(mask, 0.0, 1.0).astype(np.float32)
@@ -712,6 +712,25 @@ def enhance_image(image, options):
         gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
         if inverted_white is not None:
             gray[inverted_white] = 255
+
+        # В тёмной схеме AutoCAD нейтрально-тёмная подложка должна стать
+        # чисто белой. Цветные тёмные штрихи сюда не попадают: их высокая
+        # цветовая насыщенность уже обрабатывается отдельными масками.
+        source_rgb_float = rgb.astype(np.float32)
+        source_luminance = (
+            0.299 * source_rgb_float[:, :, 0]
+            + 0.587 * source_rgb_float[:, :, 1]
+            + 0.114 * source_rgb_float[:, :, 2]
+        )
+        source_chroma = (
+            source_rgb_float.max(axis=2)
+            - source_rgb_float.min(axis=2)
+        )
+        neutral_dark_background = (
+            (source_luminance < 80.0)
+            & (source_chroma < 15.0)
+        )
+        gray[neutral_dark_background] = 255
         bgr = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
     elif not invert:
         bgr = _apply_color_mode(bgr, options.color_mode)
