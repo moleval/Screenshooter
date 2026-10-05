@@ -479,6 +479,7 @@ def enhance_image(image, options):
 
     invert = options.color_mode == "invert"
     monochrome = options.color_mode == "monochrome"
+    dark_red_mask = _dark_red_mask(rgb) if monochrome else None
 
     scale = _choose_scale(image.width(), image.height(), options.scale)
     if scale != 1.0:
@@ -510,9 +511,6 @@ def enhance_image(image, options):
     bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
     if monochrome:
         gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
-        dark_red_mask = _dark_red_mask(
-            cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
-        )
         gray = _tone_map_dark_red_after_inversion(
             gray,
             dark_red_mask,
