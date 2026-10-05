@@ -194,16 +194,17 @@ def test_directional_cad_detail_increases_thin_line_contrast():
     result = _apply_directional_cad_detail(bgr, mask, gain=0.85)
     result_gray = cv2.cvtColor(result, cv2.COLOR_BGR2GRAY)
 
-    source_contrast = (
-        float(image[48:50, 50:120].mean())
-        - float(image[43:45, 50:120].mean())
+    source_edge_contrast = abs(
+        float(image[47, 50:120].mean())
+        - float(image[48, 50:120].mean())
     )
-    result_contrast = (
-        float(result_gray[48:50, 50:120].mean())
-        - float(result_gray[43:45, 50:120].mean())
+    result_edge_contrast = abs(
+        float(result_gray[47, 50:120].mean())
+        - float(result_gray[48, 50:120].mean())
     )
 
-    assert result_contrast < source_contrast
+    # Проверяем именно локальную границу, а не среднюю яркость всей линии.
+    assert result_edge_contrast > source_edge_contrast
 
 
 def test_geometry_detector_finds_long_segments():
