@@ -536,6 +536,7 @@ def enhance_image(image, options):
     rgba = _qimage_to_rgba(image)
     alpha = rgba[:, :, 3].copy()
     rgb = rgba[:, :, :3].copy()
+    source_rgb = rgb.copy()
     bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
 
     invert = options.color_mode == "invert"
@@ -568,6 +569,13 @@ def enhance_image(image, options):
                 fy=scale,
                 interpolation=cv2.INTER_LINEAR,
             )
+        source_rgb = cv2.resize(
+            source_rgb,
+            None,
+            fx=scale,
+            fy=scale,
+            interpolation=cv2.INTER_LANCZOS4,
+        )
         alpha = cv2.resize(
             alpha,
             None,
@@ -716,7 +724,7 @@ def enhance_image(image, options):
         # В тёмной схеме AutoCAD нейтрально-тёмная подложка должна стать
         # чисто белой. Цветные тёмные штрихи сюда не попадают: их высокая
         # цветовая насыщенность уже обрабатывается отдельными масками.
-        source_rgb_float = rgb.astype(np.float32)
+        source_rgb_float = source_rgb.astype(np.float32)
         source_luminance = (
             0.299 * source_rgb_float[:, :, 0]
             + 0.587 * source_rgb_float[:, :, 1]
