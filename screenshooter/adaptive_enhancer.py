@@ -168,6 +168,65 @@ def _line_mask(gray, inverted=False):
     return _normalise_mask(lines, 0.65)
 
 
+def _directional_boundary_mask(gray):
+    """Выделяет направленные границы без расширения самой CAD-линии."""
+    gray_float = gray.astype(np.float32)
+
+    gx = cv2.Sobel(gray_float, cv2.CV_32F, 1, 0, ksize=3)
+    gy = cv2.Sobel(gray_float, cv2.CV_32F, 0, 1, ksize=3)
+    gx2 = cv2.GaussianBlur(gx * gx, (0, 0), 1.0)
+    gy2 = cv2.GaussianBlur(gy * gy, (0, 0), 1.0)
+
+    # Чем сильнее одна компонента градиента доминирует над другой,
+    # тем увереннее это именно направленная граница, а не шум/угол.
+    anisotropy = np.abs(gx2 - gy2) / (gx2 + gy2 + 1e-3)
+    gradient = np.sqrt(gx2 + gy2)
+
+    reference = float(np.percentile(gradient, 90))
+    if reference <= 1.0:
+        return np.zeros_like(gray_float)
+
+    response = np.clip(gradient / reference, 0.0, 1.0) * anisotropy
+    response = cv2.GaussianBlur(response, (0, 0), 0.45)
+
+    # Отсекаем слабые границы, чтобы не превращать CAD-фон в зерно.
+    return np.clip((response - 0.12) / 0.88, 0.0, 1.0).astype(np.float32)
+
+
+def _apply_directional_cad_detail(bgr, boundary_mask, gain=0.85):
+    """Усиливает тонкие CAD-штрихи вдоль их собственной ориентации."""
+    gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY).astype(np.float32)
+
+    gx = cv2.Sobel(gray, cv2.CV_32F, 1, 0, ksize=3)
+    gy = cv2.Sobel(gray, cv2.CV_32F, 0, 1, ksize=3)
+    gx2 = cv2.GaussianBlur(gx * gx, (0, 0), 1.0)
+    gy2 = cv2.GaussianBlur(gy * gy, (0, 0), 1.0)
+    total = gx2 + gy2 + 1e-3
+
+    vertical_edge = gx2 / total
+    horizontal_edge = gy2 / total
+
+    # Для горизонтальной линии граница вертикальна -> размываем поперёк Y.
+    # Для вертикальной линии граница горизонтальна -> размываем поперёк X.
+    horizontal_response = gray - cv2.GaussianBlur(
+        gray, (0, 0), sigmaX=0.35, sigmaY=1.15
+    )
+    vertical_response = gray - cv2.GaussianBlur(
+        gray, (0, 0), sigmaX=1.15, sigmaY=0.35
+    )
+
+    directional = (
+        horizontal_response * horizontal_edge
+        + vertical_response * vertical_edge
+    )
+    directional = np.clip(directional, -32.0, 32.0)
+
+    strength = boundary_mask * gain
+    result = bgr.astype(np.float32) + directional[:, :, None] * strength[:, :, None]
+    return result.clip(0, 255).astype(np.uint8)
+
+
+
 def _geometry_mask(gray):
     """Находит длинные прямые сегменты и угловые геометрические контуры."""
     edges = cv2.Canny(gray, 50, 150)
@@ -422,6 +481,20 @@ def enhance_image(image, options):
             bgr.astype(np.float32) * (1.0 - mask)
             + sharpened.astype(np.float32) * mask
         ).clip(0, 255).astype(np.uint8)
+
+        # Отдельный CAD-проход: не повышаем общую резкость кадра,
+        # а усиливаем только направленные границы тонких штрихов.
+        # Это особенно полезно для размерных линий и мелких элементов
+        # чертежа, где обычный unsharp mask даёт ореолы.
+        if cad_profile:
+            directional_mask = _directional_boundary_mask(
+                cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+            )
+            bgr = _apply_directional_cad_detail(
+                bgr,
+                directional_mask,
+                gain=0.85,
+            )
 
     if monochrome:
         gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
