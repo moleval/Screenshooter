@@ -29,6 +29,10 @@ class TrayManager(QObject):
             icon = QIcon()
 
         self.tray_icon = QSystemTrayIcon(icon, self)
+        self._single_click_timer = QTimer(self)
+        self._single_click_timer.setSingleShot(True)
+        self._single_click_timer.setInterval(250)
+        self._single_click_timer.timeout.connect(self._toggle_all_windows)
         self.tray_icon.setToolTip("Скриншотер")
 
         self.menu = QMenu()
@@ -340,13 +344,20 @@ class TrayManager(QObject):
 
     def _on_activated(self, reason):
         if reason == QSystemTrayIcon.Trigger:
-            self._toggle_all_windows()
+            # Windows/Qt могут прислать Trigger перед DoubleClick.
+            # Откладываем одиночный клик, чтобы двойной не выполнял два действия.
+            self._single_click_timer.start()
             return
-        target = self._current_window()
-        if target is None:
-            return
+
         if reason == QSystemTrayIcon.DoubleClick:
-            target.show_from_tray()
+            self._single_click_timer.stop()
+            self._create_new_window()
+            return
+
+        if reason == QSystemTrayIcon.MiddleClick:
+            target = self._current_window()
+            if target is not None:
+                self._activate_window(target)
 
     def show_message(self, title: str, message: str):
         self.tray_icon.showMessage(title, message, QSystemTrayIcon.Information, 3000)
