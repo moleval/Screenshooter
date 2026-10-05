@@ -169,23 +169,24 @@ def _line_mask(gray, inverted=False):
 
 
 def _directional_boundary_mask(gray):
-    """Выделяет направленные границы без расширения самой CAD-линии."""
+    """Выделяет направленные границы, включая диагональные CAD-линии."""
     gray_float = gray.astype(np.float32)
 
     gx = cv2.Sobel(gray_float, cv2.CV_32F, 1, 0, ksize=3)
     gy = cv2.Sobel(gray_float, cv2.CV_32F, 0, 1, ksize=3)
     gx2 = cv2.GaussianBlur(gx * gx, (0, 0), 1.0)
     gy2 = cv2.GaussianBlur(gy * gy, (0, 0), 1.0)
+    gxy = cv2.GaussianBlur(gx * gy, (0, 0), 1.0)
 
-    # Чем сильнее одна компонента градиента доминирует над другой,
-    # тем увереннее это именно направленная граница, а не шум/угол.
-    anisotropy = np.abs(gx2 - gy2) / (gx2 + gy2 + 1e-3)
-    gradient = np.sqrt(gx2 + gy2)
+    trace = gx2 + gy2
+    discriminant = np.sqrt(
+        np.maximum((gx2 - gy2) ** 2 + 4.0 * gxy * gxy, 0.0)
+    )
+    # Коэффициент когерентности структуры не зависит от того, является
+    # линия горизонтальной, вертикальной или диагональной.
+    coherence = discriminant / (trace + 1e-3)
+    gradient = np.sqrt(np.maximum(trace, 0.0))
 
-    # CAD-линии занимают малую долю кадра, поэтому глобальный 90-й
-    # перцентиль часто оказывается равен нулю: почти весь кадр — фон.
-    # Нормируемся по ненулевым градиентам, иначе разреженные тонкие
-    # размерные линии вообще не попадут в directional pass.
     positive_gradient = gradient[gradient > 1.0]
     if positive_gradient.size == 0:
         return np.zeros_like(gray_float)
@@ -194,10 +195,9 @@ def _directional_boundary_mask(gray):
     if reference <= 1.0:
         return np.zeros_like(gray_float)
 
-    response = np.clip(gradient / reference, 0.0, 1.0) * anisotropy
+    response = np.clip(gradient / reference, 0.0, 1.0) * coherence
     response = cv2.GaussianBlur(response, (0, 0), 0.45)
 
-    # Отсекаем слабые границы, чтобы не превращать CAD-фон в зерно.
     return np.clip((response - 0.12) / 0.88, 0.0, 1.0).astype(np.float32)
 
 
