@@ -464,8 +464,13 @@ def enhance_image(image, options):
 
     # В монохромном режиме CAD-снимок сначала инвертируется,
     # затем переводится в оттенки серого: белая геометрия на тёмном фоне.
+    inverted_white = None
     if invert or monochrome:
         rgb = (255 - rgb.astype(np.int16)).astype(np.uint8)
+        if monochrome:
+            # Не даём последующим CAD-фильтрам затемнить пиксели,
+            # которые были чисто чёрными в исходном изображении.
+            inverted_white = np.all(rgb == 255, axis=2)
 
     bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
     if monochrome:
@@ -583,6 +588,8 @@ def enhance_image(image, options):
 
     if monochrome:
         gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+        if inverted_white is not None:
+            gray[inverted_white] = 255
         bgr = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
     elif not invert:
         bgr = _apply_color_mode(bgr, options.color_mode)
