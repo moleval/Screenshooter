@@ -958,9 +958,10 @@ class ScreenshotApp(QMainWindow):
             self.screenshot_pixmap = QPixmap.fromImage(enhanced)
             self._background_enhanced = True
 
-    def display_screenshot(self, source_is_autocad=False):
+    def display_screenshot(self, source_is_autocad=False, already_preprocessed=False):
         self._captured_window_is_autocad = bool(source_is_autocad)
-        self._prepare_captured_pixmap()
+        if not already_preprocessed:
+            self._prepare_captured_pixmap()
         self.view.clear_pasted_images()
         self.scene.clear()
         self.view.active_text_item = None
