@@ -12,6 +12,7 @@ import os
 import tempfile
 import time
 
+
 import win32com.client
 import win32gui
 from PyQt5.QtCore import QRect
@@ -24,6 +25,10 @@ AC_WINDOW = 4
 AC_SCALE_TO_FIT = 0
 AC_0_DEGREES = 0
 AC_90_DEGREES = 1
+
+
+def _diagnostic(message):
+    print(f"[AUTOCAD PDF] {message}", flush=True)
 
 
 def _variant_point(values):
@@ -340,8 +345,10 @@ def capture_autocad_region_via_pdf(hwnd, screen_rect, *, dpi=600, timeout=30.0):
     if screen_rect is None or screen_rect.isNull():
         return None
 
+    _diagnostic("запуск захвата")
     acad = _get_acad_application()
     if acad is None:
+        _diagnostic("FALLBACK: AutoCAD не найден через COM")
         return None
 
     temp_dir = tempfile.mkdtemp(prefix="screenshooter_autocad_pdf_")
@@ -353,9 +360,12 @@ def capture_autocad_region_via_pdf(hwnd, screen_rect, *, dpi=600, timeout=30.0):
 
     try:
         document = acad.ActiveDocument
+        _diagnostic("connected")
         lower_left, upper_right = screen_rect_to_autocad_window(
             document, hwnd, screen_rect
         )
+
+        _diagnostic(f"WCS window: {lower_left} -> {upper_right}")
 
         layout = document.ActiveLayout
         snapshot = _snapshot_layout(layout)
@@ -368,16 +378,24 @@ def capture_autocad_region_via_pdf(hwnd, screen_rect, *, dpi=600, timeout=30.0):
         document.SetVariable("BACKGROUNDPLOT", 1)
         _configure_monochrome_pdf(layout, lower_left, upper_right)
         document.Regen(0)
+        _diagnostic("plotting...")
 
         result = document.Plot.PlotToFile(pdf_path)
         if result is False:
+            _diagnostic("FALLBACK: PlotToFile вернул False")
             return None
 
         if not _wait_for_file(pdf_path, timeout):
+            _diagnostic("FALLBACK: PDF не появился или не стабилизировался")
             return None
 
-        return _render_pdf_to_qimage(pdf_path, dpi)
-    except Exception:
+        _diagnostic(f"PDF created: {pdf_path}")
+        image = _render_pdf_to_qimage(pdf_path, dpi)
+        _diagnostic(f"rendered at {dpi} DPI: {image.width()}x{image.height()}")
+        _diagnostic("SUCCESS")
+        return image
+    except Exception as error:
+        _diagnostic(f"FALLBACK: {type(error).__name__}: {error}")
         return None
     finally:
         if document is not None and layout is not None and snapshot is not None:
