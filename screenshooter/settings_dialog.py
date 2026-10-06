@@ -121,6 +121,24 @@ class SettingsDialog(QDialog):
 
         layout.addWidget(enhancer_group)
 
+        autocad_group = QGroupBox("AutoCAD")
+        autocad_layout = QFormLayout(autocad_group)
+
+        self.dwg_to_pdf_check = QCheckBox(
+            "DWG TO PDF — захватывать область через DWG To PDF.pc3"
+        )
+        self.dwg_to_pdf_check.setToolTip(
+            "Включает экспериментальный путь AutoCAD: область сначала "
+            "плотится в PDF через DWG To PDF.pc3, затем PDF растрируется. "
+            "При выключенном режиме используется обычный экранный захват."
+        )
+        self.dwg_to_pdf_check.setChecked(
+            getattr(self.settings, "dwg_to_pdf", False)
+        )
+        autocad_layout.addRow(self.dwg_to_pdf_check)
+
+        layout.addWidget(autocad_group)
+
         layout.addStretch(1)
 
         buttons = QDialogButtonBox(
@@ -163,6 +181,7 @@ class SettingsDialog(QDialog):
         self.settings.enhancer_ui = self.enhancer_ui_check.isChecked()
         self.settings.enhancer_geometry = self.enhancer_geometry_check.isChecked()
         self.settings.enhancer_color_mode = self.enhancer_color_combo.currentData()
+        self.settings.dwg_to_pdf = self.dwg_to_pdf_check.isChecked()
         self.settings.save()
 
         enabled = self.autostart_check.isChecked()
