@@ -18,6 +18,7 @@ from PyQt5.QtWidgets import QApplication, QDialog
 from .capture.screen_overlay import ScreenCaptureOverlay
 from .capture.region_overlay import RegionCaptureOverlay
 from .capture.window_capture import capture_active_window, is_autocad_window
+from .capture.autocad_pdf_capture import capture_autocad_region_via_pdf
 from .capture.virtual_screen import grab_screen_physical
 
 
@@ -45,6 +46,7 @@ class HotkeyManager(QObject):
         self._printscreen_down = False
         self._alt_down = False
         self._capture_source_is_autocad = False
+        self._capture_source_autocad_hwnd = None
 
         self._key_state_lock = threading.Lock()
 
@@ -212,6 +214,9 @@ class HotkeyManager(QObject):
         except Exception:
             foreground_hwnd = None
         self._capture_source_is_autocad = is_autocad_window(foreground_hwnd)
+        self._capture_source_autocad_hwnd = (
+            foreground_hwnd if self._capture_source_is_autocad else None
+        )
 
         # По требованию приложения:
         #   PrintScreen      -> выделение участка экрана
@@ -634,7 +639,33 @@ class HotkeyManager(QObject):
         target = None
         try:
             target = self._target()
-            pixmap = self._capture_pixmap("region")
+
+            overlay = RegionCaptureOverlay()
+            overlay.activateWindow()
+            overlay.raise_()
+            QApplication.processEvents()
+
+            accepted = overlay.exec_() == QDialog.Accepted
+            pixmap = overlay.get_pixmap() if accepted else None
+
+            # Экспериментальный AutoCAD-путь. При любой ошибке остается
+            # обычный экранный pixmap, полученный тем же overlay.
+            if (
+                accepted
+                and self._capture_source_is_autocad
+                and self._capture_source_autocad_hwnd
+            ):
+                selection_rect = overlay.get_selection_rect()
+                if selection_rect is not None:
+                    pdf_image = capture_autocad_region_via_pdf(
+                        self._capture_source_autocad_hwnd,
+                        selection_rect,
+                        dpi=600,
+                    )
+                    if pdf_image is not None and not pdf_image.isNull():
+                        from PyQt5.QtGui import QPixmap
+                        pixmap = QPixmap.fromImage(pdf_image)
+
             if pixmap is not None:
                 target = (
                     target
@@ -650,4 +681,5 @@ class HotkeyManager(QObject):
         finally:
             self._finish(target)
             self._capture_source_is_autocad = False
+            self._capture_source_autocad_hwnd = None
             self._request_pending = False
