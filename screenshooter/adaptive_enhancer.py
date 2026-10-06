@@ -546,16 +546,28 @@ def is_dark_autocad_scheme(image):
         (gray.height(), gray.bytesPerLine())
     )[:, :gray.width()]
 
-    median = float(np.median(array))
-    dark_fraction = float(np.mean(array < 80))
-    bright_fraction = float(np.mean(array > 180))
+    # В полном кадре AutoCAD присутствуют лента, панели и палитры, поэтому
+    # их светлые элементы могут заметно разбавлять статистику тёмного
+    # чертёжного поля. Для определения схемы дополнительно анализируем
+    # центральную область, где обычно находится canvas.
+    central = array[
+        int(array.shape[0] * 0.20):int(array.shape[0] * 0.85),
+        int(array.shape[1] * 0.15):int(array.shape[1] * 0.90),
+    ]
+    if central.size == 0:
+        central = array
 
-    # Тёмная схема CAD имеет преимущественно тёмный фон и сравнительно
-    # небольшую долю светлых элементов. Светлая схема — наоборот.
+    median = float(np.median(central))
+    dark_fraction = float(np.mean(central < 80))
+    bright_fraction = float(np.mean(central > 180))
+
+    # Тёмная схема CAD определяется по самому чертёжному полю, а не по
+    # всей оболочке AutoCAD. Это сохраняет консервативность для светлой
+    # схемы, но не теряет тёмный canvas из-за яркой ленты/панелей.
     return (
         dark_fraction >= 0.55
         and median < 115
-        and bright_fraction < 0.35
+        and bright_fraction < 0.45
     )
 
 
