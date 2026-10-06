@@ -40,6 +40,7 @@ class ThemeManager:
         'btn_text': QColor(51, 51, 51),
         'btn_green': QColor(76, 175, 80),
         'btn_red': QColor(244, 67, 54),
+        'icon_action': QColor(58, 63, 70),
 
         'editor_bg': QColor(199, 210, 223),
 
@@ -87,6 +88,7 @@ class ThemeManager:
         'btn_text': QColor(255, 255, 255),
         'btn_green': QColor(76, 175, 80),
         'btn_red': QColor(244, 67, 54),
+        'icon_action': QColor(214, 218, 224),
 
         'editor_bg': QColor(135, 135, 135),
 
