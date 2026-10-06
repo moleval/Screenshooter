@@ -9,9 +9,10 @@
 from __future__ import annotations
 
 import os
+import re
 import tempfile
 import time
-
+import winreg
 
 import win32com.client
 import win32gui
@@ -35,12 +36,51 @@ def _variant_point(values):
     return tuple(float(value) for value in values[:3])
 
 
+def _get_autocad_progid_candidates():
+    """Возвращает общий и зарегистрированные версионные ProgID AutoCAD."""
+    candidates = ["AutoCAD.Application"]
+    pattern = re.compile(r"^AutoCAD\.Application\.(\d+)$", re.IGNORECASE)
+
+    try:
+        with winreg.OpenKey(winreg.HKEY_CLASSES_ROOT, "") as root:
+            index = 0
+            while True:
+                try:
+                    name = winreg.EnumKey(root, index)
+                except OSError:
+                    break
+                index += 1
+
+                match = pattern.match(name)
+                if match:
+                    candidates.append(name)
+    except OSError:
+        pass
+
+    def version_key(progid):
+        match = pattern.match(progid)
+        return int(match.group(1)) if match else -1
+
+    return sorted(set(candidates), key=version_key, reverse=True)
+
+
 def _get_acad_application():
     """Возвращает уже запущенный AutoCAD, не запуская новый экземпляр."""
-    try:
-        return win32com.client.GetActiveObject("AutoCAD.Application")
-    except Exception:
-        return None
+    candidates = _get_autocad_progid_candidates()
+    _diagnostic(f"COM ProgID кандидаты: {', '.join(candidates)}")
+
+    for progid in candidates:
+        try:
+            application = win32com.client.GetActiveObject(progid)
+            _diagnostic(f"COM подключение успешно: {progid}")
+            return application
+        except Exception as error:
+            _diagnostic(
+                f"COM недоступен: {progid} "
+                f"({type(error).__name__}: {error})"
+            )
+
+    return None
 
 
 def _get_view_state(document):
@@ -381,10 +421,6 @@ def capture_autocad_region_via_pdf(hwnd, screen_rect, *, dpi=600, timeout=30.0):
         except Exception:
             pass
 
-        # Для явного тестового режима DWG TO PDF используем синхронный
-        # plot. Это важно: AutoCAD должен реально выполнить PlotToFile
-        # до возврата управления Screenshooter, а не продолжить фоновую
-        # печать после закрытия overlay.
         document.SetVariable("BACKGROUNDPLOT", 0)
         _diagnostic("BACKGROUNDPLOT=0")
         _configure_monochrome_pdf(layout, lower_left, upper_right)
