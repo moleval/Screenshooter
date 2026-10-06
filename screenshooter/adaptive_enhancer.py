@@ -368,9 +368,13 @@ def _dark_colored_mask(rgb):
         + 0.114 * rgb_float[:, :, 2]
     )
 
-    darkness = np.clip((150.0 - luminance) / 150.0, 0.0, 1.0)
-    saturation = np.clip((chroma - 18.0) / 80.0, 0.0, 1.0)
-    return np.clip(darkness * saturation, 0.0, 1.0).astype(np.float32)
+    # Для CAD важнее наличие насыщенного цвета, чем точная luminance:
+    # одинаково насыщенные зелёный и циан после инверсии должны получать
+    # сопоставимую коррекцию. Нейтральный фон по-прежнему исключается
+    # через chroma.
+    darkness = np.clip((180.0 - luminance) / 180.0, 0.0, 1.0)
+    saturation = np.clip((chroma - 18.0) / 60.0, 0.0, 1.0)
+    return np.sqrt(darkness * saturation).clip(0.0, 1.0).astype(np.float32)
 
 
 def _tone_map_dark_colors_after_inversion(gray, dark_color_mask, target=215.0):
@@ -381,7 +385,10 @@ def _tone_map_dark_colors_after_inversion(gray, dark_color_mask, target=215.0):
     # После обычного grayscale разные CAD-цвета имеют сильно различную
     # яркость: синий/зелёный/фиолетовый/голубой становятся неодинаково
     # тёмными. Нормализуем только уверенно цветные тёмные штрихи.
-    strength = np.power(mask, 0.85)
+    # Усиливаем коррекцию уже при частичной маске, чтобы тонкие
+    # антиалиасинговые пиксели цветной линии не оставались заметно темнее
+    # основного штриха. Полная маска по-прежнему приходит ровно к target.
+    strength = np.sqrt(mask)
     result = gray_float + (float(target) - gray_float) * strength
     return np.clip(result, 0.0, 255.0).astype(np.uint8)
 
