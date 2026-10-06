@@ -37,6 +37,8 @@ class HotkeyManager(QObject):
         super().__init__(parent)
 
         self.window_manager = window_manager
+        from .settings import AppSettings
+        self._settings = AppSettings()
 
         self._capturing = False
         self._hidden_windows = []
@@ -651,13 +653,17 @@ class HotkeyManager(QObject):
             accepted = overlay.exec_() == QDialog.Accepted
             pixmap = overlay.get_pixmap() if accepted else None
 
-            # Экспериментальный AutoCAD-путь. При любой ошибке остается
-            # обычный экранный pixmap, полученный тем же overlay.
+            # DWG TO PDF — только при явном включении в настройках.
+            # При включённом режиме fallback не должен запускать
+            # монохромное инвертирование AutoCAD.
+            self._settings.load()
+            dwg_to_pdf_enabled = bool(getattr(self._settings, "dwg_to_pdf", False))
             pdf_capture_succeeded = False
             if (
                 accepted
                 and self._capture_source_is_autocad
                 and self._capture_source_autocad_hwnd
+                and dwg_to_pdf_enabled
             ):
                 selection_rect = overlay.get_selection_rect()
                 if selection_rect is not None:
@@ -679,7 +685,10 @@ class HotkeyManager(QObject):
                 self._deliver(
                     target,
                     pixmap,
-                    source_is_autocad=self._capture_source_is_autocad,
+                    source_is_autocad=(
+                        self._capture_source_is_autocad
+                        and not dwg_to_pdf_enabled
+                    ) or pdf_capture_succeeded,
                     already_preprocessed=pdf_capture_succeeded,
                 )
         except Exception as error:
