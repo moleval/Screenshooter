@@ -14,6 +14,7 @@ import tempfile
 import time
 import winreg
 
+import pythoncom
 import win32com.client
 import win32gui
 from PyQt5.QtCore import QRect
@@ -33,7 +34,16 @@ def _diagnostic(message):
 
 
 def _variant_point(values):
-    return tuple(float(value) for value in values[:3])
+    value = getattr(values, "value", values)
+    return tuple(float(item) for item in value[:3])
+
+
+def _as_com_point(point):
+    """Создаёт Variant с SAFEARRAY из трёх double для AutoCAD ActiveX."""
+    return win32com.client.VARIANT(
+        pythoncom.VT_ARRAY | pythoncom.VT_R8,
+        tuple(float(value) for value in point[:3]),
+    )
 
 
 def _get_autocad_progid_candidates():
@@ -140,7 +150,7 @@ def _screen_point_to_wcs(document, hwnd, screen_x, screen_y, view_state):
 
     return _variant_point(
         document.Utility.TranslateCoordinates(
-            ucs_point,
+            _as_com_point(ucs_point),
             AC_UCS,
             AC_WORLD,
             False,
