@@ -356,6 +356,36 @@ def _dark_blue_mask(rgb):
     return np.clip(mask, 0.0, 1.0).astype(np.float32)
 
 
+def _dark_colored_mask(rgb):
+    """Выделяет тёмные насыщенные CAD-цвета до инверсии."""
+    rgb_float = rgb.astype(np.float32)
+    maximum = rgb_float.max(axis=2)
+    minimum = rgb_float.min(axis=2)
+    chroma = maximum - minimum
+    luminance = (
+        0.299 * rgb_float[:, :, 0]
+        + 0.587 * rgb_float[:, :, 1]
+        + 0.114 * rgb_float[:, :, 2]
+    )
+
+    darkness = np.clip((150.0 - luminance) / 150.0, 0.0, 1.0)
+    saturation = np.clip((chroma - 18.0) / 80.0, 0.0, 1.0)
+    return np.clip(darkness * saturation, 0.0, 1.0).astype(np.float32)
+
+
+def _tone_map_dark_colors_after_inversion(gray, dark_color_mask, target=215.0):
+    """Приводит тёмные насыщенные CAD-цвета к единому светло-серому тону."""
+    gray_float = gray.astype(np.float32)
+    mask = np.clip(dark_color_mask.astype(np.float32), 0.0, 1.0)
+
+    # После обычного grayscale разные CAD-цвета имеют сильно различную
+    # яркость: синий/зелёный/фиолетовый/голубой становятся неодинаково
+    # тёмными. Нормализуем только уверенно цветные тёмные штрихи.
+    strength = np.power(mask, 0.85)
+    result = gray_float + (float(target) - gray_float) * strength
+    return np.clip(result, 0.0, 255.0).astype(np.uint8)
+
+
 def _tone_map_dark_red_after_inversion(gray, dark_red_mask):
     """Уводит инвертированный тёмно-красный цвет в устойчивый светло-серый."""
     gray_float = gray.astype(np.float32)
@@ -543,6 +573,7 @@ def enhance_image(image, options):
     monochrome = options.color_mode == "monochrome"
     dark_red_mask = _dark_red_mask(rgb) if monochrome else None
     dark_blue_mask = _dark_blue_mask(rgb) if monochrome else None
+    dark_color_mask = _dark_colored_mask(rgb) if monochrome else None
 
     scale = _choose_scale(image.width(), image.height(), options.scale)
     if scale != 1.0:
@@ -564,6 +595,14 @@ def enhance_image(image, options):
         if dark_blue_mask is not None:
             dark_blue_mask = cv2.resize(
                 dark_blue_mask,
+                None,
+                fx=scale,
+                fy=scale,
+                interpolation=cv2.INTER_LINEAR,
+            )
+        if dark_color_mask is not None:
+            dark_color_mask = cv2.resize(
+                dark_color_mask,
                 None,
                 fx=scale,
                 fy=scale,
@@ -720,6 +759,11 @@ def enhance_image(image, options):
         gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
         if inverted_white is not None:
             gray[inverted_white] = 255
+
+        gray = _tone_map_dark_colors_after_inversion(
+            gray,
+            dark_color_mask,
+        )
 
         # В тёмной схеме AutoCAD нейтрально-тёмная подложка должна стать
         # чисто белой. Цветные тёмные штрихи сюда не попадают: их высокая
