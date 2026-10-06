@@ -1,0 +1,401 @@
+"""
+Экспериментальный захват области AutoCAD через фоновый PDF-plot.
+
+экранная область -> координаты текущего вида AutoCAD
+-> DWG To PDF.pc3 / monochrome.ctb -> временный PDF
+-> рендер PDF в QImage с высоким DPI.
+"""
+
+from __future__ import annotations
+
+import os
+import tempfile
+import time
+
+import win32com.client
+import win32gui
+from PyQt5.QtCore import QRect
+from PyQt5.QtGui import QImage
+
+
+AC_WORLD = 0
+AC_UCS = 1
+AC_WINDOW = 4
+AC_SCALE_TO_FIT = 0
+AC_0_DEGREES = 0
+AC_90_DEGREES = 1
+
+
+def _variant_point(values):
+    return tuple(float(value) for value in values[:3])
+
+
+def _get_acad_application():
+    """Возвращает уже запущенный AutoCAD, не запуская новый экземпляр."""
+    try:
+        return win32com.client.GetActiveObject("AutoCAD.Application")
+    except Exception:
+        return None
+
+
+def _get_view_state(document):
+    center = _variant_point(document.GetVariable("VIEWCTR"))
+    view_size = float(document.GetVariable("VIEWSIZE"))
+    screen_size = _variant_point(document.GetVariable("SCREENSIZE"))
+    view_dir = _variant_point(document.GetVariable("VIEWDIR"))
+    view_twist = float(document.GetVariable("VIEWTWIST"))
+
+    if view_size <= 0 or screen_size[0] <= 0 or screen_size[1] <= 0:
+        raise RuntimeError("Некорректные параметры текущего вида AutoCAD.")
+
+    return {
+        "center": center,
+        "view_size": view_size,
+        "screen_size": screen_size,
+        "view_dir": view_dir,
+        "view_twist": view_twist,
+    }
+
+
+def _is_supported_2d_view(view_state):
+    direction = view_state["view_dir"]
+    twist = view_state["view_twist"]
+    return (
+        abs(direction[0]) < 1e-6
+        and abs(direction[1]) < 1e-6
+        and abs(abs(direction[2]) - 1.0) < 1e-6
+        and abs(twist) < 1e-6
+    )
+
+
+def _screen_point_to_wcs(document, hwnd, screen_x, screen_y, view_state):
+    client = win32gui.GetClientRect(hwnd)
+    origin = win32gui.ClientToScreen(hwnd, (0, 0))
+    client_width = client[2] - client[0]
+    client_height = client[3] - client[1]
+
+    if client_width <= 0 or client_height <= 0:
+        raise RuntimeError("Не удалось определить клиентскую область AutoCAD.")
+
+    rel_x = float(screen_x - origin[0])
+    rel_y = float(screen_y - origin[1])
+
+    screen_w = float(view_state["screen_size"][0])
+    screen_h = float(view_state["screen_size"][1])
+    view_h = float(view_state["view_size"])
+    view_w = view_h * screen_w / screen_h
+    center = view_state["center"]
+
+    cad_x = rel_x * screen_w / client_width
+    cad_y = rel_y * screen_h / client_height
+
+    ucs_x = center[0] + (cad_x / screen_w - 0.5) * view_w
+    ucs_y = center[1] + (0.5 - cad_y / screen_h) * view_h
+    ucs_point = (ucs_x, ucs_y, center[2])
+
+    return _variant_point(
+        document.Utility.TranslateCoordinates(
+            ucs_point,
+            AC_UCS,
+            AC_WORLD,
+            False,
+        )
+    )
+
+
+def screen_rect_to_autocad_window(document, hwnd, screen_rect):
+    """Переводит QRect экранного выделения в пару WCS-точек AutoCAD."""
+    view_state = _get_view_state(document)
+
+    if not _is_supported_2d_view(view_state):
+        raise RuntimeError(
+            "PDF-прототип поддерживает только 2D вид сверху без VIEWTWIST."
+        )
+
+    left = screen_rect.left()
+    top = screen_rect.top()
+    right = screen_rect.right()
+    bottom = screen_rect.bottom()
+
+    p1 = _screen_point_to_wcs(document, hwnd, left, bottom, view_state)
+    p2 = _screen_point_to_wcs(document, hwnd, right, top, view_state)
+
+    lower_left = (
+        min(p1[0], p2[0]),
+        min(p1[1], p2[1]),
+        min(p1[2], p2[2]),
+    )
+    upper_right = (
+        max(p1[0], p2[0]),
+        max(p1[1], p2[1]),
+        max(p1[2], p2[2]),
+    )
+
+    if (
+        abs(upper_right[0] - lower_left[0]) < 1e-9
+        or abs(upper_right[1] - lower_left[1]) < 1e-9
+    ):
+        raise RuntimeError("Выделенная область AutoCAD слишком мала.")
+
+    return lower_left, upper_right
+
+
+def _find_pdf_media(layout):
+    layout.RefreshPlotDeviceInfo()
+    names = layout.GetCanonicalMediaNames()
+    normalized = [(str(name).lower(), str(name)) for name in names]
+
+    for token in ("a4", "iso_a4", "ansi_a"):
+        for lower, original in normalized:
+            if token in lower:
+                return original
+
+    if not normalized:
+        raise RuntimeError("DWG To PDF.pc3 не предоставил форматы бумаги.")
+
+    return normalized[0][1]
+
+
+def _snapshot_layout(layout):
+    names = (
+        "ConfigName",
+        "CanonicalMediaName",
+        "CenterPlot",
+        "PlotRotation",
+        "PlotType",
+        "PlotWithLineweights",
+        "PlotWithPlotStyles",
+        "ScaleLineweights",
+        "StyleSheet",
+        "UseStandardScale",
+        "StandardScale",
+    )
+    snapshot = {}
+    for name in names:
+        try:
+            snapshot[name] = getattr(layout, name)
+        except Exception:
+            pass
+
+    try:
+        lower_left, upper_right = layout.GetWindowToPlot()
+        snapshot["Window"] = (
+            _variant_point(lower_left),
+            _variant_point(upper_right),
+        )
+    except Exception:
+        pass
+
+    return snapshot
+
+
+def _restore_layout(layout, snapshot):
+    for name, value in snapshot.items():
+        if name == "Window":
+            continue
+        try:
+            setattr(layout, name, value)
+        except Exception:
+            pass
+
+    window = snapshot.get("Window")
+    if window is not None:
+        try:
+            layout.SetWindowToPlot(window[0], window[1])
+        except Exception:
+            pass
+
+
+def _configure_monochrome_pdf(layout, lower_left, upper_right):
+    layout.RefreshPlotDeviceInfo()
+    layout.ConfigName = "DWG To PDF.pc3"
+    layout.RefreshPlotDeviceInfo()
+    layout.CanonicalMediaName = _find_pdf_media(layout)
+    layout.SetWindowToPlot(lower_left, upper_right)
+    layout.PlotType = AC_WINDOW
+    layout.CenterPlot = True
+    layout.UseStandardScale = True
+    layout.StandardScale = AC_SCALE_TO_FIT
+    layout.PlotRotation = (
+        AC_0_DEGREES
+        if abs(upper_right[0] - lower_left[0])
+        >= abs(upper_right[1] - lower_left[1])
+        else AC_90_DEGREES
+    )
+    layout.PlotWithPlotStyles = True
+    layout.PlotWithLineweights = False
+    layout.ScaleLineweights = False
+
+    try:
+        for style in layout.GetPlotStyleTableNames():
+            if str(style).lower() == "monochrome.ctb":
+                layout.StyleSheet = style
+                break
+    except Exception:
+        pass
+
+    layout.RefreshPlotDeviceInfo()
+
+
+def _wait_for_file(path, timeout):
+    deadline = time.monotonic() + timeout
+    previous_size = -1
+    stable_since = None
+
+    while time.monotonic() < deadline:
+        if os.path.isfile(path):
+            try:
+                size = os.path.getsize(path)
+            except OSError:
+                size = -1
+
+            if size > 0 and size == previous_size:
+                if stable_since is None:
+                    stable_since = time.monotonic()
+                elif time.monotonic() - stable_since >= 0.35:
+                    return True
+            else:
+                previous_size = size
+                stable_since = None
+
+        time.sleep(0.08)
+
+    return False
+
+
+def _trim_white_pdf_margins(image, threshold=250):
+    if image.isNull():
+        return image
+
+    import numpy as np
+
+    rgb = image.convertToFormat(QImage.Format_RGB888)
+    width = rgb.width()
+    height = rgb.height()
+    ptr = rgb.bits()
+    ptr.setsize(rgb.bytesPerLine() * height)
+
+    array = np.frombuffer(ptr, dtype=np.uint8).reshape(
+        height, rgb.bytesPerLine()
+    )[:, :width * 3].reshape(height, width, 3)
+
+    dark = np.any(array < threshold, axis=2)
+    if not dark.any():
+        return image
+
+    ys, xs = np.where(dark)
+    rect = QRect(
+        int(xs.min()),
+        int(ys.min()),
+        int(xs.max() - xs.min() + 1),
+        int(ys.max() - ys.min() + 1),
+    )
+
+    margin = max(2, min(12, int(min(width, height) * 0.003)))
+    rect = rect.adjusted(-margin, -margin, margin, margin)
+    rect = rect.intersected(QRect(0, 0, width, height))
+    return rgb.copy(rect)
+
+
+def _render_pdf_to_qimage(pdf_path, dpi):
+    try:
+        import fitz
+    except ImportError as error:
+        raise RuntimeError(
+            "Для PDF-прототипа нужен PyMuPDF: pip install PyMuPDF"
+        ) from error
+
+    pdf = fitz.open(pdf_path)
+    try:
+        if pdf.page_count < 1:
+            raise RuntimeError("AutoCAD создал пустой PDF.")
+
+        page = pdf.load_page(0)
+        zoom = float(dpi) / 72.0
+        pix = page.get_pixmap(
+            matrix=fitz.Matrix(zoom, zoom),
+            colorspace=fitz.csRGB,
+            alpha=False,
+        )
+
+        image = QImage(
+            pix.samples,
+            pix.width,
+            pix.height,
+            pix.stride,
+            QImage.Format_RGB888,
+        ).copy()
+        return _trim_white_pdf_margins(image)
+    finally:
+        pdf.close()
+
+
+def capture_autocad_region_via_pdf(hwnd, screen_rect, *, dpi=600, timeout=30.0):
+    """
+    Возвращает QImage из AutoCAD -> PDF -> raster.
+    При любой невозможности возвращает None для безопасного fallback.
+    """
+    if not hwnd or not win32gui.IsWindow(hwnd):
+        return None
+    if screen_rect is None or screen_rect.isNull():
+        return None
+
+    acad = _get_acad_application()
+    if acad is None:
+        return None
+
+    temp_dir = tempfile.mkdtemp(prefix="screenshooter_autocad_pdf_")
+    pdf_path = os.path.join(temp_dir, "capture.pdf")
+    document = None
+    layout = None
+    snapshot = None
+    original_background_plot = None
+
+    try:
+        document = acad.ActiveDocument
+        lower_left, upper_right = screen_rect_to_autocad_window(
+            document, hwnd, screen_rect
+        )
+
+        layout = document.ActiveLayout
+        snapshot = _snapshot_layout(layout)
+
+        try:
+            original_background_plot = document.GetVariable("BACKGROUNDPLOT")
+        except Exception:
+            pass
+
+        document.SetVariable("BACKGROUNDPLOT", 1)
+        _configure_monochrome_pdf(layout, lower_left, upper_right)
+        document.Regen(0)
+
+        result = document.Plot.PlotToFile(pdf_path)
+        if result is False:
+            return None
+
+        if not _wait_for_file(pdf_path, timeout):
+            return None
+
+        return _render_pdf_to_qimage(pdf_path, dpi)
+    except Exception:
+        return None
+    finally:
+        if document is not None and layout is not None and snapshot is not None:
+            try:
+                _restore_layout(layout, snapshot)
+                document.Regen(0)
+            except Exception:
+                pass
+
+        if document is not None and original_background_plot is not None:
+            try:
+                document.SetVariable("BACKGROUNDPLOT", original_background_plot)
+            except Exception:
+                pass
+
+        try:
+            if os.path.isfile(pdf_path):
+                os.remove(pdf_path)
+            os.rmdir(temp_dir)
+        except OSError:
+            pass
