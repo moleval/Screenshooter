@@ -460,14 +460,17 @@ class HotkeyManager(QObject):
         )
 
     @staticmethod
-    def _deliver(target, pixmap, screen_capture=False, source_is_autocad=False):
+    def _deliver(target, pixmap, screen_capture=False, source_is_autocad=False, already_preprocessed=False):
         if target.is_empty():
             # Для нового скриншота используем тот же путь, что и обычный
             # захват через ScreenshotApp.display_screenshot(): это гарантирует,
             # что настройки enhancer (включая инверсию) применяются до показа.
             target.screenshot_pixmap = pixmap
             if source_is_autocad:
-                target.display_screenshot(source_is_autocad=True)
+                target.display_screenshot(
+                    source_is_autocad=True,
+                    already_preprocessed=already_preprocessed,
+                )
             else:
                 target.display_screenshot()
         else:
@@ -554,6 +557,7 @@ class HotkeyManager(QObject):
                     target,
                     pixmap,
                     source_is_autocad=self._capture_source_is_autocad,
+                    already_preprocessed=pdf_capture_succeeded,
                 )
         except Exception as error:
             print(f"Ошибка захвата экрана: {error}")
@@ -650,6 +654,7 @@ class HotkeyManager(QObject):
 
             # Экспериментальный AutoCAD-путь. При любой ошибке остается
             # обычный экранный pixmap, полученный тем же overlay.
+            pdf_capture_succeeded = False
             if (
                 accepted
                 and self._capture_source_is_autocad
@@ -665,6 +670,7 @@ class HotkeyManager(QObject):
                     if pdf_image is not None and not pdf_image.isNull():
                         from PyQt5.QtGui import QPixmap
                         pixmap = QPixmap.fromImage(pdf_image)
+                        pdf_capture_succeeded = True
 
             if pixmap is not None:
                 target = (
