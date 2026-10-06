@@ -45,6 +45,13 @@ def _as_com_point(point):
         tuple(float(value) for value in point[:3]),
     )
 
+def _as_com_xy(point):
+    """Создаёт Variant с SAFEARRAY из двух double для окна печати."""
+    return win32com.client.VARIANT(
+        pythoncom.VT_ARRAY | pythoncom.VT_R8,
+        tuple(float(value) for value in point[:2]),
+    )
+
 
 def _get_autocad_progid_candidates():
     """Возвращает общий и зарегистрированные версионные ProgID AutoCAD."""
@@ -256,17 +263,16 @@ def _restore_layout(layout, snapshot):
     window = snapshot.get("Window")
     if window is not None:
         try:
-            layout.SetWindowToPlot(window[0], window[1])
+            layout.SetWindowToPlot(_as_com_xy(window[0]), _as_com_xy(window[1]))
         except Exception:
             pass
 
 
 def _configure_monochrome_pdf(layout, lower_left, upper_right):
-    layout.RefreshPlotDeviceInfo()
     layout.ConfigName = "DWG To PDF.pc3"
     layout.RefreshPlotDeviceInfo()
     layout.CanonicalMediaName = _find_pdf_media(layout)
-    layout.SetWindowToPlot(lower_left, upper_right)
+    layout.SetWindowToPlot(_as_com_xy(lower_left), _as_com_xy(upper_right))
     layout.PlotType = AC_WINDOW
     layout.CenterPlot = True
     layout.UseStandardScale = True
