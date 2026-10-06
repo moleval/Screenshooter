@@ -341,11 +341,17 @@ def capture_autocad_region_via_pdf(hwnd, screen_rect, *, dpi=600, timeout=30.0):
     При любой невозможности возвращает None для безопасного fallback.
     """
     if not hwnd or not win32gui.IsWindow(hwnd):
+        _diagnostic("FALLBACK: недействительный hwnd AutoCAD")
         return None
     if screen_rect is None or screen_rect.isNull():
+        _diagnostic("FALLBACK: пустое выделение")
         return None
 
-    _diagnostic("запуск захвата")
+    _diagnostic(
+        f"запуск захвата hwnd=0x{int(hwnd):X}, "
+        f"rect={screen_rect.x()},{screen_rect.y()},"
+        f"{screen_rect.width()}x{screen_rect.height()}"
+    )
     acad = _get_acad_application()
     if acad is None:
         _diagnostic("FALLBACK: AutoCAD не найден через COM")
@@ -375,12 +381,23 @@ def capture_autocad_region_via_pdf(hwnd, screen_rect, *, dpi=600, timeout=30.0):
         except Exception:
             pass
 
-        document.SetVariable("BACKGROUNDPLOT", 1)
+        # Для явного тестового режима DWG TO PDF используем синхронный
+        # plot. Это важно: AutoCAD должен реально выполнить PlotToFile
+        # до возврата управления Screenshooter, а не продолжить фоновую
+        # печать после закрытия overlay.
+        document.SetVariable("BACKGROUNDPLOT", 0)
+        _diagnostic("BACKGROUNDPLOT=0")
         _configure_monochrome_pdf(layout, lower_left, upper_right)
+        _diagnostic(
+            f"plot device={layout.ConfigName}, "
+            f"media={layout.CanonicalMediaName}, "
+            f"plot_type={layout.PlotType}"
+        )
         document.Regen(0)
-        _diagnostic("plotting...")
+        _diagnostic(f"plotting to: {pdf_path}")
 
         result = document.Plot.PlotToFile(pdf_path)
+        _diagnostic(f"PlotToFile returned: {result}")
         if result is False:
             _diagnostic("FALLBACK: PlotToFile вернул False")
             return None
