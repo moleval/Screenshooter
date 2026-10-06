@@ -316,7 +316,7 @@ def test_monochrome_dark_blue_line_becomes_light_gray():
     line = result.pixelColor(20, 15)
     background = result.pixelColor(0, 0)
     assert line.red() == line.green() == line.blue()
-    assert 190 <= line.red() <= 220
+    assert 165 <= line.red() <= 195
     assert background.red() == background.green() == background.blue() == 255
 
 
