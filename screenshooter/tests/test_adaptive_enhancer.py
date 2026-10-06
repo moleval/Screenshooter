@@ -13,8 +13,10 @@ from screenshooter.adaptive_enhancer import (
     _directional_boundary_mask,
     _compress_cad_highlights,
     _dark_blue_mask,
+    _dark_colored_mask,
     _dark_red_mask,
     _tone_map_dark_blue_after_inversion,
+    _tone_map_dark_colors_after_inversion,
     _tone_map_dark_red_after_inversion,
     _choose_scale,
     enhance_image,
@@ -316,6 +318,74 @@ def test_monochrome_dark_blue_line_becomes_light_gray():
     assert line.red() == line.green() == line.blue()
     assert 190 <= line.red() <= 220
     assert background.red() == background.green() == background.blue() == 255
+
+
+def test_dark_colored_mask_selects_saturated_colors_but_not_dark_neutral():
+    rgb = np.full((30, 60, 3), 20, dtype=np.uint8)
+    rgb[4:8, 4:14] = (0, 150, 0)
+    rgb[10:14, 18:28] = (0, 150, 150)
+    rgb[16:20, 32:42] = (110, 0, 110)
+    rgb[22:26, 46:56] = (90, 15, 12)
+
+    mask = _dark_colored_mask(rgb)
+
+    assert float(mask[5:7, 6:12].mean()) > 0.35
+    assert float(mask[11:13, 20:26].mean()) > 0.35
+    assert float(mask[17:19, 34:40].mean()) > 0.35
+    assert float(mask[23:25, 48:54].mean()) > 0.35
+    assert float(mask[0:3, 0:20].max()) < 0.01
+
+
+def test_dark_colored_tone_map_normalizes_different_hues_to_light_gray():
+    gray = np.full((20, 80), 255, dtype=np.uint8)
+    gray[2:5, 5:15] = 180
+    gray[7:10, 20:30] = 150
+    gray[12:15, 35:45] = 205
+    gray[15:18, 55:65] = 165
+
+    mask = np.zeros_like(gray, dtype=np.float32)
+    mask[2:5, 5:15] = 1.0
+    mask[7:10, 20:30] = 1.0
+    mask[12:15, 35:45] = 1.0
+    mask[15:18, 55:65] = 1.0
+
+    result = _tone_map_dark_colors_after_inversion(gray, mask)
+
+    assert 210 <= int(result[3, 10]) <= 220
+    assert 210 <= int(result[8, 25]) <= 220
+    assert 210 <= int(result[13, 40]) <= 220
+    assert 210 <= int(result[16, 60]) <= 220
+    assert int(result[0, 0]) == 255
+
+
+def test_monochrome_dark_green_diagonal_stays_sharp_and_light_gray():
+    source = QImage(80, 80, QImage.Format_RGBA8888)
+    source.fill(QColor(20, 20, 20, 255))
+    for i in range(12, 68):
+        for offset in range(-1, 2):
+            x = i
+            y = i + offset
+            if 0 <= x < 80 and 0 <= y < 80:
+                source.setPixelColor(x, y, QColor(0, 150, 0, 255))
+
+    result = enhance_image(
+        source,
+        EnhancerOptions(
+            enabled=True,
+            scale=1.0,
+            text=False,
+            lines=False,
+            ui=False,
+            geometry=False,
+            color_mode="monochrome",
+        ),
+    )
+
+    center = result.pixelColor(40, 40)
+    side = result.pixelColor(40, 36)
+    assert center.red() == center.green() == center.blue()
+    assert 205 <= center.red() <= 220
+    assert center.red() - side.red() >= 20
 
 
 def test_cad_highlight_compression_leaves_uniform_background_unchanged():
