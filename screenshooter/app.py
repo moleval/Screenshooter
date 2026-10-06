@@ -597,6 +597,7 @@ class ScreenshotApp(QMainWindow):
             (self.insert_clipboard_btn, "clipboard-copy"),
             (self.save_as_btn, "save-all"),
             (self.quick_save_btn, "save"),
+            (self.print_btn, "printer"),
             (self.settings_btn, "settings"),
             (self.help_btn, "help"),
         ):
