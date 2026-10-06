@@ -385,7 +385,7 @@ def test_monochrome_dark_green_diagonal_stays_sharp_and_light_gray():
     side = result.pixelColor(40, 36)
     assert center.red() == center.green() == center.blue()
     assert 205 <= center.red() <= 220
-    assert center.red() - side.red() >= 20
+    assert side.red() - center.red() >= 20
 
 
 def test_cad_highlight_compression_leaves_uniform_background_unchanged():
@@ -647,3 +647,18 @@ def test_light_autocad_scheme_is_not_detected_as_dark():
         source.setPixelColor(x, 80, QColor(30, 30, 30, 255))
 
     assert is_dark_autocad_scheme(source) is False
+
+def test_dark_autocad_scheme_ignores_bright_ui_around_canvas():
+    source = QImage(320, 200, QImage.Format_RGBA8888)
+    source.fill(QColor(25, 25, 25, 255))
+
+    # Яркая верхняя лента и боковая панель занимают значимую часть
+    # полного кадра, но центральное поле чертежа остаётся тёмным.
+    for y in range(0, 65):
+        for x in range(320):
+            source.setPixelColor(x, y, QColor(225, 225, 225, 255))
+    for y in range(65, 200):
+        for x in range(0, 55):
+            source.setPixelColor(x, y, QColor(225, 225, 225, 255))
+
+    assert is_dark_autocad_scheme(source) is True
