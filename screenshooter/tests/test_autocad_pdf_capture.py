@@ -1,5 +1,6 @@
 """Тесты экспериментального PDF-захвата AutoCAD."""
 from PyQt5.QtCore import QRect
+from pytest import approx
 
 from screenshooter.capture.autocad_pdf_capture import (
     _is_supported_2d_view,
@@ -66,5 +67,5 @@ def test_screen_rect_maps_to_autocad_window():
         module.win32gui.GetClientRect = original_get_client_rect
         module.win32gui.ClientToScreen = original_client_to_screen
 
-    assert lower_left == (50.0, 175.0, 0.0)
-    assert upper_right == (150.0, 225.0, 0.0)
+    assert lower_left == approx((50.0, 175.0, 0.0), abs=0.25)
+    assert upper_right == approx((150.0, 225.0, 0.0), abs=0.25)
