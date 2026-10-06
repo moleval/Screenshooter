@@ -557,7 +557,6 @@ class HotkeyManager(QObject):
                     target,
                     pixmap,
                     source_is_autocad=self._capture_source_is_autocad,
-                    already_preprocessed=pdf_capture_succeeded,
                 )
         except Exception as error:
             print(f"Ошибка захвата экрана: {error}")
@@ -681,6 +680,7 @@ class HotkeyManager(QObject):
                     target,
                     pixmap,
                     source_is_autocad=self._capture_source_is_autocad,
+                    already_preprocessed=pdf_capture_succeeded,
                 )
         except Exception as error:
             print(f"Ошибка захвата области: {error}")
