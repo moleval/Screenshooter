@@ -4,9 +4,8 @@
 """
 
 from PyQt5.QtCore import QObject, QTimer
-import os
 from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QSystemTrayIcon, QMenu, QAction, QApplication, QFileDialog
+from PyQt5.QtWidgets import QSystemTrayIcon, QMenu, QAction, QApplication
 
 from .utils import load_app_icon
 from .settings import AppSettings
@@ -126,13 +125,6 @@ class TrayManager(QObject):
         self.theme_menu = self.menu.addMenu("Тема")
         self.theme_menu.setEnabled(True)
         self._build_theme_menu()
-
-        self.save_dir_action = QAction("Выбрать папку сохранения...", self)
-        self.save_dir_action.setEnabled(True)
-        self.save_dir_action.triggered.connect(self._choose_save_directory)
-        self.menu.addAction(self.save_dir_action)
-
-        self.menu.addSeparator()
 
         self.quit_action = QAction("Выход", self)
         self.quit_action.triggered.connect(self._quit_app)
@@ -320,26 +312,6 @@ class TrayManager(QObject):
     def _update_theme_checks(self, selected_key: str):
         for key, action in self.theme_actions.items():
             action.setChecked(key == selected_key)
-
-    def _choose_save_directory(self):
-        target = self._current_window()
-        if target is not None:
-            target.choose_save_directory()
-            return
-
-        directory = QFileDialog.getExistingDirectory(
-            None,
-            "Выберите папку для сохранения скриншотов",
-            self.settings.save_directory or os.path.expanduser("~"),
-        )
-        if directory:
-            self.settings.set_save_directory(directory)
-            self.tray_icon.showMessage(
-                "Скриншотер",
-                f"Папка сохранения: {directory}",
-                QSystemTrayIcon.Information,
-                2000,
-            )
 
     def _quit_app(self):
         target = self._current_window()
