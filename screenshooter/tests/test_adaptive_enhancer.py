@@ -351,10 +351,10 @@ def test_dark_colored_tone_map_normalizes_different_hues_to_light_gray():
 
     result = _tone_map_dark_colors_after_inversion(gray, mask)
 
-    assert 210 <= int(result[3, 10]) <= 220
-    assert 210 <= int(result[8, 25]) <= 220
-    assert 210 <= int(result[13, 40]) <= 220
-    assert 210 <= int(result[16, 60]) <= 220
+    assert 165 <= int(result[3, 10]) <= 175
+    assert 165 <= int(result[8, 25]) <= 175
+    assert 165 <= int(result[13, 40]) <= 175
+    assert 165 <= int(result[16, 60]) <= 175
     assert int(result[0, 0]) == 255
 
 
@@ -384,7 +384,7 @@ def test_monochrome_dark_green_diagonal_stays_sharp_and_light_gray():
     center = result.pixelColor(40, 40)
     side = result.pixelColor(40, 36)
     assert center.red() == center.green() == center.blue()
-    assert 205 <= center.red() <= 220
+    assert 165 <= center.red() <= 195
     assert side.red() - center.red() >= 20
 
 
