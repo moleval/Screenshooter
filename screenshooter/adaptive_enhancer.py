@@ -377,7 +377,7 @@ def _dark_colored_mask(rgb):
     return np.sqrt(darkness * saturation).clip(0.0, 1.0).astype(np.float32)
 
 
-def _tone_map_dark_colors_after_inversion(gray, dark_color_mask, target=190.0):
+def _tone_map_dark_colors_after_inversion(gray, dark_color_mask, target=170.0):
     """Приводит тёмные насыщенные CAD-цвета к единому светло-серому тону."""
     gray_float = gray.astype(np.float32)
     mask = np.clip(dark_color_mask.astype(np.float32), 0.0, 1.0)
