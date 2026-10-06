@@ -88,3 +88,9 @@ class RegionCaptureOverlay(QDialog):
 
     def get_pixmap(self):
         return self._pixmap
+
+    def get_selection_rect(self):
+        """Возвращает выделение в экранных координатах."""
+        if self._selection_rect is None or self._selection_rect.isNull():
+            return None
+        return self._selection_rect.translated(self.geometry().topLeft())
