@@ -3,7 +3,7 @@
 
 экранная область -> координаты текущего вида AutoCAD
 -> DWG To PDF.pc3 / monochrome.ctb -> временный PDF
--> рендер PDF в QImage с высоким DPI.
+-> рендер PDF в QImage.
 """
 
 from __future__ import annotations
@@ -46,6 +46,7 @@ def _as_com_point(point):
         pythoncom.VT_ARRAY | pythoncom.VT_R8,
         tuple(float(value) for value in point[:3]),
     )
+
 
 def _as_com_xy(point):
     """Создаёт Variant с SAFEARRAY из двух double для окна печати."""
@@ -402,6 +403,7 @@ def _wait_for_file(path, timeout):
 
 
 def _trim_white_pdf_margins(image, threshold=250):
+    """Обрезает только белые поля готового PDF, не изменяя пиксели CAD."""
     if image.isNull():
         return image
 
@@ -463,64 +465,13 @@ def _render_pdf_to_qimage(pdf_path, dpi):
             pix.stride,
             QImage.Format_RGB888,
         ).copy()
-        return image, (
-            float(page.rect.width) * 25.4 / 72.0,
-            float(page.rect.height) * 25.4 / 72.0,
-        )
+        return image
     finally:
         pdf.close()
 
 
-def _crop_rendered_pdf_to_plot(image, page_mm, layout, lower_left, upper_right):
-    """Обрезает PDF ровно до AutoCAD-окна, а не до содержимого чертежа."""
-    paper_width, paper_height = page_mm
-    try:
-        origin = _variant_point(layout.PlotOrigin)
-        rotation = int(layout.PlotRotation)
-    except Exception:
-        return image
-
-    scale = None
-    try:
-        numerator, denominator = layout.GetCustomScale()
-        if denominator:
-            scale = float(numerator) / float(denominator)
-        if int(getattr(layout, "PaperUnits", AC_MILLIMETERS)) == 0:
-            scale *= 25.4
-    except Exception:
-        pass
-
-    if scale is None or scale <= 0:
-        return image
-
-    drawing_width = abs(upper_right[0] - lower_left[0])
-    drawing_height = abs(upper_right[1] - lower_left[1])
-    plot_width = drawing_width * scale
-    plot_height = drawing_height * scale
-
-    if rotation in (AC_90_DEGREES, 3):
-        plot_width, plot_height = plot_height, plot_width
-
-    if paper_width <= 0 or paper_height <= 0:
-        return image
-
-    x1 = origin[0]
-    y1 = paper_height - (origin[1] + plot_height)
-    x2 = x1 + plot_width
-    y2 = y1 + plot_height
-
-    width = image.width()
-    height = image.height()
-    left = max(0, min(width - 1, round(x1 / paper_width * width)))
-    top = max(0, min(height - 1, round(y1 / paper_height * height)))
-    right = max(left + 1, min(width, round(x2 / paper_width * width)))
-    bottom = max(top + 1, min(height, round(y2 / paper_height * height)))
-
-    return image.copy(left, top, right - left, bottom - top)
-
-
 def _match_selection_aspect(image, screen_rect):
-    """Убирает только геометрическую погрешность листа, не меняя пиксели CAD."""
+    """Убирает только геометрическую погрешность листа, не меняя CAD-пиксели."""
     target_ratio = screen_rect.width() / max(1, screen_rect.height())
     current_ratio = image.width() / max(1, image.height())
     if abs(current_ratio - target_ratio) / target_ratio < 0.005:
@@ -540,7 +491,13 @@ def _match_selection_aspect(image, screen_rect):
 
 def capture_autocad_region_via_pdf(hwnd, screen_rect, *, dpi=600, timeout=30.0):
     """
-    Возвращает QImage из AutoCAD -> PDF -> raster.
+    Возвращает QImage напрямую из AutoCAD -> PDF -> raster.
+
+    Важно: после рендера PDF не выполняется никакая обработка CAD-линий,
+    усиление, sharpen, contrast или adaptive enhancer. Разрешены только:
+      1. удаление белых полей самого PDF;
+      2. геометрическое приведение к пропорции исходного выделения.
+
     При любой невозможности возвращает None для безопасного fallback.
     """
     if not hwnd or not win32gui.IsWindow(hwnd):
@@ -606,11 +563,15 @@ def capture_autocad_region_via_pdf(hwnd, screen_rect, *, dpi=600, timeout=30.0):
             return None
 
         _diagnostic(f"PDF created: {pdf_path}")
-        image, page_mm = _render_pdf_to_qimage(pdf_path, dpi)
-        image = _crop_rendered_pdf_to_plot(
-            image, page_mm, layout, lower_left, upper_right
-        )
+        image = _render_pdf_to_qimage(pdf_path, dpi)
+
+        # Не пересчитываем границы CAD через PlotOrigin/масштаб AutoCAD:
+        # эти координаты относятся к листу PDF и давали рассинхрон с
+        # экранным выделением. Берём именно готовый PDF как источник пикселей
+        # и удаляем только его белое поле.
+        image = _trim_white_pdf_margins(image)
         image = _match_selection_aspect(image, screen_rect)
+
         _diagnostic(f"rendered at {dpi} DPI: {image.width()}x{image.height()}")
         _diagnostic("SUCCESS")
         return image
@@ -631,14 +592,17 @@ def capture_autocad_region_via_pdf(hwnd, screen_rect, *, dpi=600, timeout=30.0):
             except Exception:
                 pass
 
-        # PyMuPDF уже закрыл PDF. Удаляем и файл, и каталог; несколько
-        # попыток нужны на Windows из-за кратковременных файловых блокировок.
-        for _ in range(8):
+        # PyMuPDF уже закрыл PDF. На Windows AutoCAD иногда ещё кратковременно
+        # удерживает файл, поэтому сначала удаляем сам файл, затем каталог.
+        for _ in range(40):
             try:
-                shutil.rmtree(temp_dir)
+                if os.path.exists(pdf_path):
+                    os.remove(pdf_path)
+                if os.path.isdir(temp_dir):
+                    os.rmdir(temp_dir)
                 _diagnostic("temporary PDF removed")
                 break
             except OSError:
-                time.sleep(0.05)
+                time.sleep(0.1)
         else:
             _diagnostic(f"WARNING: не удалось удалить временный PDF: {pdf_path}")
