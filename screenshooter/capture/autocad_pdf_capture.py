@@ -483,8 +483,8 @@ def _render_pdf_to_qimage(pdf_path, dpi):
         page = pdf.load_page(0)
         zoom = float(dpi) / 72.0
         pix = page.get_pixmap(
-            matrix=fitz.Matrix(zoom, zoom),
-            colorspace=fitz.csRGB,
+            matrix=pymupdf.Matrix(zoom, zoom),
+            colorspace=pymupdf.csRGB,
             alpha=False,
         )
 
@@ -495,9 +495,60 @@ def _render_pdf_to_qimage(pdf_path, dpi):
             pix.stride,
             QImage.Format_RGB888,
         ).copy()
-        return _enhance_pdf_cad_image(image)
+        return _enhance_pdf_cad_image(image), (
+            float(page.rect.width),
+            float(page.rect.height),
+        )
     finally:
         pdf.close()
+
+
+def _crop_rendered_pdf_to_plot(image, page_mm, layout, lower_left, upper_right):
+    """Обрезает PDF ровно до AutoCAD-окна, а не до содержимого чертежа."""
+    paper_width, paper_height = page_mm
+    try:
+        origin = _variant_point(layout.PlotOrigin)
+        rotation = int(layout.PlotRotation)
+    except Exception:
+        return image
+
+    scale = None
+    try:
+        numerator, denominator = layout.GetCustomScale()
+        if denominator:
+            scale = float(numerator) / float(denominator)
+        if int(getattr(layout, "PaperUnits", AC_MILLIMETERS)) == 0:
+            scale *= 25.4
+    except Exception:
+        pass
+
+    if scale is None or scale <= 0:
+        return image
+
+    drawing_width = abs(upper_right[0] - lower_left[0])
+    drawing_height = abs(upper_right[1] - lower_left[1])
+    plot_width = drawing_width * scale
+    plot_height = drawing_height * scale
+
+    if rotation in (AC_90_DEGREES, 3):
+        plot_width, plot_height = plot_height, plot_width
+
+    if paper_width <= 0 or paper_height <= 0:
+        return image
+
+    x1 = origin[0]
+    y1 = paper_height - (origin[1] + plot_height)
+    x2 = x1 + plot_width
+    y2 = y1 + plot_height
+
+    width = image.width()
+    height = image.height()
+    left = max(0, min(width - 1, round(x1 / paper_width * width)))
+    top = max(0, min(height - 1, round(y1 / paper_height * height)))
+    right = max(left + 1, min(width, round(x2 / paper_width * width)))
+    bottom = max(top + 1, min(height, round(y2 / paper_height * height)))
+
+    return image.copy(left, top, right - left, bottom - top)
 
 
 def capture_autocad_region_via_pdf(hwnd, screen_rect, *, dpi=600, timeout=30.0):
@@ -568,7 +619,10 @@ def capture_autocad_region_via_pdf(hwnd, screen_rect, *, dpi=600, timeout=30.0):
             return None
 
         _diagnostic(f"PDF created: {pdf_path}")
-        image = _render_pdf_to_qimage(pdf_path, dpi)
+        image, page_mm = _render_pdf_to_qimage(pdf_path, dpi)
+        image = _crop_rendered_pdf_to_plot(
+            image, page_mm, layout, lower_left, upper_right
+        )
         _diagnostic(f"rendered at {dpi} DPI: {image.width()}x{image.height()}")
         _diagnostic("SUCCESS")
         return image
