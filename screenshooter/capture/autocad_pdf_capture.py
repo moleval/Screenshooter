@@ -56,6 +56,21 @@ def _as_com_xy(point):
     )
 
 
+def _set_int_system_variable(document, name, value):
+    """Устанавливает целочисленную системную переменную AutoCAD типизированно."""
+    variant = win32com.client.VARIANT(
+        pythoncom.VT_I4,
+        int(value),
+    )
+    document.SetVariable(name, variant)
+    actual = int(document.GetVariable(name))
+    if actual != int(value):
+        raise RuntimeError(
+            f"{name} после установки имеет значение {actual}, "
+            f"ожидалось {int(value)}"
+        )
+
+
 def _get_autocad_progid_candidates():
     """Возвращает общий и зарегистрированные версионные ProgID AutoCAD."""
     candidates = ["AutoCAD.Application"]
@@ -458,11 +473,17 @@ def _render_pdf_to_qimage(pdf_path, dpi):
 
         page = pdf.load_page(0)
         zoom = float(dpi) / 72.0
-        pix = page.get_pixmap(
-            matrix=pymupdf.Matrix(zoom, zoom),
-            colorspace=pymupdf.csRGB,
-            alpha=False,
-        )
+        previous_aa = pymupdf.TOOLS.show_aa_level()
+        pymupdf.TOOLS.set_aa_level(8)
+        try:
+            pix = page.get_pixmap(
+                matrix=pymupdf.Matrix(zoom, zoom),
+                colorspace=pymupdf.csRGB,
+                alpha=False,
+                annots=False,
+            )
+        finally:
+            pymupdf.TOOLS.set_aa_level(int(previous_aa["graphics"]))
 
         image = QImage(
             pix.samples,
@@ -495,14 +516,13 @@ def _match_selection_aspect(image, screen_rect):
     return image.copy(0, top, width, new_height)
 
 
-def capture_autocad_region_via_pdf(hwnd, screen_rect, *, dpi=600, timeout=30.0):
+def capture_autocad_region_via_pdf(hwnd, screen_rect, *, dpi=900, timeout=30.0):
     """
     Возвращает QImage напрямую из AutoCAD -> PDF -> raster.
 
-    Важно: после рендера PDF не выполняется никакая обработка CAD-линий,
-    усиление, sharpen, contrast или adaptive enhancer. Разрешены только:
-      1. удаление белых полей самого PDF;
-      2. геометрическое приведение к пропорции исходного выделения.
+    PDF считается эталонным источником: после его создания не выполняются
+    crop, trim, sharpen, contrast, adaptive enhancer или иная обработка CAD.
+    Возвращается вся страница PDF в исходном порядке пикселей.
 
     При любой невозможности возвращает None для безопасного fallback.
     """
@@ -551,10 +571,14 @@ def capture_autocad_region_via_pdf(hwnd, screen_rect, *, dpi=600, timeout=30.0):
         document.SetVariable("BACKGROUNDPLOT", 0)
         _diagnostic("BACKGROUNDPLOT=0")
         try:
-            original_plot_transparency_override = document.GetVariable(
-                "PLOTTRANSPARENCYOVERRIDE"
+            original_plot_transparency_override = int(
+                document.GetVariable("PLOTTRANSPARENCYOVERRIDE")
             )
-            document.SetVariable("PLOTTRANSPARENCYOVERRIDE", 2)
+            _set_int_system_variable(
+                document,
+                "PLOTTRANSPARENCYOVERRIDE",
+                2,
+            )
             _diagnostic("PLOTTRANSPARENCYOVERRIDE=2")
         except Exception as error:
             _diagnostic(
