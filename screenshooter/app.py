@@ -976,10 +976,10 @@ class ScreenshotApp(QMainWindow):
         self.view.image_editor.crop_target_item = None
 
         item = QGraphicsPixmapItem(self.screenshot_pixmap)
-        if self._captured_image_is_pdf:
-            item.setTransformationMode(Qt.FastTransformation)
-        else:
-            item.setTransformationMode(Qt.SmoothTransformation)
+        # PDF-источник уже отрендерен с высоким DPI. При уменьшении полного
+        # листа до окна редактора используем качественную интерполяцию, как
+        # PDF-просмотрщик, а не nearest-neighbor.
+        item.setTransformationMode(Qt.SmoothTransformation)
 
         item.setAcceptedMouseButtons(Qt.NoButton)
         item.setZValue(-1000)
