@@ -2,8 +2,8 @@
 Экспериментальный захват области AutoCAD через фоновый PDF-plot.
 
 экранная область -> координаты текущего вида AutoCAD
--> DWG To PDF.pc3 / monochrome.ctb -> временный PDF
--> рендер PDF в QImage.
+-> DWG To PDF.pc3 / monochrome.ctb -> PDF
+-> открыть PDF во внешнем viewer -> screenshot экрана -> QImage.
 """
 
 from __future__ import annotations
@@ -58,21 +58,6 @@ def _as_com_xy(point):
         pythoncom.VT_ARRAY | pythoncom.VT_R8,
         tuple(float(value) for value in point[:2]),
     )
-
-
-def _set_int_system_variable(document, name, value):
-    """Устанавливает целочисленную системную переменную AutoCAD типизированно."""
-    variant = win32com.client.VARIANT(
-        pythoncom.VT_I4,
-        int(value),
-    )
-    document.SetVariable(name, variant)
-    actual = int(document.GetVariable(name))
-    if actual != int(value):
-        raise RuntimeError(
-            f"{name} после установки имеет значение {actual}, "
-            f"ожидалось {int(value)}"
-        )
 
 
 def _get_autocad_progid_candidates():
@@ -275,11 +260,6 @@ def _get_paper_margins(layout):
 
 def _find_pdf_media(layout):
     layout.RefreshPlotDeviceInfo()
-    try:
-        layout.PlotTransparency = True
-        _diagnostic("PlotTransparency=True")
-    except Exception as error:
-        _diagnostic(f"WARNING: PlotTransparency недоступен: {error}")
     names = layout.GetCanonicalMediaNames()
     normalized = [(str(name).lower(), str(name)) for name in names]
 
@@ -403,7 +383,14 @@ def _configure_monochrome_pdf(layout, lower_left, upper_right):
     except Exception:
         pass
 
+    # RefreshPlotDeviceInfo может сбросить PlotTransparency,
+    # поэтому включаем её после последнего обновления устройства печати.
     layout.RefreshPlotDeviceInfo()
+    try:
+        layout.PlotTransparency = True
+        _diagnostic("PlotTransparency=True")
+    except Exception as error:
+        _diagnostic(f"WARNING: PlotTransparency недоступен: {error}")
 
 
 def _find_pdf_window(file_name):
