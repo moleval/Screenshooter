@@ -374,6 +374,9 @@ class ScreenshotApp(QMainWindow):
         # повторно проходить через enhancer при экспорте.
         self._background_enhanced = False
         self._captured_window_is_autocad = False
+        # PDF AutoCAD-захват является эталонным источником пикселей:
+        # enhancer не должен применяться ни при показе, ни при экспорте.
+        self._captured_image_is_pdf = False
         self.user_zoomed = False
         self.thickness_widget.set_value_silent(2)
 
@@ -958,9 +961,10 @@ class ScreenshotApp(QMainWindow):
             self.screenshot_pixmap = QPixmap.fromImage(enhanced)
             self._background_enhanced = True
 
-    def display_screenshot(self, source_is_autocad=False, already_preprocessed=False):
+    def display_screenshot(self, source_is_autocad=False, already_preprocessed=False, source_is_pdf=False):
         self._captured_window_is_autocad = bool(source_is_autocad)
-        if not already_preprocessed:
+        self._captured_image_is_pdf = bool(source_is_pdf)
+        if not already_preprocessed and not self._captured_image_is_pdf:
             self._prepare_captured_pixmap()
         self.view.clear_pasted_images()
         self.scene.clear()
