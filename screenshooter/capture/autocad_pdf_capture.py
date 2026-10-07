@@ -212,8 +212,8 @@ def screen_rect_to_autocad_window(document, hwnd, screen_rect):
 
     left = screen_rect.left()
     top = screen_rect.top()
-    right = screen_rect.right()
-    bottom = screen_rect.bottom()
+    right = left + screen_rect.width()
+    bottom = top + screen_rect.height()
 
     p1 = _screen_point_to_wcs(document, hwnd, left, bottom, view_state)
     p2 = _screen_point_to_wcs(document, hwnd, right, top, view_state)
@@ -336,25 +336,29 @@ def _configure_monochrome_pdf(layout, lower_left, upper_right):
     if printable_width <= 0 or printable_height <= 0:
         raise RuntimeError("AutoCAD не вернул рабочую область бумаги.")
 
+    landscape = window_width >= window_height
+    layout.PlotRotation = AC_90_DEGREES if landscape else AC_0_DEGREES
+
+    effective_printable_width = printable_width
+    effective_printable_height = printable_height
+    if landscape:
+        effective_printable_width, effective_printable_height = (
+            printable_height,
+            printable_width,
+        )
+
     scale = min(
-        printable_width / window_width,
-        printable_height / window_height,
+        effective_printable_width / window_width,
+        effective_printable_height / window_height,
     )
     if scale <= 0:
         raise RuntimeError("Не удалось вычислить масштаб PDF.")
 
-    # GetCustomScale использует единицы бумаги; для DWG To PDF это обычно мм.
     if int(getattr(layout, "PaperUnits", AC_MILLIMETERS)) == 0:
         scale /= 25.4
 
     layout.UseStandardScale = False
     layout.SetCustomScale(scale, 1.0)
-    layout.PlotRotation = (
-        AC_0_DEGREES
-        if abs(upper_right[0] - lower_left[0])
-        >= abs(upper_right[1] - lower_left[1])
-        else AC_90_DEGREES
-    )
     layout.PlotWithPlotStyles = True
     layout.PlotWithLineweights = False
     layout.ScaleLineweights = False
@@ -394,43 +398,6 @@ def _wait_for_file(path, timeout):
         time.sleep(0.08)
 
     return False
-
-
-def _enhance_pdf_cad_image(image):
-    """Усиливает слабые линии на белом фоне, не инвертируя фон."""
-    if image.isNull():
-        return image
-
-    import numpy as np
-
-    rgb = image.convertToFormat(QImage.Format_RGB888)
-    width = rgb.width()
-    height = rgb.height()
-    ptr = rgb.bits()
-    ptr.setsize(rgb.bytesPerLine() * height)
-    array = np.frombuffer(ptr, dtype=np.uint8).reshape(
-        height, rgb.bytesPerLine()
-    )[:, :width * 3].reshape(height, width, 3)
-
-    corner = np.concatenate((
-        array[: max(1, height // 20), : max(1, width // 20)].reshape(-1, 3),
-        array[: max(1, height // 20), -max(1, width // 20):].reshape(-1, 3),
-        array[-max(1, height // 20):, : max(1, width // 20)].reshape(-1, 3),
-        array[-max(1, height // 20):, -max(1, width // 20):].reshape(-1, 3),
-    ))
-    if float(corner.mean()) < 245.0:
-        return rgb.copy()
-
-    strengthened = 255.0 - (255.0 - array.astype(np.float32)) * 4.0
-    strengthened = np.clip(strengthened, 0, 255).astype(np.uint8)
-    result = QImage(
-        strengthened.data,
-        width,
-        height,
-        width * 3,
-        QImage.Format_RGB888,
-    ).copy()
-    return result
 
 
 def _trim_white_pdf_margins(image, threshold=250):
@@ -495,7 +462,7 @@ def _render_pdf_to_qimage(pdf_path, dpi):
             pix.stride,
             QImage.Format_RGB888,
         ).copy()
-        return _enhance_pdf_cad_image(image), (
+        return image, (
             float(page.rect.width) * 25.4 / 72.0,
             float(page.rect.height) * 25.4 / 72.0,
         )
@@ -549,6 +516,25 @@ def _crop_rendered_pdf_to_plot(image, page_mm, layout, lower_left, upper_right):
     bottom = max(top + 1, min(height, round(y2 / paper_height * height)))
 
     return image.copy(left, top, right - left, bottom - top)
+
+
+def _match_selection_aspect(image, screen_rect):
+    """Убирает только геометрическую погрешность листа, не меняя пиксели CAD."""
+    target_ratio = screen_rect.width() / max(1, screen_rect.height())
+    current_ratio = image.width() / max(1, image.height())
+    if abs(current_ratio - target_ratio) / target_ratio < 0.005:
+        return image
+
+    width = image.width()
+    height = image.height()
+    if current_ratio > target_ratio:
+        new_width = max(1, round(height * target_ratio))
+        left = (width - new_width) // 2
+        return image.copy(left, 0, new_width, height)
+
+    new_height = max(1, round(width / target_ratio))
+    top = (height - new_height) // 2
+    return image.copy(0, top, width, new_height)
 
 
 def capture_autocad_region_via_pdf(hwnd, screen_rect, *, dpi=600, timeout=30.0):
@@ -623,6 +609,7 @@ def capture_autocad_region_via_pdf(hwnd, screen_rect, *, dpi=600, timeout=30.0):
         image = _crop_rendered_pdf_to_plot(
             image, page_mm, layout, lower_left, upper_right
         )
+        image = _match_selection_aspect(image, screen_rect)
         _diagnostic(f"rendered at {dpi} DPI: {image.width()}x{image.height()}")
         _diagnostic("SUCCESS")
         return image
