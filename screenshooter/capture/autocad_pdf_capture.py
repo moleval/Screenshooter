@@ -1,5 +1,4 @@
-"""
-Экспериментальный захват области AutoCAD через фоновый PDF-plot.
+"""Экспериментальный захват области AutoCAD через фоновый PDF-plot.
 
 экранная область -> координаты текущего вида AutoCAD
 -> DWG To PDF.pc3 / monochrome.ctb -> PDF
@@ -10,7 +9,6 @@ from __future__ import annotations
 
 import os
 import re
-import shutil
 import tempfile
 import time
 import winreg
@@ -256,9 +254,7 @@ def screen_rect_to_autocad_window(document, hwnd, screen_rect):
         upper_right[2],
     )
 
-    _diagnostic(
-        f"WCS margin: +12% -> {lower_left} -> {upper_right}"
-    )
+    _diagnostic(f"WCS margin: +12% -> {lower_left} -> {upper_right}")
     return lower_left, upper_right
 
 
@@ -387,7 +383,7 @@ def _configure_monochrome_pdf(layout, lower_left, upper_right):
     layout.PlotWithPlotStyles = True
     layout.PlotWithLineweights = False
     layout.ScaleLineweights = False
-    # Прозрачность должна участвовать в печати PDF.
+
     try:
         layout.PlotTransparency = True
     except Exception:
@@ -401,8 +397,6 @@ def _configure_monochrome_pdf(layout, lower_left, upper_right):
     except Exception:
         pass
 
-    # RefreshPlotDeviceInfo может сбросить PlotTransparency,
-    # поэтому включаем её после последнего обновления устройства печати.
     layout.RefreshPlotDeviceInfo()
     try:
         layout.PlotTransparency = True
@@ -412,14 +406,7 @@ def _configure_monochrome_pdf(layout, lower_left, upper_right):
 
 
 def _find_pdf_window(file_name):
-    """
-    Находит активное окно PDF-XChange после открытия PDF.
-
-    В заголовке верхнего окна имя файла может отсутствовать: PDF-XChange
-    способен показывать имя документа только во вкладке. Поэтому сначала
-    проверяем активное окно, затем ищем видимые окна PDF-XChange и только
-    потом используем точное совпадение имени PDF.
-    """
+    """Находит активное окно PDF-XChange после открытия PDF."""
     needle = str(file_name).lower()
 
     try:
@@ -491,71 +478,33 @@ def _capture_pdf_viewport(viewer_hwnd):
     return Image.frombytes("RGB", (shot.width, shot.height), shot.rgb)
 
 
-def _pan_pdf_view(viewer_hwnd, dx, dy):
-    """
-    Сдвигает страницу PDF мышью, используя штатный Hand Tool PDF-XChange.
-
-    PDF-XChange документирует Space как временное включение Hand Tool,
-    поэтому здесь не используется программный рендеринг или экспорт.
-    """
-    left, top, right, bottom = win32gui.GetClientRect(viewer_hwnd)
-    origin = win32gui.ClientToScreen(viewer_hwnd, (left, top))
-    center_x = int(origin[0] + (right - left) / 2)
-    center_y = int(origin[1] + (bottom - top) / 2)
-
-    win32api.SetCursorPos((center_x, center_y))
-    win32api.keybd_event(ord(" "), 0, 0, 0)
+def _is_fullscreen_window(hwnd):
+    """Определяет F11-fullscreen PDF-XChange без изменения состояния окна."""
     try:
-        time.sleep(0.05)
-        win32api.mouse_event(
-            win32con.MOUSEEVENTF_LEFTDOWN,
-            0,
-            0,
-            0,
-            0,
+        style = win32gui.GetWindowLong(hwnd, win32con.GWL_STYLE)
+        rect = win32gui.GetWindowRect(hwnd)
+        monitor = win32api.MonitorFromWindow(hwnd, win32con.MONITOR_DEFAULTTONEAREST)
+        monitor_info = win32api.GetMonitorInfo(monitor)
+        work = monitor_info["Monitor"]
+        return (
+            not (style & win32con.WS_CAPTION)
+            and abs(rect[0] - work[0]) <= 2
+            and abs(rect[1] - work[1]) <= 2
+            and abs(rect[2] - work[2]) <= 2
+            and abs(rect[3] - work[3]) <= 2
         )
-        time.sleep(0.05)
-        win32api.SetCursorPos((
-            center_x - int(dx),
-            center_y - int(dy),
-        ))
-        time.sleep(0.12)
-        win32api.mouse_event(
-            win32con.MOUSEEVENTF_LEFTUP,
-            0,
-            0,
-            0,
-            0,
-        )
-    finally:
-        win32api.keybd_event(
-            ord(" "),
-            0,
-            win32con.KEYEVENTF_KEYUP,
-            0,
-        )
-
-    time.sleep(0.45)
+    except Exception:
+        return False
 
 
-def _crop_to_pdf_page(image):
-    """
-    Убирает серое поле PDF-viewer вокруг белой страницы.
+def _ensure_pdf_window_normal(viewer_hwnd):
+    """Выводит PDF-XChange из F11-fullscreen, если он уже в нём открыт."""
+    if not _is_fullscreen_window(viewer_hwnd):
+        return
 
-    Это не обработка PDF: кадр уже получен с экрана. Мы только удаляем
-    окружающее окно просмотра перед сборкой tiled screenshot.
-    """
-    gray = image.convert("L")
-    mask = gray.point(lambda value: 255 if value >= 235 else 0)
-    bbox = mask.getbbox()
-    if not bbox:
-        return image
-
-    left, top, right, bottom = bbox
-    if right - left < 400 or bottom - top < 400:
-        return image
-
-    return image.crop(bbox)
+    _diagnostic("PDF viewer уже в fullscreen — один раз выходим перед скриншотом")
+    _send_key(win32con.VK_F11)
+    time.sleep(0.8)
 
 
 def _image_to_qimage(image):
@@ -573,11 +522,11 @@ def _image_to_qimage(image):
 
 def _capture_open_pdf_window(pdf_path, timeout=15.0):
     """
-    Открывает PDF-XChange и получает tiled screenshot страницы.
+    Открывает PDF-XChange и получает один экранный screenshot страницы.
 
-    Все кадры берутся только из client-area PDF-viewer. Fullscreen
-    включается один раз перед серией кадров и выключается один раз
-    после последнего кадра.
+    Никакого tiled/pan-захвата и никакого F11 после съёмки:
+    PDF-XChange остаётся в обычном оконном режиме, а в результат
+    попадает ровно один кадр client-area.
     """
     file_name = os.path.basename(pdf_path)
     try:
@@ -597,99 +546,26 @@ def _capture_open_pdf_window(pdf_path, timeout=15.0):
         raise RuntimeError(f"не найдено окно PDF-viewer для {file_name}")
 
     try:
+        _ensure_pdf_window_normal(viewer_hwnd)
         win32gui.ShowWindow(viewer_hwnd, win32con.SW_MAXIMIZE)
         win32gui.SetForegroundWindow(viewer_hwnd)
     except Exception:
         pass
 
-    time.sleep(0.5)
+    time.sleep(0.6)
 
-    # Нормализуем страницу и один раз входим в fullscreen.
+    # Вписываем всю страницу в доступную область и снимаем один кадр.
     _send_key(ord("0"), modifiers=(win32con.VK_CONTROL,))
-    time.sleep(0.45)
-    _send_key(win32con.VK_F11)
-    time.sleep(0.8)
-    _send_key(win32con.VK_F8)
-    time.sleep(0.4)
-
-    _send_key(ord("M"), modifiers=(win32con.VK_CONTROL, win32con.VK_SHIFT))
-    time.sleep(0.35)
-    for char in "250":
-        _send_key(ord(char))
-        time.sleep(0.04)
-    _send_key(win32con.VK_RETURN)
     time.sleep(0.9)
 
-    first = _capture_pdf_viewport(viewer_hwnd)
-    tile_width, tile_height = first.size
-
-    # Большое перекрытие снижает риск разрыва тонких CAD-линий.
-    horizontal_step = max(500, tile_width // 2)
-    vertical_step = max(400, tile_height // 2)
-
-    tiles = []
-    for row in range(4):
-        row_tiles = []
-        for col in range(2):
-            if row == 0 and col == 0:
-                tile = first
-            else:
-                time.sleep(0.20)
-                tile = _capture_pdf_viewport(viewer_hwnd)
-
-            row_tiles.append(tile)
-
-            if col == 0:
-                _pan_pdf_view(
-                    viewer_hwnd,
-                    horizontal_step,
-                    0,
-                )
-
-        _pan_pdf_view(
-            viewer_hwnd,
-            -horizontal_step,
-            0,
-        )
-        tiles.append(row_tiles)
-
-        if row < 3:
-            _pan_pdf_view(
-                viewer_hwnd,
-                0,
-                vertical_step,
-            )
-
-    canvas_width = tile_width + horizontal_step
-    canvas_height = tile_height + vertical_step * 3
-    canvas = Image.new("RGB", (canvas_width, canvas_height), (128, 128, 128))
-
-    for row, row_tiles in enumerate(tiles):
-        for col, tile in enumerate(row_tiles):
-            canvas.paste(
-                tile,
-                (
-                    col * horizontal_step,
-                    row * vertical_step,
-                ),
-            )
-
-    image = _image_to_qimage(canvas)
+    image = _image_to_qimage(_capture_pdf_viewport(viewer_hwnd))
     _diagnostic(
-        f"PDF viewer tiled screenshot: {image.width()}x{image.height()} "
-        f"zoom=250% tiles=2x4 client-area"
+        f"PDF viewer single screenshot: {image.width()}x{image.height()} "
+        f"client-area, fit-page"
     )
 
-    # Выходим из fullscreen ровно один раз после последнего кадра.
-    try:
-        _send_key(win32con.VK_F11)
-        time.sleep(0.45)
-        _send_key(ord("W"), modifiers=(win32con.VK_CONTROL,))
-        time.sleep(0.35)
-        _diagnostic("PDF viewer: F11 fullscreen exited, PDF tab closed")
-    except Exception as error:
-        _diagnostic(f"WARNING: не удалось закрыть вкладку PDF: {error}")
-
+    # Намеренно НЕ отправляем F11 и Ctrl+W после съёмки.
+    # Окно остаётся в обычном максимизированном режиме, а PDF остаётся открыт.
     return image
 
 
@@ -816,9 +692,9 @@ def capture_autocad_region_via_pdf(hwnd, screen_rect, *, dpi=900, timeout=30.0):
             except Exception:
                 pass
 
-        # PDF-viewer может удерживать временный файл открытым. Сначала
-        # пытаемся удалить PDF, затем каталог; если viewer его держит,
-        # оставляем файл до следующего запуска Windows/очистки temp.
+        # PDF остаётся открытым в viewer, поэтому временный файл может
+        # удерживаться процессом. Пробуем удалить его, но не закрываем viewer
+        # автоматически: это важно для одиночного экранного захвата.
         for _ in range(40):
             try:
                 if os.path.exists(pdf_path):
