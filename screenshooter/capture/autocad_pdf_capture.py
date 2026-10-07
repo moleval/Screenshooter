@@ -394,18 +394,41 @@ def _configure_monochrome_pdf(layout, lower_left, upper_right):
 
 
 def _find_pdf_window(file_name):
-    """Находит окно PDF-XChange, в котором открыт созданный PDF."""
+    """
+    Находит активное окно PDF-XChange после открытия PDF.
+
+    В заголовке верхнего окна имя файла может отсутствовать: PDF-XChange
+    способен показывать имя документа только во вкладке. Поэтому сначала
+    проверяем активное окно, затем ищем видимые окна PDF-XChange и только
+    потом используем точное совпадение имени PDF.
+    """
     needle = str(file_name).lower()
-    found = []
+
+    try:
+        foreground = win32gui.GetForegroundWindow()
+        if foreground and win32gui.IsWindowVisible(foreground):
+            title = win32gui.GetWindowText(foreground).lower()
+            if (
+                "pdf-xchange" in title
+                or "pdf xchange" in title
+                or needle in title
+            ):
+                return foreground
+    except Exception:
+        pass
+
+    candidates = []
 
     def visit(hwnd, _):
         try:
             if not win32gui.IsWindowVisible(hwnd):
                 return True
             title = win32gui.GetWindowText(hwnd)
-            if needle in title.lower():
-                found.append(hwnd)
-                return False
+            lower = title.lower()
+            if "pdf-xchange" in lower or "pdf xchange" in lower:
+                candidates.append(hwnd)
+            elif needle in lower:
+                candidates.append(hwnd)
         except Exception:
             pass
         return True
@@ -415,7 +438,7 @@ def _find_pdf_window(file_name):
     except Exception:
         pass
 
-    return found[0] if found else None
+    return candidates[0] if candidates else None
 
 
 def _send_key(vk, modifiers=()):
@@ -528,11 +551,11 @@ def _wait_for_file(path, timeout):
 
 def capture_autocad_region_via_pdf(hwnd, screen_rect, *, dpi=900, timeout=30.0):
     """
-    Возвращает QImage напрямую из AutoCAD -> PDF -> raster.
+    Возвращает QImage из цепочки AutoCAD -> PDF -> PDF-viewer -> screenshot.
 
-    PDF считается эталонным источником: после его создания не выполняются
-    crop, trim, sharpen, contrast, adaptive enhancer или иная обработка CAD.
-    Возвращается вся страница PDF в исходном порядке пикселей.
+    PDF считается эталонным векторным источником: после его создания PDF
+    не растеризуется библиотекой. Пиксели получает только экранный screenshot
+    уже открытой страницы PDF-XChange.
 
     При любой невозможности возвращает None для безопасного fallback.
     """
@@ -623,24 +646,9 @@ def capture_autocad_region_via_pdf(hwnd, screen_rect, *, dpi=900, timeout=30.0):
             except Exception:
                 pass
 
-        if (
-            document is not None
-            and original_plot_transparency_override is not None
-        ):
-            try:
-                document.SetVariable(
-                    "PLOTTRANSPARENCYOVERRIDE",
-                    original_plot_transparency_override,
-                )
-                _diagnostic(
-                    "PLOTTRANSPARENCYOVERRIDE restored: "
-                    f"{original_plot_transparency_override}"
-                )
-            except Exception:
-                pass
-
-        # PyMuPDF уже закрыл PDF. На Windows AutoCAD иногда ещё кратковременно
-        # удерживает файл, поэтому сначала удаляем сам файл, затем каталог.
+        # PDF-viewer может удерживать временный файл открытым. Сначала
+        # пытаемся удалить PDF, затем каталог; если viewer его держит,
+        # оставляем файл до следующего запуска Windows/очистки temp.
         for _ in range(40):
             try:
                 if os.path.exists(pdf_path):
