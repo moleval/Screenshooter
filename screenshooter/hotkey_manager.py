@@ -671,7 +671,7 @@ class HotkeyManager(QObject):
                     pdf_image = capture_autocad_region_via_pdf(
                         self._capture_source_autocad_hwnd,
                         selection_rect,
-                        dpi=600,
+                        dpi=900,
                     )
                     if pdf_image is not None and not pdf_image.isNull():
                         from PyQt5.QtGui import QPixmap
