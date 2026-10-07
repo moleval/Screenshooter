@@ -462,7 +462,7 @@ class HotkeyManager(QObject):
         )
 
     @staticmethod
-    def _deliver(target, pixmap, screen_capture=False, source_is_autocad=False, already_preprocessed=False):
+    def _deliver(target, pixmap, screen_capture=False, source_is_autocad=False, already_preprocessed=False, source_is_pdf=False):
         if target.is_empty():
             # Для нового скриншота используем тот же путь, что и обычный
             # захват через ScreenshotApp.display_screenshot(): это гарантирует,
@@ -472,6 +472,7 @@ class HotkeyManager(QObject):
                 target.display_screenshot(
                     source_is_autocad=True,
                     already_preprocessed=already_preprocessed,
+                    source_is_pdf=source_is_pdf,
                 )
             else:
                 target.display_screenshot()
@@ -690,6 +691,7 @@ class HotkeyManager(QObject):
                         and not dwg_to_pdf_enabled
                     ) or pdf_capture_succeeded,
                     already_preprocessed=pdf_capture_succeeded,
+                    source_is_pdf=pdf_capture_succeeded,
                 )
         except Exception as error:
             print(f"Ошибка захвата области: {error}")
