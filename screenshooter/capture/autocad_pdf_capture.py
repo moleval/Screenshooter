@@ -280,6 +280,7 @@ def _snapshot_layout(layout):
         "PlotWithLineweights",
         "PlotWithPlotStyles",
         "ScaleLineweights",
+        "PlotTransparency",
         "StyleSheet",
         "UseStandardScale",
         "StandardScale",
@@ -528,6 +529,7 @@ def capture_autocad_region_via_pdf(hwnd, screen_rect, *, dpi=600, timeout=30.0):
     layout = None
     snapshot = None
     original_background_plot = None
+    original_plot_transparency_override = None
 
     try:
         document = acad.ActiveDocument
@@ -548,6 +550,16 @@ def capture_autocad_region_via_pdf(hwnd, screen_rect, *, dpi=600, timeout=30.0):
 
         document.SetVariable("BACKGROUNDPLOT", 0)
         _diagnostic("BACKGROUNDPLOT=0")
+        try:
+            original_plot_transparency_override = document.GetVariable(
+                "PLOTTRANSPARENCYOVERRIDE"
+            )
+            document.SetVariable("PLOTTRANSPARENCYOVERRIDE", 2)
+            _diagnostic("PLOTTRANSPARENCYOVERRIDE=2")
+        except Exception as error:
+            _diagnostic(
+                f"WARNING: не удалось включить прозрачность печати: {error}"
+            )
         _configure_monochrome_pdf(layout, lower_left, upper_right)
         _diagnostic(
             f"plot device={layout.ConfigName}, "
@@ -574,14 +586,12 @@ def capture_autocad_region_via_pdf(hwnd, screen_rect, *, dpi=600, timeout=30.0):
             f"(before crop)"
         )
 
-        # Не пересчитываем границы CAD через PlotOrigin/масштаб AutoCAD:
-        # эти координаты относятся к листу PDF и давали рассинхрон с
-        # экранным выделением. Берём именно готовый PDF как источник пикселей
-        # и удаляем только его белое поле.
-        image = _trim_white_pdf_margins(image)
-        image = _match_selection_aspect(image, screen_rect)
-
-        _diagnostic(f"rendered at {dpi} DPI: {image.width()}x{image.height()}")
+        # PDF является эталонным источником. Не выполняем crop, trim
+        # или подгонку пропорций: возвращаем всю страницу PDF.
+        _diagnostic(
+            f"rendered full PDF at {dpi} DPI: "
+            f"{image.width()}x{image.height()}"
+        )
         _diagnostic("SUCCESS")
         return image
     except Exception as error:
@@ -598,6 +608,22 @@ def capture_autocad_region_via_pdf(hwnd, screen_rect, *, dpi=600, timeout=30.0):
         if document is not None and original_background_plot is not None:
             try:
                 document.SetVariable("BACKGROUNDPLOT", original_background_plot)
+            except Exception:
+                pass
+
+        if (
+            document is not None
+            and original_plot_transparency_override is not None
+        ):
+            try:
+                document.SetVariable(
+                    "PLOTTRANSPARENCYOVERRIDE",
+                    original_plot_transparency_override,
+                )
+                _diagnostic(
+                    "PLOTTRANSPARENCYOVERRIDE restored: "
+                    f"{original_plot_transparency_override}"
+                )
             except Exception:
                 pass
 
