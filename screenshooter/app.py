@@ -976,7 +976,10 @@ class ScreenshotApp(QMainWindow):
         self.view.image_editor.crop_target_item = None
 
         item = QGraphicsPixmapItem(self.screenshot_pixmap)
-        item.setTransformationMode(Qt.SmoothTransformation)
+        if self._captured_image_is_pdf:
+            item.setTransformationMode(Qt.FastTransformation)
+        else:
+            item.setTransformationMode(Qt.SmoothTransformation)
 
         item.setAcceptedMouseButtons(Qt.NoButton)
         item.setZValue(-1000)
