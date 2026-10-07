@@ -27,6 +27,7 @@ AC_WINDOW = 4
 AC_SCALE_TO_FIT = 0
 AC_0_DEGREES = 0
 AC_90_DEGREES = 1
+AC_MILLIMETERS = 1
 
 
 def _diagnostic(message):
@@ -130,14 +131,49 @@ def _is_supported_2d_view(view_state):
     )
 
 
-def _screen_point_to_wcs(document, hwnd, screen_x, screen_y, view_state):
+def _graphics_rect(hwnd, screen_size):
+    """Находит дочернюю область графики AutoCAD по SCREENSIZE."""
+    target_w = float(screen_size[0])
+    target_h = float(screen_size[1])
+    candidates = []
+
+    def visit(child, _):
+        try:
+            rect = win32gui.GetClientRect(child)
+            width = rect[2] - rect[0]
+            height = rect[3] - rect[1]
+            if width <= 200 or height <= 150:
+                return
+            origin = win32gui.ClientToScreen(child, (0, 0))
+            dw = abs(width - target_w) / max(target_w, 1.0)
+            dh = abs(height - target_h) / max(target_h, 1.0)
+            score = dw + dh
+            if dw <= 0.20 and dh <= 0.20:
+                candidates.append((score, origin, width, height, child))
+        except Exception:
+            pass
+
+    try:
+        win32gui.EnumChildWindows(hwnd, visit, None)
+    except Exception:
+        candidates = []
+
+    if candidates:
+        _, origin, width, height, child = min(candidates, key=lambda item: item[0])
+        return origin, width, height, child
+
     client = win32gui.GetClientRect(hwnd)
     origin = win32gui.ClientToScreen(hwnd, (0, 0))
-    client_width = client[2] - client[0]
-    client_height = client[3] - client[1]
+    return origin, client[2] - client[0], client[3] - client[1], hwnd
+
+
+def _screen_point_to_wcs(document, hwnd, screen_x, screen_y, view_state):
+    origin, client_width, client_height, _ = _graphics_rect(
+        hwnd, view_state["screen_size"]
+    )
 
     if client_width <= 0 or client_height <= 0:
-        raise RuntimeError("Не удалось определить клиентскую область AutoCAD.")
+        raise RuntimeError("Не удалось определить графическую область AutoCAD.")
 
     rel_x = float(screen_x - origin[0])
     rel_y = float(screen_y - origin[1])
@@ -200,6 +236,20 @@ def screen_rect_to_autocad_window(document, hwnd, screen_rect):
         raise RuntimeError("Выделенная область AutoCAD слишком мала.")
 
     return lower_left, upper_right
+
+
+def _get_paper_size(layout):
+    result = layout.GetPaperSize()
+    if isinstance(result, tuple) and len(result) >= 2:
+        return float(result[0]), float(result[1])
+    raise RuntimeError("AutoCAD не вернул размер бумаги.")
+
+
+def _get_paper_margins(layout):
+    result = layout.GetPaperMargins()
+    if isinstance(result, tuple) and len(result) >= 2:
+        return _variant_point(result[0])[:2], _variant_point(result[1])[:2]
+    raise RuntimeError("AutoCAD не вернул поля бумаги.")
 
 
 def _find_pdf_media(layout):
@@ -275,8 +325,30 @@ def _configure_monochrome_pdf(layout, lower_left, upper_right):
     layout.SetWindowToPlot(_as_com_xy(lower_left), _as_com_xy(upper_right))
     layout.PlotType = AC_WINDOW
     layout.CenterPlot = True
-    layout.UseStandardScale = True
-    layout.StandardScale = AC_SCALE_TO_FIT
+
+    paper_width, paper_height = _get_paper_size(layout)
+    margin_ll, margin_ur = _get_paper_margins(layout)
+    printable_width = paper_width - (margin_ur[0] - margin_ll[0])
+    printable_height = paper_height - (margin_ur[1] - margin_ll[1])
+    window_width = abs(upper_right[0] - lower_left[0])
+    window_height = abs(upper_right[1] - lower_left[1])
+
+    if printable_width <= 0 or printable_height <= 0:
+        raise RuntimeError("AutoCAD не вернул рабочую область бумаги.")
+
+    scale = min(
+        printable_width / window_width,
+        printable_height / window_height,
+    )
+    if scale <= 0:
+        raise RuntimeError("Не удалось вычислить масштаб PDF.")
+
+    # GetCustomScale использует единицы бумаги; для DWG To PDF это обычно мм.
+    if int(getattr(layout, "PaperUnits", AC_MILLIMETERS)) == 0:
+        scale /= 25.4
+
+    layout.UseStandardScale = False
+    layout.SetCustomScale(scale, 1.0)
     layout.PlotRotation = (
         AC_0_DEGREES
         if abs(upper_right[0] - lower_left[0])
@@ -324,6 +396,43 @@ def _wait_for_file(path, timeout):
     return False
 
 
+def _enhance_pdf_cad_image(image):
+    """Усиливает слабые линии на белом фоне, не инвертируя фон."""
+    if image.isNull():
+        return image
+
+    import numpy as np
+
+    rgb = image.convertToFormat(QImage.Format_RGB888)
+    width = rgb.width()
+    height = rgb.height()
+    ptr = rgb.bits()
+    ptr.setsize(rgb.bytesPerLine() * height)
+    array = np.frombuffer(ptr, dtype=np.uint8).reshape(
+        height, rgb.bytesPerLine()
+    )[:, :width * 3].reshape(height, width, 3)
+
+    corner = np.concatenate((
+        array[: max(1, height // 20), : max(1, width // 20)].reshape(-1, 3),
+        array[: max(1, height // 20), -max(1, width // 20):].reshape(-1, 3),
+        array[-max(1, height // 20):, : max(1, width // 20)].reshape(-1, 3),
+        array[-max(1, height // 20):, -max(1, width // 20):].reshape(-1, 3),
+    ))
+    if float(corner.mean()) < 245.0:
+        return rgb.copy()
+
+    strengthened = 255.0 - (255.0 - array.astype(np.float32)) * 4.0
+    strengthened = np.clip(strengthened, 0, 255).astype(np.uint8)
+    result = QImage(
+        strengthened.data,
+        width,
+        height,
+        width * 3,
+        QImage.Format_RGB888,
+    ).copy()
+    return result
+
+
 def _trim_white_pdf_margins(image, threshold=250):
     if image.isNull():
         return image
@@ -360,13 +469,13 @@ def _trim_white_pdf_margins(image, threshold=250):
 
 def _render_pdf_to_qimage(pdf_path, dpi):
     try:
-        import fitz
+        import pymupdf
     except ImportError as error:
         raise RuntimeError(
             "Для PDF-прототипа нужен PyMuPDF: pip install PyMuPDF"
         ) from error
 
-    pdf = fitz.open(pdf_path)
+    pdf = pymupdf.open(pdf_path)
     try:
         if pdf.page_count < 1:
             raise RuntimeError("AutoCAD создал пустой PDF.")
@@ -386,7 +495,7 @@ def _render_pdf_to_qimage(pdf_path, dpi):
             pix.stride,
             QImage.Format_RGB888,
         ).copy()
-        return _trim_white_pdf_margins(image)
+        return _enhance_pdf_cad_image(image)
     finally:
         pdf.close()
 
