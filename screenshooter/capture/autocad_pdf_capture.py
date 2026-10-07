@@ -496,8 +496,8 @@ def _render_pdf_to_qimage(pdf_path, dpi):
             QImage.Format_RGB888,
         ).copy()
         return _enhance_pdf_cad_image(image), (
-            float(page.rect.width),
-            float(page.rect.height),
+            float(page.rect.width) * 25.4 / 72.0,
+            float(page.rect.height) * 25.4 / 72.0,
         )
     finally:
         pdf.close()
