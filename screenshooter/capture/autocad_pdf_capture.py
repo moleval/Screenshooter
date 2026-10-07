@@ -364,6 +364,11 @@ def _configure_monochrome_pdf(layout, lower_left, upper_right):
     layout.PlotWithPlotStyles = True
     layout.PlotWithLineweights = False
     layout.ScaleLineweights = False
+    # Прозрачность должна участвовать в печати PDF.
+    try:
+        layout.PlotTransparency = True
+    except Exception:
+        pass
 
     try:
         for style in layout.GetPlotStyleTableNames():
@@ -564,6 +569,10 @@ def capture_autocad_region_via_pdf(hwnd, screen_rect, *, dpi=600, timeout=30.0):
 
         _diagnostic(f"PDF created: {pdf_path}")
         image = _render_pdf_to_qimage(pdf_path, dpi)
+        _diagnostic(
+            f"PDF raster source: {image.width()}x{image.height()} "
+            f"(before crop)"
+        )
 
         # Не пересчитываем границы CAD через PlotOrigin/масштаб AutoCAD:
         # эти координаты относятся к листу PDF и давали рассинхрон с
