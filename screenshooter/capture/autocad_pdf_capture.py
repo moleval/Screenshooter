@@ -15,8 +15,12 @@ import tempfile
 import time
 import winreg
 
+import mss
+
 import pythoncom
 import win32com.client
+import win32api
+import win32con
 import win32gui
 from PyQt5.QtCore import QRect
 from PyQt5.QtGui import QImage
@@ -271,6 +275,11 @@ def _get_paper_margins(layout):
 
 def _find_pdf_media(layout):
     layout.RefreshPlotDeviceInfo()
+    try:
+        layout.PlotTransparency = True
+        _diagnostic("PlotTransparency=True")
+    except Exception as error:
+        _diagnostic(f"WARNING: PlotTransparency недоступен: {error}")
     names = layout.GetCanonicalMediaNames()
     normalized = [(str(name).lower(), str(name)) for name in names]
 
@@ -397,6 +406,113 @@ def _configure_monochrome_pdf(layout, lower_left, upper_right):
     layout.RefreshPlotDeviceInfo()
 
 
+def _find_pdf_window(file_name):
+    """Находит окно PDF-XChange, в котором открыт созданный PDF."""
+    needle = str(file_name).lower()
+    found = []
+
+    def visit(hwnd, _):
+        try:
+            if not win32gui.IsWindowVisible(hwnd):
+                return True
+            title = win32gui.GetWindowText(hwnd)
+            if needle in title.lower():
+                found.append(hwnd)
+                return False
+        except Exception:
+            pass
+        return True
+
+    try:
+        win32gui.EnumWindows(visit, None)
+    except Exception:
+        pass
+
+    return found[0] if found else None
+
+
+def _send_key(vk, modifiers=()):
+    """Эмулирует короткое нажатие клавиши через Win32."""
+    for modifier in modifiers:
+        win32api.keybd_event(modifier, 0, 0, 0)
+    win32api.keybd_event(vk, 0, 0, 0)
+    win32api.keybd_event(vk, 0, win32con.KEYEVENTF_KEYUP, 0)
+    for modifier in reversed(modifiers):
+        win32api.keybd_event(modifier, 0, win32con.KEYEVENTF_KEYUP, 0)
+
+
+def _capture_open_pdf_window(pdf_path, timeout=15.0):
+    """
+    Открывает PDF системным приложением и снимает именно его отображение.
+
+    PDF не растеризуется программно: пиксели получаются аппаратным
+    screenshot после того, как PDF-viewer сам отрисовал векторную страницу.
+    Для PDF-XChange используются штатные Ctrl+0 (Fit Page) и F11.
+    """
+    file_name = os.path.basename(pdf_path)
+    try:
+        os.startfile(pdf_path)
+    except Exception as error:
+        raise RuntimeError(f"не удалось открыть PDF: {error}") from error
+
+    deadline = time.monotonic() + timeout
+    viewer_hwnd = None
+    while time.monotonic() < deadline:
+        viewer_hwnd = _find_pdf_window(file_name)
+        if viewer_hwnd:
+            break
+        time.sleep(0.15)
+
+    if not viewer_hwnd:
+        raise RuntimeError(f"не найдено окно PDF-viewer для {file_name}")
+
+    try:
+        win32gui.ShowWindow(viewer_hwnd, win32con.SW_MAXIMIZE)
+        win32gui.SetForegroundWindow(viewer_hwnd)
+    except Exception:
+        pass
+
+    time.sleep(0.35)
+    _send_key(ord("0"), modifiers=(win32con.VK_CONTROL,))
+    time.sleep(0.35)
+    _send_key(win32con.VK_F11)
+    time.sleep(0.75)
+    _send_key(ord("0"), modifiers=(win32con.VK_CONTROL,))
+    time.sleep(0.75)
+
+    try:
+        left, top, right, bottom = win32gui.GetWindowRect(viewer_hwnd)
+    except Exception as error:
+        raise RuntimeError(f"не удалось получить область PDF-viewer: {error}") from error
+
+    width = max(1, int(right - left))
+    height = max(1, int(bottom - top))
+    if width < 200 or height < 200:
+        raise RuntimeError(f"слишком маленькое окно PDF-viewer: {width}x{height}")
+
+    with mss.mss() as sct:
+        shot = sct.grab({
+            "left": int(left),
+            "top": int(top),
+            "width": width,
+            "height": height,
+        })
+
+    image = QImage(
+        shot.raw,
+        shot.width,
+        shot.height,
+        shot.width * 4,
+        QImage.Format_ARGB32,
+    ).copy()
+
+    _diagnostic(
+        f"PDF viewer screenshot: {image.width()}x{image.height()} "
+        f"window=0x{int(viewer_hwnd):X}"
+    )
+    return image
+
+
 def _wait_for_file(path, timeout):
     deadline = time.monotonic() + timeout
     previous_size = -1
@@ -421,99 +537,6 @@ def _wait_for_file(path, timeout):
         time.sleep(0.08)
 
     return False
-
-
-def _trim_white_pdf_margins(image, threshold=250):
-    """Обрезает только белые поля готового PDF, не изменяя пиксели CAD."""
-    if image.isNull():
-        return image
-
-    import numpy as np
-
-    rgb = image.convertToFormat(QImage.Format_RGB888)
-    width = rgb.width()
-    height = rgb.height()
-    ptr = rgb.bits()
-    ptr.setsize(rgb.bytesPerLine() * height)
-
-    array = np.frombuffer(ptr, dtype=np.uint8).reshape(
-        height, rgb.bytesPerLine()
-    )[:, :width * 3].reshape(height, width, 3)
-
-    dark = np.any(array < threshold, axis=2)
-    if not dark.any():
-        return image
-
-    ys, xs = np.where(dark)
-    rect = QRect(
-        int(xs.min()),
-        int(ys.min()),
-        int(xs.max() - xs.min() + 1),
-        int(ys.max() - ys.min() + 1),
-    )
-
-    margin = max(2, min(12, int(min(width, height) * 0.003)))
-    rect = rect.adjusted(-margin, -margin, margin, margin)
-    rect = rect.intersected(QRect(0, 0, width, height))
-    return rgb.copy(rect)
-
-
-def _render_pdf_to_qimage(pdf_path, dpi):
-    try:
-        import pymupdf
-    except ImportError as error:
-        raise RuntimeError(
-            "Для PDF-прототипа нужен PyMuPDF: pip install PyMuPDF"
-        ) from error
-
-    pdf = pymupdf.open(pdf_path)
-    try:
-        if pdf.page_count < 1:
-            raise RuntimeError("AutoCAD создал пустой PDF.")
-
-        page = pdf.load_page(0)
-        zoom = float(dpi) / 72.0
-        previous_aa = pymupdf.TOOLS.show_aa_level()
-        pymupdf.TOOLS.set_aa_level(8)
-        try:
-            pix = page.get_pixmap(
-                matrix=pymupdf.Matrix(zoom, zoom),
-                colorspace=pymupdf.csRGB,
-                alpha=False,
-                annots=False,
-            )
-        finally:
-            pymupdf.TOOLS.set_aa_level(int(previous_aa["graphics"]))
-
-        image = QImage(
-            pix.samples,
-            pix.width,
-            pix.height,
-            pix.stride,
-            QImage.Format_RGB888,
-        ).copy()
-        return image
-    finally:
-        pdf.close()
-
-
-def _match_selection_aspect(image, screen_rect):
-    """Убирает только геометрическую погрешность листа, не меняя CAD-пиксели."""
-    target_ratio = screen_rect.width() / max(1, screen_rect.height())
-    current_ratio = image.width() / max(1, image.height())
-    if abs(current_ratio - target_ratio) / target_ratio < 0.005:
-        return image
-
-    width = image.width()
-    height = image.height()
-    if current_ratio > target_ratio:
-        new_width = max(1, round(height * target_ratio))
-        left = (width - new_width) // 2
-        return image.copy(left, 0, new_width, height)
-
-    new_height = max(1, round(width / target_ratio))
-    top = (height - new_height) // 2
-    return image.copy(0, top, width, new_height)
 
 
 def capture_autocad_region_via_pdf(hwnd, screen_rect, *, dpi=900, timeout=30.0):
@@ -549,7 +572,6 @@ def capture_autocad_region_via_pdf(hwnd, screen_rect, *, dpi=900, timeout=30.0):
     layout = None
     snapshot = None
     original_background_plot = None
-    original_plot_transparency_override = None
 
     try:
         document = acad.ActiveDocument
@@ -570,20 +592,6 @@ def capture_autocad_region_via_pdf(hwnd, screen_rect, *, dpi=900, timeout=30.0):
 
         document.SetVariable("BACKGROUNDPLOT", 0)
         _diagnostic("BACKGROUNDPLOT=0")
-        try:
-            original_plot_transparency_override = int(
-                document.GetVariable("PLOTTRANSPARENCYOVERRIDE")
-            )
-            _set_int_system_variable(
-                document,
-                "PLOTTRANSPARENCYOVERRIDE",
-                2,
-            )
-            _diagnostic("PLOTTRANSPARENCYOVERRIDE=2")
-        except Exception as error:
-            _diagnostic(
-                f"WARNING: не удалось включить прозрачность печати: {error}"
-            )
         _configure_monochrome_pdf(layout, lower_left, upper_right)
         _diagnostic(
             f"plot device={layout.ConfigName}, "
@@ -604,16 +612,9 @@ def capture_autocad_region_via_pdf(hwnd, screen_rect, *, dpi=900, timeout=30.0):
             return None
 
         _diagnostic(f"PDF created: {pdf_path}")
-        image = _render_pdf_to_qimage(pdf_path, dpi)
+        image = _capture_open_pdf_window(pdf_path, timeout=timeout)
         _diagnostic(
-            f"PDF raster source: {image.width()}x{image.height()} "
-            f"(before crop)"
-        )
-
-        # PDF является эталонным источником. Не выполняем crop, trim
-        # или подгонку пропорций: возвращаем всю страницу PDF.
-        _diagnostic(
-            f"rendered full PDF at {dpi} DPI: "
+            f"captured from opened PDF viewer: "
             f"{image.width()}x{image.height()}"
         )
         _diagnostic("SUCCESS")
