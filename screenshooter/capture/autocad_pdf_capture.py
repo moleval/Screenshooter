@@ -520,6 +520,19 @@ def _capture_open_pdf_window(pdf_path, timeout=15.0):
         f"PDF viewer screenshot: {image.width()}x{image.height()} "
         f"window=0x{int(viewer_hwnd):X}"
     )
+
+    # Возвращаем PDF-XChange из полноэкранного режима и закрываем
+    # только открытую вкладку захваченного PDF. Сам PDF-viewer не
+    # завершаем: пользователь может продолжать им пользоваться.
+    try:
+        _send_key(win32con.VK_ESCAPE)
+        time.sleep(0.25)
+        _send_key(ord("W"), modifiers=(win32con.VK_CONTROL,))
+        time.sleep(0.35)
+        _diagnostic("PDF viewer: fullscreen exited, PDF tab closed")
+    except Exception as error:
+        _diagnostic(f"WARNING: не удалось закрыть вкладку PDF: {error}")
+
     return image
 
 
