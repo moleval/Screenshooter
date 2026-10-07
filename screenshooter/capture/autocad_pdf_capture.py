@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import tempfile
 import time
 import winreg
@@ -630,9 +631,14 @@ def capture_autocad_region_via_pdf(hwnd, screen_rect, *, dpi=600, timeout=30.0):
             except Exception:
                 pass
 
-        try:
-            if os.path.isfile(pdf_path):
-                os.remove(pdf_path)
-            os.rmdir(temp_dir)
-        except OSError:
-            pass
+        # PyMuPDF уже закрыл PDF. Удаляем и файл, и каталог; несколько
+        # попыток нужны на Windows из-за кратковременных файловых блокировок.
+        for _ in range(8):
+            try:
+                shutil.rmtree(temp_dir)
+                _diagnostic("temporary PDF removed")
+                break
+            except OSError:
+                time.sleep(0.05)
+        else:
+            _diagnostic(f"WARNING: не удалось удалить временный PDF: {pdf_path}")
