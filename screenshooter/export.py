@@ -107,6 +107,7 @@ class Exporter:
             if (
                 (getattr(self.settings, "enhancer_enabled", False) or autocad_monochrome)
                 and not getattr(window, "_background_enhanced", False)
+                and not getattr(window, "_captured_image_is_pdf", False)
             ):
                 options = EnhancerOptions(
                     enabled=True,
