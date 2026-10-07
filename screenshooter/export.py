@@ -46,6 +46,29 @@ class Exporter:
         if bg_pixmap.isNull():
             return None
 
+        # Для PDF-захвата уже имеется готовый результат PDF -> QImage -> QPixmap.
+        # Если сцена содержит только этот фон и он не трансформирован, не
+        # прогоняем его второй раз через QGraphicsScene.render(): повторное
+        # растеризование может смягчать тонкие CAD-линии.
+        window = self.view.window()
+        if getattr(window, "_captured_image_is_pdf", False):
+            scene_items = [
+                item for item in self.scene.items()
+                if not sip.isdeleted(item)
+            ]
+            try:
+                is_identity_transform = bg.sceneTransform().isIdentity()
+            except RuntimeError:
+                is_identity_transform = False
+            if len(scene_items) == 1 and scene_items[0] is bg and is_identity_transform:
+                direct_image = bg_pixmap.toImage().copy()
+                print(
+                    f"[EXPORT] PDF direct source: "
+                    f"{direct_image.width()}x{direct_image.height()}",
+                    flush=True,
+                )
+                return direct_image
+
         # Все служебные элементы должны быть скрыты на время рендера.
         # Ручки аннотаций являются обычными QGraphicsItem, поэтому без
         # временного скрытия они физически попадают в экспортируемое изображение.
@@ -90,6 +113,12 @@ class Exporter:
 
         try:
             target = bg.sceneBoundingRect()
+            print(
+                f"[EXPORT] scene render source: "
+                f"{bg_pixmap.width()}x{bg_pixmap.height()} -> "
+                f"{target.width():.0f}x{target.height():.0f}",
+                flush=True,
+            )
             target_rect = target.toAlignedRect()
             img = QImage(target_rect.size(), QImage.Format_ARGB32)
             img.fill(Qt.transparent)
