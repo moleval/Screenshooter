@@ -4,9 +4,8 @@
 """
 
 from PyQt5.QtCore import QObject, QTimer
-import os
 from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QSystemTrayIcon, QMenu, QAction, QApplication, QFileDialog
+from PyQt5.QtWidgets import QSystemTrayIcon, QMenu, QAction, QApplication
 
 from .utils import load_app_icon
 from .settings import AppSettings
@@ -29,6 +28,10 @@ class TrayManager(QObject):
             icon = QIcon()
 
         self.tray_icon = QSystemTrayIcon(icon, self)
+        self._single_click_timer = QTimer(self)
+        self._single_click_timer.setSingleShot(True)
+        self._single_click_timer.setInterval(250)
+        self._single_click_timer.timeout.connect(self._toggle_all_windows)
         self.tray_icon.setToolTip("Скриншотер")
 
         self.menu = QMenu()
@@ -123,13 +126,6 @@ class TrayManager(QObject):
         self.theme_menu.setEnabled(True)
         self._build_theme_menu()
 
-        self.save_dir_action = QAction("Выбрать папку сохранения...", self)
-        self.save_dir_action.setEnabled(True)
-        self.save_dir_action.triggered.connect(self._choose_save_directory)
-        self.menu.addAction(self.save_dir_action)
-
-        self.menu.addSeparator()
-
         self.quit_action = QAction("Выход", self)
         self.quit_action.triggered.connect(self._quit_app)
         self.menu.addAction(self.quit_action)
@@ -210,11 +206,17 @@ class TrayManager(QObject):
         self.update_windows_menu()
 
     def _create_new_window(self):
-        """Создаёт новое независимое пустое окно редактора."""
+        """Создаёт новое независимое пустое окно редактора во весь экран."""
         if self.window_manager is None:
             return
         window = self.window_manager.create_editor_window(reusable=True, show=True)
         self._activate_window(window)
+        # Новое пустое окно из двойного клика по трею сразу разворачиваем
+        # на весь доступный экран, не меняя поведение обычного показа окон.
+        window.showMaximized()
+        window.raise_()
+        window.activateWindow()
+        self.update_windows_menu()
 
     def _toggle_all_windows(self):
         if self.window_manager is None:
@@ -311,26 +313,6 @@ class TrayManager(QObject):
         for key, action in self.theme_actions.items():
             action.setChecked(key == selected_key)
 
-    def _choose_save_directory(self):
-        target = self._current_window()
-        if target is not None:
-            target.choose_save_directory()
-            return
-
-        directory = QFileDialog.getExistingDirectory(
-            None,
-            "Выберите папку для сохранения скриншотов",
-            self.settings.save_directory or os.path.expanduser("~"),
-        )
-        if directory:
-            self.settings.set_save_directory(directory)
-            self.tray_icon.showMessage(
-                "Скриншотер",
-                f"Папка сохранения: {directory}",
-                QSystemTrayIcon.Information,
-                2000,
-            )
-
     def _quit_app(self):
         target = self._current_window()
         if target is not None:
@@ -340,13 +322,20 @@ class TrayManager(QObject):
 
     def _on_activated(self, reason):
         if reason == QSystemTrayIcon.Trigger:
-            self._toggle_all_windows()
+            # Windows/Qt могут прислать Trigger перед DoubleClick.
+            # Откладываем одиночный клик, чтобы двойной не выполнял два действия.
+            self._single_click_timer.start()
             return
-        target = self._current_window()
-        if target is None:
-            return
+
         if reason == QSystemTrayIcon.DoubleClick:
-            target.show_from_tray()
+            self._single_click_timer.stop()
+            self._create_new_window()
+            return
+
+        if reason == QSystemTrayIcon.MiddleClick:
+            target = self._current_window()
+            if target is not None:
+                self._activate_window(target)
 
     def show_message(self, title: str, message: str):
         self.tray_icon.showMessage(title, message, QSystemTrayIcon.Information, 3000)

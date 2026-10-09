@@ -18,6 +18,7 @@ from PyQt5.QtWidgets import QApplication, QDialog
 from .capture.screen_overlay import ScreenCaptureOverlay
 from .capture.region_overlay import RegionCaptureOverlay
 from .capture.window_capture import capture_active_window, is_autocad_window
+from .capture.autocad_pdf_capture import capture_autocad_region_via_pdf
 from .capture.virtual_screen import grab_screen_physical
 
 
@@ -36,6 +37,8 @@ class HotkeyManager(QObject):
         super().__init__(parent)
 
         self.window_manager = window_manager
+        from .settings import AppSettings
+        self._settings = AppSettings()
 
         self._capturing = False
         self._hidden_windows = []
@@ -45,6 +48,7 @@ class HotkeyManager(QObject):
         self._printscreen_down = False
         self._alt_down = False
         self._capture_source_is_autocad = False
+        self._capture_source_autocad_hwnd = None
 
         self._key_state_lock = threading.Lock()
 
@@ -212,6 +216,9 @@ class HotkeyManager(QObject):
         except Exception:
             foreground_hwnd = None
         self._capture_source_is_autocad = is_autocad_window(foreground_hwnd)
+        self._capture_source_autocad_hwnd = (
+            foreground_hwnd if self._capture_source_is_autocad else None
+        )
 
         # По требованию приложения:
         #   PrintScreen      -> выделение участка экрана
@@ -455,14 +462,18 @@ class HotkeyManager(QObject):
         )
 
     @staticmethod
-    def _deliver(target, pixmap, screen_capture=False, source_is_autocad=False):
+    def _deliver(target, pixmap, screen_capture=False, source_is_autocad=False, already_preprocessed=False, source_is_pdf=False):
         if target.is_empty():
             # Для нового скриншота используем тот же путь, что и обычный
             # захват через ScreenshotApp.display_screenshot(): это гарантирует,
             # что настройки enhancer (включая инверсию) применяются до показа.
             target.screenshot_pixmap = pixmap
             if source_is_autocad:
-                target.display_screenshot(source_is_autocad=True)
+                target.display_screenshot(
+                    source_is_autocad=True,
+                    already_preprocessed=already_preprocessed,
+                    source_is_pdf=source_is_pdf,
+                )
             else:
                 target.display_screenshot()
         else:
@@ -634,7 +645,39 @@ class HotkeyManager(QObject):
         target = None
         try:
             target = self._target()
-            pixmap = self._capture_pixmap("region")
+
+            overlay = RegionCaptureOverlay()
+            overlay.activateWindow()
+            overlay.raise_()
+            QApplication.processEvents()
+
+            accepted = overlay.exec_() == QDialog.Accepted
+            pixmap = overlay.get_pixmap() if accepted else None
+
+            # DWG TO PDF — только при явном включении в настройках.
+            # При включённом режиме fallback не должен запускать
+            # монохромное инвертирование AutoCAD.
+            self._settings.load()
+            dwg_to_pdf_enabled = bool(getattr(self._settings, "dwg_to_pdf", False))
+            pdf_capture_succeeded = False
+            if (
+                accepted
+                and self._capture_source_is_autocad
+                and self._capture_source_autocad_hwnd
+                and dwg_to_pdf_enabled
+            ):
+                selection_rect = overlay.get_selection_rect()
+                if selection_rect is not None:
+                    pdf_image = capture_autocad_region_via_pdf(
+                        self._capture_source_autocad_hwnd,
+                        selection_rect,
+                        dpi=900,
+                    )
+                    if pdf_image is not None and not pdf_image.isNull():
+                        from PyQt5.QtGui import QPixmap
+                        pixmap = QPixmap.fromImage(pdf_image)
+                        pdf_capture_succeeded = True
+
             if pixmap is not None:
                 target = (
                     target
@@ -643,11 +686,17 @@ class HotkeyManager(QObject):
                 self._deliver(
                     target,
                     pixmap,
-                    source_is_autocad=self._capture_source_is_autocad,
+                    source_is_autocad=(
+                        self._capture_source_is_autocad
+                        and not dwg_to_pdf_enabled
+                    ) or pdf_capture_succeeded,
+                    already_preprocessed=pdf_capture_succeeded,
+                    source_is_pdf=pdf_capture_succeeded,
                 )
         except Exception as error:
             print(f"Ошибка захвата области: {error}")
         finally:
             self._finish(target)
             self._capture_source_is_autocad = False
+            self._capture_source_autocad_hwnd = None
             self._request_pending = False

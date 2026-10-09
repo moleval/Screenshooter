@@ -80,8 +80,9 @@ def test_icon_manager_keeps_toolbar_colors_in_dark_theme(qapp):
         assert IconManager._color_for_category(IconManager.EDITING).name() == "#d7f5ff"
         assert IconManager._color_for_icon("pipette", IconManager.EDITING) == QColor("#ffffff")
         assert IconManager._color_for_icon("palette", IconManager.EDITING) == QColor("#ffffff")
-        for name in ("undo", "redo", "screen-1", "screen-2", "clear", "save", "help"):
-            assert IconManager._color_for_icon(name, IconManager.EDITING) == QColor("#ffffff")
+        expected = theme_manager.get_color("icon_action")
+        for name in ("undo", "redo", "screen-1", "screen-2", "clear", "save", "help", "printer"):
+            assert IconManager._color_for_icon(name, IconManager.EDITING) == expected
     finally:
         theme_manager.set_theme(previous)
 
@@ -145,3 +146,22 @@ def test_app_theme_switch_refreshes_existing_editing_icon(qapp):
     finally:
         app.close()
 
+
+def test_app_theme_switch_refreshes_print_icon(qapp):
+    from screenshooter.app import ScreenshotApp
+
+    app = ScreenshotApp()
+    try:
+        app.apply_theme("dark")
+        dark = app.print_btn.icon().pixmap(
+            IconManager.ICON_SIZE, QIcon.Normal, QIcon.Off
+        )
+        assert _has_color_close_to(dark, (214, 218, 224))
+
+        app.apply_theme("light")
+        light = app.print_btn.icon().pixmap(
+            IconManager.ICON_SIZE, QIcon.Normal, QIcon.Off
+        )
+        assert _has_color_close_to(light, (58, 63, 70))
+    finally:
+        app.close()
