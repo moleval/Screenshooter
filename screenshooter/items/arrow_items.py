@@ -13,18 +13,39 @@ from PyQt5.QtWidgets import QGraphicsItem, QGraphicsPathItem, QStyle
 from ..constants import HIT_AREA_PADDING
 
 
+def _arrow_head_polygon(end, angle, arrow_size, head_type):
+    ar = math.radians(20)
+    p1 = end
+    p2 = end - QPointF(arrow_size * math.cos(angle - ar), arrow_size * math.sin(angle - ar))
+    p3 = end - QPointF(arrow_size * math.cos(angle + ar), arrow_size * math.sin(angle + ar))
+    if head_type != "barbed":
+        return QPolygonF([p2, p1, p3])
+    ux, uy = math.cos(angle), math.sin(angle)
+    px, py = -uy, ux
+    half, back = arrow_size * math.sin(ar), arrow_size * math.cos(ar)
+    barb_back, barb_tip = back * 0.42, back * 0.72
+    return QPolygonF([p1,
+        end - QPointF(ux*back,uy*back) + QPointF(px*half,py*half),
+        end - QPointF(ux*barb_back,uy*barb_back) + QPointF(px*half*.78,py*half*.78),
+        end - QPointF(ux*barb_tip,uy*barb_tip),
+        end - QPointF(ux*barb_back,uy*barb_back) - QPointF(px*half*.78,py*half*.78),
+        end - QPointF(ux*back,uy*back) - QPointF(px*half,py*half)])
+
+
 # ==================== ArrowItem ====================
 class ArrowItem(QGraphicsItem):
     """Прямая стрелка с наконечником."""
 
-    def __init__(self, start, end, pen):
+    def __init__(self, start, end, pen, head_type='triangle'):
         super().__init__()
+        self._head_type = head_type
         self._start = start
         self._end = end
         self._line_end = start
         self._p1 = end
         self._p2 = end
         self._p3 = end
+        self._head_path = QPainterPath()
         self._pen = QPen(pen)
         self._pen.setCapStyle(Qt.FlatCap)
         self._pen.setJoinStyle(Qt.MiterJoin)
@@ -32,6 +53,13 @@ class ArrowItem(QGraphicsItem):
         self.setFlags(QGraphicsItem.ItemIsMovable | QGraphicsItem.ItemIsSelectable)
         self.setCacheMode(QGraphicsItem.NoCache)
         self.set_line(start, end)
+
+    def set_head_type(self, head_type):
+        if head_type not in ('triangle','barbed','dot') or self._head_type == head_type: return
+        self.prepareGeometryChange()
+        self._head_type = head_type
+        self._update_geometry()
+        self.update()
 
     def set_line(self, start, end):
         self.prepareGeometryChange()
@@ -76,10 +104,20 @@ class ArrowItem(QGraphicsItem):
                                  arrow_size * math.sin(angle - ar))
         self._p3 = end - QPointF(arrow_size * math.cos(angle + ar),
                                  arrow_size * math.sin(angle + ar))
-        t = (length - arrow_size * math.cos(ar)) / length
-        self._line_end = QPointF(start.x() + dx * t, start.y() + dy * t)
+        if self._head_type == 'dot':
+            radius = max(3.0, arrow_size * .30)
+            self._line_end = end - QPointF(math.cos(angle)*radius, math.sin(angle)*radius)
+        else:
+            t = (length - arrow_size * math.cos(ar)) / length
+            self._line_end = QPointF(start.x()+dx*t, start.y()+dy*t)
 
         shape = QPainterPath()
+        self._head_path = QPainterPath()
+        if self._head_type == 'dot': self._head_path.addEllipse(end, max(3.0,arrow_size*.30), max(3.0,arrow_size*.30))
+        elif self._head_type == 'triangle':
+            self._head_path.moveTo(self._p2); self._head_path.lineTo(self._p1); self._head_path.lineTo(self._p3); self._head_path.closeSubpath()
+        else:
+            self._head_path.addPolygon(_arrow_head_polygon(end,angle,arrow_size,self._head_type)); self._head_path.closeSubpath()
 
         # Обводка линии с теми же Cap/Join, что в paint()
         line_path = QPainterPath(start)
@@ -91,17 +129,12 @@ class ArrowItem(QGraphicsItem):
         shape.addPath(line_stroker.createStroke(line_path))
 
         # Обводка наконечника (как в paint: FlatCap/MiterJoin)
-        head_path = QPainterPath()
-        head_path.moveTo(self._p2)
-        head_path.lineTo(self._p1)
-        head_path.lineTo(self._p3)
-        head_path.closeSubpath()
         head_stroker = QPainterPathStroker()
         head_stroker.setWidth(pw)
         head_stroker.setCapStyle(Qt.FlatCap)
         head_stroker.setJoinStyle(Qt.MiterJoin)
-        shape.addPath(head_stroker.createStroke(head_path))
-        shape.addPath(head_path)
+        shape.addPath(head_stroker.createStroke(self._head_path))
+        shape.addPath(self._head_path)
 
         self._shape_path = shape
 
@@ -138,7 +171,11 @@ class ArrowItem(QGraphicsItem):
         hp.setJoinStyle(Qt.MiterJoin)
         painter.setPen(hp)
         painter.setBrush(self._brush)
-        painter.drawPolygon(QPolygonF([self._p2, self._p1, self._p3]))
+        if self._head_type == 'dot':
+            r=max(3.0,max(8,8+self._pen.widthF()*3)*.30); painter.setPen(Qt.NoPen); painter.drawEllipse(self._end,r,r)
+        elif self._head_type == 'triangle': painter.drawPolygon(QPolygonF([self._p2,self._p1,self._p3]))
+        else:
+            a=math.atan2(self._end.y()-self._start.y(),self._end.x()-self._start.x()); painter.drawPolygon(_arrow_head_polygon(self._end,a,max(8,8+self._pen.widthF()*3),self._head_type))
 
         # Рамка выделения
         if option.state & QStyle.State_Selected:
@@ -157,8 +194,9 @@ class CurvedArrowItem(QGraphicsPathItem):
     # Коэффициент притапливания: 1.0 = по основанию, <1.0 = глубже
     TRIM_FACTOR = 0.65
 
-    def __init__(self, start, end, ctrl, pen):
+    def __init__(self, start, end, ctrl, pen, head_type='triangle'):
         super().__init__()
+        self._head_type = head_type
         self._start = start
         self._end = end
         self._ctrl = ctrl
@@ -167,6 +205,10 @@ class CurvedArrowItem(QGraphicsPathItem):
         self.setCacheMode(QGraphicsItem.NoCache)
         self.setPen(pen)
         self.build_path(start, end, ctrl)
+
+    def set_head_type(self, head_type):
+        if head_type not in ('triangle','barbed','dot') or self._head_type == head_type: return
+        self.prepareGeometryChange(); self._head_type=head_type; self.build_path(self._start,self._end,self._ctrl); self.update()
 
     def set_curve(self, start, end, ctrl):
         self.prepareGeometryChange()
@@ -297,7 +339,9 @@ class CurvedArrowItem(QGraphicsPathItem):
         hp.setJoinStyle(Qt.MiterJoin)
         painter.setPen(hp)
         painter.setBrush(QColor(self._pen.color()))
-        painter.drawPolygon(QPolygonF([p2, p1, p3]))
+        if self._head_type == 'dot': painter.setPen(Qt.NoPen); painter.drawEllipse(end_point,max(3.0,asz*.30),max(3.0,asz*.30))
+        elif self._head_type == 'triangle': painter.drawPolygon(QPolygonF([p2,p1,p3]))
+        else: painter.drawPolygon(_arrow_head_polygon(end_point,angle,asz,self._head_type))
 
         # Рамка выделения
         if option.state & QStyle.State_Selected:
@@ -309,7 +353,7 @@ class CurvedArrowItem(QGraphicsPathItem):
     def boundingRect(self):
         pw = self._pen.widthF()
         arrow_size = max(8, 8 + pw * 3)
-        margin = arrow_size + pw / 2 + 5
+        margin = arrow_size * 2 + pw / 2 + 5
         return self.path().boundingRect().adjusted(-margin, -margin, margin, margin)
 
     def shape(self):
@@ -332,10 +376,10 @@ class CurvedArrowItem(QGraphicsPathItem):
             p3 = end_point - QPointF(asz * math.cos(angle + ar),
                                      asz * math.sin(angle + ar))
             head = QPainterPath()
-            head.moveTo(p2)
-            head.lineTo(p1)
-            head.lineTo(p3)
-            head.closeSubpath()
+            if self._head_type == 'dot': head.addEllipse(end_point,max(3.0,asz*.30),max(3.0,asz*.30))
+            elif self._head_type == 'triangle':
+                head.moveTo(p2); head.lineTo(p1); head.lineTo(p3); head.closeSubpath()
+            else: head.addPolygon(_arrow_head_polygon(end_point,angle,asz,self._head_type)); head.closeSubpath()
             path.addPath(head)
         return path
 
