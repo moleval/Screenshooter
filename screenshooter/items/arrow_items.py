@@ -14,22 +14,38 @@ from ..constants import HIT_AREA_PADDING
 
 
 def _arrow_head_polygon(end, angle, arrow_size, head_type):
+    """Возвращает контур наконечника в локальном направлении стрелки."""
     ar = math.radians(20)
-    p1 = end
-    p2 = end - QPointF(arrow_size * math.cos(angle - ar), arrow_size * math.sin(angle - ar))
-    p3 = end - QPointF(arrow_size * math.cos(angle + ar), arrow_size * math.sin(angle + ar))
-    if head_type != "barbed":
-        return QPolygonF([p2, p1, p3])
     ux, uy = math.cos(angle), math.sin(angle)
     px, py = -uy, ux
-    half, back = arrow_size * math.sin(ar), arrow_size * math.cos(ar)
-    barb_back, barb_tip = back * 0.42, back * 0.72
-    return QPolygonF([p1,
-        end - QPointF(ux*back,uy*back) + QPointF(px*half,py*half),
-        end - QPointF(ux*barb_back,uy*barb_back) + QPointF(px*half*.78,py*half*.78),
-        end - QPointF(ux*barb_tip,uy*barb_tip),
-        end - QPointF(ux*barb_back,uy*barb_back) - QPointF(px*half*.78,py*half*.78),
-        end - QPointF(ux*back,uy*back) - QPointF(px*half,py*half)])
+    back = arrow_size * math.cos(ar)
+    half = arrow_size * math.sin(ar)
+    tip = end
+    left_shoulder = end - QPointF(ux * back, uy * back) + QPointF(px * half, py * half)
+    right_shoulder = end - QPointF(ux * back, uy * back) - QPointF(px * half, py * half)
+    if head_type != "barbed":
+        return QPolygonF([left_shoulder, tip, right_shoulder])
+
+    # Две симметричные выемки образуют выраженные обратные зацепы.
+    hook_back = back * 0.38
+    hook_half = half * 0.72
+    notch_back = back * 0.67
+    return QPolygonF([
+        tip,
+        left_shoulder,
+        end - QPointF(ux * hook_back, uy * hook_back) + QPointF(px * hook_half, py * hook_half),
+        end - QPointF(ux * notch_back, uy * notch_back),
+        end - QPointF(ux * hook_back, uy * hook_back) - QPointF(px * hook_half, py * hook_half),
+        right_shoulder,
+    ])
+
+
+def _arrow_shaft_width(width):
+    """Сдерживает рост визуальной толщины штриха на больших значениях."""
+    width = max(1.0, float(width))
+    if width <= 5.0:
+        return width
+    return 5.0 + 5.0 * math.log(width / 5.0)
 
 
 # ==================== ArrowItem ====================
@@ -95,6 +111,7 @@ class ArrowItem(QGraphicsItem):
             return
 
         pw = self._pen.widthF()
+        shaft_width = _arrow_shaft_width(pw)
         arrow_size = max(8, 8 + pw * 3)
         angle = math.atan2(dy, dx)
         ar = math.radians(20)
@@ -123,14 +140,14 @@ class ArrowItem(QGraphicsItem):
         line_path = QPainterPath(start)
         line_path.lineTo(self._line_end)
         line_stroker = QPainterPathStroker()
-        line_stroker.setWidth(pw)
+        line_stroker.setWidth(shaft_width)
         line_stroker.setCapStyle(Qt.RoundCap)
         line_stroker.setJoinStyle(Qt.RoundJoin)
         shape.addPath(line_stroker.createStroke(line_path))
 
         # Обводка наконечника (как в paint: FlatCap/MiterJoin)
         head_stroker = QPainterPathStroker()
-        head_stroker.setWidth(pw)
+        head_stroker.setWidth(shaft_width)
         head_stroker.setCapStyle(Qt.FlatCap)
         head_stroker.setJoinStyle(Qt.MiterJoin)
         shape.addPath(head_stroker.createStroke(self._head_path))
@@ -160,6 +177,7 @@ class ArrowItem(QGraphicsItem):
 
         # Линия
         lp = QPen(self._pen)
+        lp.setWidthF(_arrow_shaft_width(self._pen.widthF()))
         lp.setCapStyle(Qt.RoundCap)
         lp.setJoinStyle(Qt.RoundJoin)
         painter.setPen(lp)
@@ -167,6 +185,7 @@ class ArrowItem(QGraphicsItem):
 
         # Наконечник
         hp = QPen(self._pen)
+        hp.setWidthF(_arrow_shaft_width(self._pen.widthF()))
         hp.setCapStyle(Qt.FlatCap)
         hp.setJoinStyle(Qt.MiterJoin)
         painter.setPen(hp)
@@ -309,6 +328,7 @@ class CurvedArrowItem(QGraphicsPathItem):
     def paint(self, painter, option, widget):
         # Кривая — рисуем напрямую с RoundCap (как у прямой стрелки)
         lp = QPen(self._pen)
+        lp.setWidthF(_arrow_shaft_width(self._pen.widthF()))
         lp.setCapStyle(Qt.RoundCap)
         lp.setJoinStyle(Qt.RoundJoin)
         painter.setPen(lp)
@@ -335,6 +355,7 @@ class CurvedArrowItem(QGraphicsPathItem):
                                  asz * math.sin(angle + ar))
 
         hp = QPen(self._pen)
+        hp.setWidthF(_arrow_shaft_width(self._pen.widthF()))
         hp.setCapStyle(Qt.FlatCap)
         hp.setJoinStyle(Qt.MiterJoin)
         painter.setPen(hp)
