@@ -92,8 +92,9 @@ class FloatingWidgetManager:
         self.view.arrow_mode = m
 
     def _on_arrow_head_type_changed(self, kind):
-        self.view.arrow_head_type=kind
-        selected=self.view.scene().selectedItems()
+        self.view.arrow_head_type = kind
+        self.view.arrow_head_widget.set_current_head_type(kind)
+        selected = self.view.scene().selectedItems()
         if len(selected)==1 and isinstance(selected[0],(ArrowItem,CurvedArrowItem)): selected[0].set_head_type(kind)
 
     def _on_line_mode_changed(self, m):
@@ -266,6 +267,14 @@ class FloatingWidgetManager:
         selected = view.scene().selectedItems()
         if selected and all(isinstance(item, PastedImageItem) for item in selected):
             self.update_image_opacity_widget()
+        # Селектор наконечника доступен и при редактировании выделенной стрелки.
+        if len(selected) == 1 and isinstance(selected[0], (ArrowItem, CurvedArrowItem)):
+            view.arrow_head_widget.set_current_head_type(selected[0]._head_type)
+            view.arrow_head_widget.setVisible(True)
+            view.arrow_head_widget.raise_()
+            view.layout_manager.update_all(immediate=True)
+            return
+
         if selected:
             all_text = all(isinstance(item, TextItem) for item in selected)
             if all_text:
