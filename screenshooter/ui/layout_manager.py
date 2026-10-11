@@ -198,13 +198,20 @@ class LayoutManager:
         amw.raise_()
 
     def update_arrow_head_widget_position(self):
-        hw,aw=self.arrow_head_widget,self.arrow_mode_widget
-        if not hw or not hw.isVisible() or not aw or not aw.isVisible(): return
-        rect=self._viewport_rect()
-        if not rect: return
-        x=max(0,rect.width()-aw.width()-self._scrollbar_width()-self.TEXT_FORMAT_RIGHT_OFFSET)
-        y=max(0,min(aw.y()+aw.height()+4,rect.height()-hw.height()-self._scrollbar_height()))
-        hw.move(x+max(0,aw.width()-hw.width()),y); hw.raise_()
+        hw, aw = self.arrow_head_widget, self.arrow_mode_widget
+        if not hw or not hw.isVisible() or not aw:
+            return
+        rect = self._viewport_rect()
+        if not rect:
+            return
+        x = max(0, rect.width() - aw.width() - self._scrollbar_width()
+                - self.TEXT_FORMAT_RIGHT_OFFSET)
+        # Селектор остаётся на прежнем месте и при скрытой панели режимов.
+        y_top = self.TEXT_FORMAT_TOP_OFFSET + aw.height() + 4
+        y = max(0, min(y_top, rect.height() - hw.height()
+                       - self._scrollbar_height()))
+        hw.move(x + max(0, aw.width() - hw.width()), y)
+        hw.raise_()
 
     def update_line_mode_widget_position(self):
         """
