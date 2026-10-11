@@ -31,6 +31,7 @@ class LayoutManager:
         self.shape_mode_widget = view.shape_mode_widget
         self.ellipse_mode_widget = view.ellipse_mode_widget
         self.arrow_mode_widget = view.arrow_mode_widget
+        self.arrow_head_widget = view.arrow_head_widget
         self.line_mode_widget = view.line_mode_widget
         self.info_widget = view.info_widget
         self.layer_widget = view.layer_widget
@@ -63,6 +64,7 @@ class LayoutManager:
         self.update_shape_mode_widget_position()
         self.update_ellipse_mode_widget_position()
         self.update_arrow_mode_widget_position()
+        self.update_arrow_head_widget_position()
         self.update_line_mode_widget_position()
         self.update_info_widget_position()
         self.update_layer_widget_position()
@@ -194,6 +196,15 @@ class LayoutManager:
         y = max(0, y)
         amw.move(x, y)
         amw.raise_()
+
+    def update_arrow_head_widget_position(self):
+        hw,aw=self.arrow_head_widget,self.arrow_mode_widget
+        if not hw or not hw.isVisible() or not aw or not aw.isVisible(): return
+        rect=self._viewport_rect()
+        if not rect: return
+        x=max(0,rect.width()-aw.width()-self._scrollbar_width()-self.TEXT_FORMAT_RIGHT_OFFSET)
+        y=max(0,min(aw.y()+aw.height()+4,rect.height()-hw.height()-self._scrollbar_height()))
+        hw.move(x+max(0,aw.width()-hw.width()),y); hw.raise_()
 
     def update_line_mode_widget_position(self):
         """
