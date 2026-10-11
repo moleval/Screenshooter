@@ -26,16 +26,20 @@ def _arrow_head_polygon(end, angle, arrow_size, head_type):
     if head_type != "barbed":
         return QPolygonF([left_shoulder, tip, right_shoulder])
 
-    # Две симметричные выемки образуют выраженные обратные зацепы.
-    hook_back = back * 0.38
-    hook_half = half * 0.72
-    notch_back = back * 0.67
+    # Компактные симметричные обратные зацепы. Их вершины слегка
+    # выходят за основание наконечника, а не в сторону острия — это
+    # предотвращает звездообразный силуэт на толстых стрелках.
+    barb_back = back * 1.14
+    barb_half = half * 0.58
+    notch_back = back * 0.72
+    notch_half = half * 0.10
     return QPolygonF([
         tip,
         left_shoulder,
-        end - QPointF(ux * hook_back, uy * hook_back) + QPointF(px * hook_half, py * hook_half),
-        end - QPointF(ux * notch_back, uy * notch_back),
-        end - QPointF(ux * hook_back, uy * hook_back) - QPointF(px * hook_half, py * hook_half),
+        end - QPointF(ux * barb_back, uy * barb_back) + QPointF(px * barb_half, py * barb_half),
+        end - QPointF(ux * notch_back, uy * notch_back) + QPointF(px * notch_half, py * notch_half),
+        end - QPointF(ux * notch_back, uy * notch_back) - QPointF(px * notch_half, py * notch_half),
+        end - QPointF(ux * barb_back, uy * barb_back) - QPointF(px * barb_half, py * barb_half),
         right_shoulder,
     ])
 
