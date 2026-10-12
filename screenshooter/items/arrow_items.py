@@ -26,13 +26,13 @@ def _arrow_head_polygon(end, angle, arrow_size, head_type):
     if head_type != "barbed":
         return QPolygonF([left_shoulder, tip, right_shoulder])
 
-    # Острые симметричные обратные зацепы: внешние вершины вынесены
-    # в стороны, а соседние точки расположены заметно глубже внутри контура.
-    # Это формирует острый, а не тупой угол на концах засечек.
-    barb_back = back * 1.10
-    barb_half = half * 0.95
-    notch_back = back * 0.72
-    notch_half = half * 0.10
+    # Острые обратные зацепы. Вершина каждого зацепа должна выступать
+    # далеко вбок и располагаться ближе к острию, чем внутренняя выемка.
+    # Прежнее расположение почти на одной линии со скатом срезало концы.
+    barb_back = back * 0.55
+    barb_half = half * 1.35
+    notch_back = back * 0.86
+    notch_half = half * 0.06
     return QPolygonF([
         tip,
         left_shoulder,
@@ -200,7 +200,7 @@ class ArrowItem(QGraphicsItem):
         # У острых засечек стандартного miter limit Qt недостаточно:
         # соединение обводки срезает вершины. Увеличиваем лимит, чтобы
         # сохранять острые концы даже при толстой линии.
-        hp.setMiterLimit(10.0)
+        hp.setMiterLimit(20.0)
         painter.setPen(hp)
         painter.setBrush(self._brush)
         if self._head_type == 'dot':
