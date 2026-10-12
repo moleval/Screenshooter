@@ -197,6 +197,10 @@ class ArrowItem(QGraphicsItem):
         hp.setWidthF(_arrow_shaft_width(self._pen.widthF()))
         hp.setCapStyle(Qt.FlatCap)
         hp.setJoinStyle(Qt.MiterJoin)
+        # У острых засечек стандартного miter limit Qt недостаточно:
+        # соединение обводки срезает вершины. Увеличиваем лимит, чтобы
+        # сохранять острые концы даже при толстой линии.
+        hp.setMiterLimit(10.0)
         painter.setPen(hp)
         painter.setBrush(self._brush)
         if self._head_type == 'dot':
@@ -368,6 +372,10 @@ class CurvedArrowItem(QGraphicsPathItem):
         hp.setWidthF(_arrow_shaft_width(self._pen.widthF()))
         hp.setCapStyle(Qt.FlatCap)
         hp.setJoinStyle(Qt.MiterJoin)
+        # У острых засечек стандартного miter limit Qt недостаточно:
+        # соединение обводки срезает вершины. Увеличиваем лимит, чтобы
+        # сохранять острые концы даже при толстой линии.
+        hp.setMiterLimit(10.0)
         painter.setPen(hp)
         painter.setBrush(QColor(self._pen.color()))
         if self._head_type == 'dot': painter.setPen(Qt.NoPen); painter.drawEllipse(end_point,max(3.0,asz*.30),max(3.0,asz*.30))
