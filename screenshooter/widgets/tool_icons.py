@@ -149,6 +149,17 @@ def create_arrow_mode_icon(mode):
     return QIcon(pixmap)
 
 
+def create_arrow_head_icon(head_type):
+    pixmap=QPixmap(28,28); pixmap.fill(Qt.transparent)
+    painter=QPainter(pixmap); painter.setRenderHint(QPainter.Antialiasing)
+    color=QColor(50,50,50); painter.setPen(QPen(color,2,Qt.SolidLine,Qt.RoundCap,Qt.RoundJoin)); painter.drawLine(3,14,17 if head_type!='dot' else 18,14)
+    painter.setPen(Qt.NoPen); painter.setBrush(color)
+    if head_type=='triangle': painter.drawPolygon(QPolygonF([QPointF(24,14),QPointF(16,8),QPointF(16,20)]))
+    elif head_type=='barbed': painter.drawPolygon(QPolygonF([QPointF(24,14),QPointF(16,8),QPointF(18,12),QPointF(13,12),QPointF(16,14),QPointF(13,16),QPointF(18,16),QPointF(16,20)]))
+    else: painter.drawEllipse(QPointF(21,14),4,4)
+    painter.end(); return QIcon(pixmap)
+
+
 def create_shape_mode_icon(mode):
     pixmap = QPixmap(26, 26)
     pixmap.fill(Qt.transparent)

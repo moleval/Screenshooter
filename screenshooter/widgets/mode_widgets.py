@@ -5,12 +5,13 @@
           Все стили задаются локально и не зависят от глобальной темы.
 """
 
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt, QSize, pyqtSignal
 from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import (QFrame, QHBoxLayout, QPushButton, QButtonGroup,
+from PyQt5.QtWidgets import (QFrame, QHBoxLayout, QVBoxLayout, QPushButton, QButtonGroup,
                              QSizePolicy, QLabel, QSlider)
 from .tool_icons import (create_shape_mode_icon, create_ellipse_mode_icon,
-                         create_arrow_mode_icon, create_line_mode_icon)
+                         create_arrow_mode_icon, create_line_mode_icon,
+                         create_arrow_head_icon)
 
 
 class BaseModeWidget(QFrame):
@@ -119,6 +120,23 @@ class ShapeModeWidgetArrow(BaseModeWidget):
         self.straight_btn.setChecked(mode == 'straight')
         self.curved_btn.setChecked(mode == 'curved')
         self.dimension_btn.setChecked(mode == 'dimension')
+
+
+class ArrowHeadWidget(QFrame):
+    headTypeChanged=pyqtSignal(str)
+    BG_COLOR="rgba(200,200,200,100)"; BORDER_RADIUS=12; BORDER_COLOR="rgba(80,80,80,180)"; PADDING=3; BUTTON_SIZE=28
+    def __init__(self,parent=None):
+        super().__init__(parent); self.setFrameShape(QFrame.StyledPanel)
+        self.setStyleSheet(f"QFrame {{ background-color:{self.BG_COLOR}; border-radius:{self.BORDER_RADIUS}px; border:2px solid {self.BORDER_COLOR}; padding:{self.PADDING}px; }}")
+        self.layout=QVBoxLayout(self); self.layout.setContentsMargins(3,3,3,3); self.layout.setSpacing(5)
+        self.button_group=QButtonGroup(self); self.button_group.setExclusive(True); self.buttons={}
+        for kind,tip in (("triangle","Стандартный наконечник"),("barbed","Стрелка с зацепами"),("dot","Точка")):
+            button=QPushButton(self); button.setFixedSize(28,28); button.setIcon(create_arrow_head_icon(kind)); button.setIconSize(QSize(26,26)); button.setCheckable(True); button.setToolTip(tip)
+            button.setStyleSheet("QPushButton{background:transparent;border:none} QPushButton:hover{background:rgba(0,0,0,20)} QPushButton:checked{background:#b0d4f1;border:2px solid #005a9e;border-radius:4px}")
+            button.clicked.connect(lambda checked=False,value=kind:self.headTypeChanged.emit(value)); self.layout.addWidget(button); self.button_group.addButton(button); self.buttons[kind]=button
+        self.buttons["triangle"].setChecked(True); self.setFixedSize(self.sizeHint())
+    def set_current_head_type(self,kind):
+        if kind in self.buttons: self.buttons[kind].setChecked(True)
 
 
 class LineModeWidget(BaseModeWidget):

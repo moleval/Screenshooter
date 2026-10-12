@@ -23,7 +23,7 @@ from .widgets.zoom_widget import ZoomWidget
 from .widgets.text_format_widget import TextFormatWidget
 from .widgets.info_widget import InfoWidget
 from .widgets.mode_widgets import (ShapeModeWidget, ShapeModeWidgetEllipse,
-                                   ShapeModeWidgetArrow, LineModeWidget,
+                                   ShapeModeWidgetArrow, ArrowHeadWidget, LineModeWidget,
                                    LayerModeWidget, ImageOpacityWidget)
 from .history import (HistoryManager, AddItemCommand, RemoveItemCommand,
                       MoveItemCommand, MoveItemsCommand, ChangePenCommand,
@@ -85,6 +85,7 @@ class EditorView(QGraphicsView):
         self.shape_mode = 'rect'
         self.ellipse_mode = 'ellipse'
         self.arrow_mode = 'straight'
+        self.arrow_head_type = 'triangle'
         self.line_mode = 'straight'
         self.setCursor(Qt.CrossCursor)
 
@@ -104,6 +105,8 @@ class EditorView(QGraphicsView):
 
         self.arrow_mode_widget = ShapeModeWidgetArrow(self)
         self.arrow_mode_widget.setVisible(False)
+        self.arrow_head_widget = ArrowHeadWidget(self)
+        self.arrow_head_widget.setVisible(False)
 
         self.line_mode_widget = LineModeWidget(self)
         self.line_mode_widget.setVisible(False)
@@ -154,7 +157,7 @@ class EditorView(QGraphicsView):
 
         for w in (self.zoom_widget, self.text_format_widget,
                   self.shape_mode_widget, self.ellipse_mode_widget,
-                  self.arrow_mode_widget, self.line_mode_widget,
+                  self.arrow_mode_widget, self.arrow_head_widget, self.line_mode_widget,
                   self.info_widget, self.layer_widget, self.image_opacity_widget,
                   self.status_label):
             w.setCursor(Qt.ArrowCursor)

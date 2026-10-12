@@ -374,6 +374,9 @@ class ScreenshotApp(QMainWindow):
         # повторно проходить через enhancer при экспорте.
         self._background_enhanced = False
         self._captured_window_is_autocad = False
+        # PDF AutoCAD-захват является эталонным источником пикселей:
+        # enhancer не должен применяться ни при показе, ни при экспорте.
+        self._captured_image_is_pdf = False
         self.user_zoomed = False
         self.thickness_widget.set_value_silent(2)
 
@@ -597,6 +600,7 @@ class ScreenshotApp(QMainWindow):
             (self.insert_clipboard_btn, "clipboard-copy"),
             (self.save_as_btn, "save-all"),
             (self.quick_save_btn, "save"),
+            (self.print_btn, "printer"),
             (self.settings_btn, "settings"),
             (self.help_btn, "help"),
         ):
@@ -957,9 +961,11 @@ class ScreenshotApp(QMainWindow):
             self.screenshot_pixmap = QPixmap.fromImage(enhanced)
             self._background_enhanced = True
 
-    def display_screenshot(self, source_is_autocad=False):
+    def display_screenshot(self, source_is_autocad=False, already_preprocessed=False, source_is_pdf=False):
         self._captured_window_is_autocad = bool(source_is_autocad)
-        self._prepare_captured_pixmap()
+        self._captured_image_is_pdf = bool(source_is_pdf)
+        if not already_preprocessed and not self._captured_image_is_pdf:
+            self._prepare_captured_pixmap()
         self.view.clear_pasted_images()
         self.scene.clear()
         self.view.active_text_item = None
@@ -970,6 +976,9 @@ class ScreenshotApp(QMainWindow):
         self.view.image_editor.crop_target_item = None
 
         item = QGraphicsPixmapItem(self.screenshot_pixmap)
+        # PDF-источник уже отрендерен с высоким DPI. При уменьшении полного
+        # листа до окна редактора используем качественную интерполяцию, как
+        # PDF-просмотрщик, а не nearest-neighbor.
         item.setTransformationMode(Qt.SmoothTransformation)
 
         item.setAcceptedMouseButtons(Qt.NoButton)

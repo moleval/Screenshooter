@@ -168,6 +168,273 @@ def _line_mask(gray, inverted=False):
     return _normalise_mask(lines, 0.65)
 
 
+def _directional_boundary_mask(gray):
+    """Выделяет направленные границы, включая диагональные CAD-линии."""
+    gray_float = gray.astype(np.float32)
+
+    gx = cv2.Sobel(gray_float, cv2.CV_32F, 1, 0, ksize=3)
+    gy = cv2.Sobel(gray_float, cv2.CV_32F, 0, 1, ksize=3)
+    gx2 = cv2.GaussianBlur(gx * gx, (0, 0), 1.0)
+    gy2 = cv2.GaussianBlur(gy * gy, (0, 0), 1.0)
+    gxy = cv2.GaussianBlur(gx * gy, (0, 0), 1.0)
+
+    trace = gx2 + gy2
+    discriminant = np.sqrt(
+        np.maximum((gx2 - gy2) ** 2 + 4.0 * gxy * gxy, 0.0)
+    )
+    # Коэффициент когерентности структуры не зависит от того, является
+    # линия горизонтальной, вертикальной или диагональной.
+    coherence = discriminant / (trace + 1e-3)
+    gradient = np.sqrt(np.maximum(trace, 0.0))
+
+    positive_gradient = gradient[gradient > 1.0]
+    if positive_gradient.size == 0:
+        return np.zeros_like(gray_float)
+
+    reference = float(np.percentile(positive_gradient, 75))
+    if reference <= 1.0:
+        return np.zeros_like(gray_float)
+
+    response = np.clip(gradient / reference, 0.0, 1.0) * coherence
+    response = cv2.GaussianBlur(response, (0, 0), 0.45)
+
+    return np.clip((response - 0.12) / 0.88, 0.0, 1.0).astype(np.float32)
+
+
+def _directional_gaussian_kernel(angle, sigma_t=0.35, sigma_n=1.15, size=9):
+    """Строит анизотропное ядро вдоль заданного направления штриха."""
+    radius = size // 2
+    axis = np.arange(-radius, radius + 1, dtype=np.float32)
+    yy, xx = np.meshgrid(axis, axis)
+
+    tangent = xx * np.cos(angle) + yy * np.sin(angle)
+    normal = -xx * np.sin(angle) + yy * np.cos(angle)
+
+    kernel = np.exp(
+        -0.5 * (
+            (tangent / sigma_t) ** 2
+            + (normal / sigma_n) ** 2
+        )
+    ).astype(np.float32)
+    return kernel / max(float(kernel.sum()), 1e-6)
+
+
+def _apply_directional_cad_detail(bgr, boundary_mask, gain=0.85):
+    """Усиливает тонкие CAD-штрихи вдоль их собственной ориентации."""
+    gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY).astype(np.float32)
+
+    gx = cv2.Sobel(gray, cv2.CV_32F, 1, 0, ksize=3)
+    gy = cv2.Sobel(gray, cv2.CV_32F, 0, 1, ksize=3)
+    gx2 = cv2.GaussianBlur(gx * gx, (0, 0), 1.0)
+    gy2 = cv2.GaussianBlur(gy * gy, (0, 0), 1.0)
+    gxy = cv2.GaussianBlur(gx * gy, (0, 0), 1.0)
+
+    # Оцениваем ориентацию локального градиента, а затем переводим её
+    # в ориентацию самого штриха. Это позволяет обрабатывать не только
+    # горизонтали/вертикали, но и типичные диагональные CAD-линии.
+    gradient_angle = 0.5 * np.arctan2(
+        2.0 * gxy,
+        gx2 - gy2 + 1e-3,
+    )
+    line_angle = gradient_angle + (np.pi / 2.0)
+
+    directions = (
+        0.0,
+        np.pi / 2.0,
+        np.pi / 4.0,
+        -np.pi / 4.0,
+    )
+    orientation_weights = []
+    for direction in directions:
+        weight = (
+            0.5
+            * (
+                1.0
+                + np.cos(2.0 * (line_angle - direction))
+            )
+        )
+        orientation_weights.append(np.power(np.clip(weight, 0.0, 1.0), 4.0))
+
+    weights = np.stack(orientation_weights, axis=0)
+    weights /= np.maximum(weights.sum(axis=0), 1e-3)
+
+    # Анизотропные high-pass для четырёх основных направлений.
+    # Узкое направление вдоль штриха и более широкое поперёк него
+    # помогают не раздувать саму CAD-линию.
+    responses = []
+    for direction in directions:
+        kernel = _directional_gaussian_kernel(direction)
+        blurred = cv2.filter2D(
+            gray,
+            cv2.CV_32F,
+            kernel,
+            borderType=cv2.BORDER_REPLICATE,
+        )
+        responses.append(gray - blurred)
+
+    directional = sum(
+        response * weight
+        for response, weight in zip(responses, weights)
+    )
+    directional = np.clip(directional, -32.0, 32.0)
+
+    strength = boundary_mask * gain
+    result = (
+        bgr.astype(np.float32)
+        + directional[:, :, None] * strength[:, :, None]
+    )
+    return result.clip(0, 255).astype(np.uint8)
+
+
+
+
+def _dark_red_mask(rgb):
+    """Выделяет тёмно-красные CAD-объекты до инверсии."""
+    rgb_float = rgb.astype(np.float32)
+    red = rgb_float[:, :, 0]
+    green = rgb_float[:, :, 1]
+    blue = rgb_float[:, :, 2]
+
+    # Оцениваем тёмность по воспринимаемой яркости, а цвет — по
+    # доминированию красного. Для нейтрального тёмного фона маска должна
+    # быть нулевой, иначе приглушение затронет весь CAD-снимок.
+    luminance = (
+        0.299 * red
+        + 0.587 * green
+        + 0.114 * blue
+    )
+    darkness = np.clip((140.0 - luminance) / 140.0, 0.0, 1.0)
+    red_dominance = np.clip(
+        (red - np.maximum(green, blue) - 8.0) / 100.0,
+        0.0,
+        1.0,
+    )
+    low_green_blue = np.clip(
+        (130.0 - np.maximum(green, blue)) / 130.0,
+        0.0,
+        1.0,
+    )
+    mask = (
+        darkness
+        * red_dominance
+        * (0.65 + 0.35 * low_green_blue)
+    )
+    return np.clip(mask, 0.0, 1.0).astype(np.float32)
+
+
+def _dark_blue_mask(rgb):
+    """Выделяет тёмно-синие CAD-объекты до инверсии."""
+    rgb_float = rgb.astype(np.float32)
+    red = rgb_float[:, :, 0]
+    green = rgb_float[:, :, 1]
+    blue = rgb_float[:, :, 2]
+
+    # Для синего важна именно воспринимаемая тёмность: насыщенный синий
+    # с B=255 всё равно выглядит тёмным и после инверсии становится
+    # жёлто-белым. Поэтому нельзя ограничиваться условием blue < N.
+    luminance = (
+        0.299 * red
+        + 0.587 * green
+        + 0.114 * blue
+    )
+    darkness = np.clip((140.0 - luminance) / 140.0, 0.0, 1.0)
+    blue_dominance = np.clip(
+        (blue - np.maximum(red, green) - 8.0) / 100.0,
+        0.0,
+        1.0,
+    )
+    low_red_green = np.clip(
+        (130.0 - np.maximum(red, green)) / 130.0,
+        0.0,
+        1.0,
+    )
+    mask = (
+        darkness
+        * blue_dominance
+        * (0.65 + 0.35 * low_red_green)
+    )
+    return np.clip(mask, 0.0, 1.0).astype(np.float32)
+
+
+def _dark_colored_mask(rgb):
+    """Выделяет тёмные насыщенные CAD-цвета до инверсии."""
+    rgb_float = rgb.astype(np.float32)
+    maximum = rgb_float.max(axis=2)
+    minimum = rgb_float.min(axis=2)
+    chroma = maximum - minimum
+    luminance = (
+        0.299 * rgb_float[:, :, 0]
+        + 0.587 * rgb_float[:, :, 1]
+        + 0.114 * rgb_float[:, :, 2]
+    )
+
+    # Для CAD важнее наличие насыщенного цвета, чем точная luminance:
+    # одинаково насыщенные зелёный и циан после инверсии должны получать
+    # сопоставимую коррекцию. Нейтральный фон по-прежнему исключается
+    # через chroma.
+    darkness = np.clip((180.0 - luminance) / 180.0, 0.0, 1.0)
+    saturation = np.clip((chroma - 18.0) / 60.0, 0.0, 1.0)
+    return np.sqrt(darkness * saturation).clip(0.0, 1.0).astype(np.float32)
+
+
+def _tone_map_dark_colors_after_inversion(gray, dark_color_mask, target=170.0):
+    """Приводит тёмные насыщенные CAD-цвета к единому светло-серому тону."""
+    gray_float = gray.astype(np.float32)
+    mask = np.clip(dark_color_mask.astype(np.float32), 0.0, 1.0)
+
+    # После обычного grayscale разные CAD-цвета имеют сильно различную
+    # яркость: синий/зелёный/фиолетовый/голубой становятся неодинаково
+    # тёмными. Нормализуем только уверенно цветные тёмные штрихи.
+    # Усиливаем коррекцию уже при частичной маске, чтобы тонкие
+    # антиалиасинговые пиксели цветной линии не оставались заметно темнее
+    # основного штриха. Полная маска по-прежнему приходит ровно к target.
+    strength = np.sqrt(mask)
+    result = gray_float + (float(target) - gray_float) * strength
+    return np.clip(result, 0.0, 255.0).astype(np.uint8)
+
+
+def _tone_map_dark_red_after_inversion(gray, dark_red_mask):
+    """Уводит инвертированный тёмно-красный цвет в устойчивый светло-серый."""
+    gray_float = gray.astype(np.float32)
+    mask = np.clip(dark_red_mask.astype(np.float32), 0.0, 1.0)
+
+    # Не превращаем тёмно-красные объекты в белые пятна: после инверсии
+    # слегка приглушаем только их яркость. Это одновременно повышает
+    # различимость тонких красных линий на почти белом фоне.
+    # Сильнее приглушаем уверенно распознанный красный штрих:
+    # после инверсии он должен оставаться светло-серым, а не сливаться
+    # с почти белым фоном.
+    reduction = 14.0 + 30.0 * mask
+    result = gray_float - reduction * mask
+    return np.clip(result, 0.0, 255.0).astype(np.uint8)
+
+
+def _tone_map_dark_blue_after_inversion(gray, dark_blue_mask):
+    """Уводит инвертированный тёмно-синий цвет в устойчивый светло-серый."""
+    gray_float = gray.astype(np.float32)
+    mask = np.clip(dark_blue_mask.astype(np.float32), 0.0, 1.0)
+
+    # Насыщенный синий на тёмной CAD-подложке после RGB-инверсии
+    # становится жёлто-белым. Приглушаем только распознанный синий штрих.
+    reduction = 14.0 + 30.0 * mask
+    result = gray_float - reduction * mask
+    return np.clip(result, 0.0, 255.0).astype(np.uint8)
+
+
+def _compress_cad_highlights(gray, feature_mask, start=170.0, reduction=24.0):
+    """Softly reduce only overly bright CAD strokes after inversion."""
+    gray_float = gray.astype(np.float32)
+    mask = np.clip(feature_mask.astype(np.float32), 0.0, 1.0)
+
+    strength = np.clip(
+        (gray_float - start) / max(255.0 - start, 1.0),
+        0.0,
+        1.0,
+    )
+    strength = np.power(strength, 1.6) * mask
+    delta = reduction * strength
+    return np.clip(gray_float - delta, 0.0, 255.0).astype(np.uint8)
+
 def _geometry_mask(gray):
     """Находит длинные прямые сегменты и угловые геометрические контуры."""
     edges = cv2.Canny(gray, 50, 150)
@@ -279,16 +546,28 @@ def is_dark_autocad_scheme(image):
         (gray.height(), gray.bytesPerLine())
     )[:, :gray.width()]
 
-    median = float(np.median(array))
-    dark_fraction = float(np.mean(array < 80))
-    bright_fraction = float(np.mean(array > 180))
+    # В полном кадре AutoCAD присутствуют лента, панели и палитры, поэтому
+    # их светлые элементы могут заметно разбавлять статистику тёмного
+    # чертёжного поля. Для определения схемы дополнительно анализируем
+    # центральную область, где обычно находится canvas.
+    central = array[
+        int(array.shape[0] * 0.20):int(array.shape[0] * 0.85),
+        int(array.shape[1] * 0.15):int(array.shape[1] * 0.90),
+    ]
+    if central.size == 0:
+        central = array
 
-    # Тёмная схема CAD имеет преимущественно тёмный фон и сравнительно
-    # небольшую долю светлых элементов. Светлая схема — наоборот.
+    median = float(np.median(central))
+    dark_fraction = float(np.mean(central < 80))
+    bright_fraction = float(np.mean(central > 180))
+
+    # Тёмная схема CAD определяется по самому чертёжному полю, а не по
+    # всей оболочке AutoCAD. Это сохраняет консервативность для светлой
+    # схемы, но не теряет тёмный canvas из-за яркой ленты/панелей.
     return (
         dark_fraction >= 0.55
         and median < 115
-        and bright_fraction < 0.35
+        and bright_fraction < 0.45
     )
 
 
@@ -306,15 +585,50 @@ def enhance_image(image, options):
     rgba = _qimage_to_rgba(image)
     alpha = rgba[:, :, 3].copy()
     rgb = rgba[:, :, :3].copy()
+    source_rgb = rgb.copy()
     bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
 
     invert = options.color_mode == "invert"
     monochrome = options.color_mode == "monochrome"
+    dark_red_mask = _dark_red_mask(rgb) if monochrome else None
+    dark_blue_mask = _dark_blue_mask(rgb) if monochrome else None
+    dark_color_mask = _dark_colored_mask(rgb) if monochrome else None
 
     scale = _choose_scale(image.width(), image.height(), options.scale)
     if scale != 1.0:
         rgb = cv2.resize(
             rgb,
+            None,
+            fx=scale,
+            fy=scale,
+            interpolation=cv2.INTER_LANCZOS4,
+        )
+        if dark_red_mask is not None:
+            dark_red_mask = cv2.resize(
+                dark_red_mask,
+                None,
+                fx=scale,
+                fy=scale,
+                interpolation=cv2.INTER_LINEAR,
+            )
+        if dark_blue_mask is not None:
+            dark_blue_mask = cv2.resize(
+                dark_blue_mask,
+                None,
+                fx=scale,
+                fy=scale,
+                interpolation=cv2.INTER_LINEAR,
+            )
+        if dark_color_mask is not None:
+            dark_color_mask = cv2.resize(
+                dark_color_mask,
+                None,
+                fx=scale,
+                fy=scale,
+                interpolation=cv2.INTER_LINEAR,
+            )
+        source_rgb = cv2.resize(
+            source_rgb,
             None,
             fx=scale,
             fy=scale,
@@ -330,12 +644,35 @@ def enhance_image(image, options):
 
     # В монохромном режиме CAD-снимок сначала инвертируется,
     # затем переводится в оттенки серого: белая геометрия на тёмном фоне.
+    inverted_white = None
     if invert or monochrome:
         rgb = (255 - rgb.astype(np.int16)).astype(np.uint8)
+        if monochrome:
+            # Не даём последующим CAD-фильтрам затемнить пиксели,
+            # которые были чисто чёрными в исходном изображении.
+            inverted_white = np.all(rgb == 255, axis=2)
 
     bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
     if monochrome:
         gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+        gray = _tone_map_dark_red_after_inversion(
+            gray,
+            dark_red_mask,
+        )
+        gray = _tone_map_dark_blue_after_inversion(
+            gray,
+            dark_blue_mask,
+        )
+        highlight_geometry = _geometry_mask(gray)
+        highlight_directional = _directional_boundary_mask(gray)
+        highlight_mask = np.maximum(
+            highlight_geometry,
+            highlight_directional,
+        )
+        gray = _compress_cad_highlights(
+            gray,
+            highlight_mask,
+        )
         bgr = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
     else:
         gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
@@ -423,8 +760,48 @@ def enhance_image(image, options):
             + sharpened.astype(np.float32) * mask
         ).clip(0, 255).astype(np.uint8)
 
+        # Отдельный CAD-проход: не повышаем общую резкость кадра,
+        # а усиливаем только направленные границы тонких штрихов.
+        # Это особенно полезно для размерных линий и мелких элементов
+        # чертежа, где обычный unsharp mask даёт ореолы.
+        if cad_profile:
+            directional_mask = _directional_boundary_mask(
+                cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+            )
+            bgr = _apply_directional_cad_detail(
+                bgr,
+                directional_mask,
+                gain=0.85,
+            )
+
     if monochrome:
         gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+        if inverted_white is not None:
+            gray[inverted_white] = 255
+
+        gray = _tone_map_dark_colors_after_inversion(
+            gray,
+            dark_color_mask,
+        )
+
+        # В тёмной схеме AutoCAD нейтрально-тёмная подложка должна стать
+        # чисто белой. Цветные тёмные штрихи сюда не попадают: их высокая
+        # цветовая насыщенность уже обрабатывается отдельными масками.
+        source_rgb_float = source_rgb.astype(np.float32)
+        source_luminance = (
+            0.299 * source_rgb_float[:, :, 0]
+            + 0.587 * source_rgb_float[:, :, 1]
+            + 0.114 * source_rgb_float[:, :, 2]
+        )
+        source_chroma = (
+            source_rgb_float.max(axis=2)
+            - source_rgb_float.min(axis=2)
+        )
+        neutral_dark_background = (
+            (source_luminance < 80.0)
+            & (source_chroma < 15.0)
+        )
+        gray[neutral_dark_background] = 255
         bgr = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
     elif not invert:
         bgr = _apply_color_mode(bgr, options.color_mode)
