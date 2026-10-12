@@ -27,10 +27,9 @@ class ArrowTool(BaseTool):
         mode = self.view.arrow_mode
 
         if mode == 'straight':
-            return ArrowItem(scene_pos, scene_pos, pen)
+            return ArrowItem(scene_pos, scene_pos, pen, head_type=self.view.arrow_head_type)
         elif mode == 'curved':
-            return CurvedArrowItem(scene_pos, scene_pos,
-                                   (scene_pos + scene_pos) / 2, pen)
+            return CurvedArrowItem(scene_pos, scene_pos, (scene_pos + scene_pos) / 2, pen, head_type=self.view.arrow_head_type)
         elif mode == 'dimension':
             return DimensionItem(scene_pos, scene_pos, pen)
         return None
