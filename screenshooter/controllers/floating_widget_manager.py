@@ -42,6 +42,7 @@ class FloatingWidgetManager:
         view.shape_mode_widget.modeChanged.connect(self._on_shape_mode_changed)
         view.ellipse_mode_widget.modeChanged.connect(self._on_ellipse_mode_changed)
         view.arrow_mode_widget.modeChanged.connect(self._on_arrow_mode_changed)
+        view.arrow_head_widget.headTypeChanged.connect(self._on_arrow_head_type_changed)
         view.line_mode_widget.modeChanged.connect(self._on_line_mode_changed)
         view.image_opacity_widget.opacityChanged.connect(self._on_image_opacity_changed)
         view.image_opacity_widget.editingFinished.connect(self._finish_image_opacity_change)
@@ -89,6 +90,12 @@ class FloatingWidgetManager:
 
     def _on_arrow_mode_changed(self, m):
         self.view.arrow_mode = m
+
+    def _on_arrow_head_type_changed(self, kind):
+        self.view.arrow_head_type = kind
+        self.view.arrow_head_widget.set_current_head_type(kind)
+        selected = self.view.scene().selectedItems()
+        if len(selected)==1 and isinstance(selected[0],(ArrowItem,CurvedArrowItem)): selected[0].set_head_type(kind)
 
     def _on_line_mode_changed(self, m):
         self.view.line_mode = m
@@ -247,6 +254,7 @@ class FloatingWidgetManager:
         view.image_opacity_widget.setVisible(False)
         view.ellipse_mode_widget.setVisible(False)
         view.arrow_mode_widget.setVisible(False)
+        view.arrow_head_widget.setVisible(False)
         view.line_mode_widget.setVisible(False)
         view.text_format_widget.setVisible(False)
 
@@ -259,6 +267,14 @@ class FloatingWidgetManager:
         selected = view.scene().selectedItems()
         if selected and all(isinstance(item, PastedImageItem) for item in selected):
             self.update_image_opacity_widget()
+        # Селектор наконечника доступен и при редактировании выделенной стрелки.
+        if len(selected) == 1 and isinstance(selected[0], (ArrowItem, CurvedArrowItem)):
+            view.arrow_head_widget.set_current_head_type(selected[0]._head_type)
+            view.arrow_head_widget.setVisible(True)
+            view.arrow_head_widget.raise_()
+            view.layout_manager.update_all(immediate=True)
+            return
+
         if selected:
             all_text = all(isinstance(item, TextItem) for item in selected)
             if all_text:
@@ -297,7 +313,9 @@ class FloatingWidgetManager:
             view.ellipse_mode_widget.raise_()
         elif active_tool == 'arrow':
             view.arrow_mode_widget.setVisible(True)
+            view.arrow_head_widget.setVisible(True)
             view.arrow_mode_widget.raise_()
+            view.arrow_head_widget.raise_()
         elif active_tool == 'line':
             view.line_mode_widget.setVisible(True)
             view.line_mode_widget.raise_()
