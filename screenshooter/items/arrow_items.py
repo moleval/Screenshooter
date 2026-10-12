@@ -26,12 +26,12 @@ def _arrow_head_polygon(end, angle, arrow_size, head_type):
     if head_type != "barbed":
         return QPolygonF([left_shoulder, tip, right_shoulder])
 
-    # Острые обратные зацепы. Вершина каждого зацепа должна выступать
-    # далеко вбок и располагаться ближе к острию, чем внутренняя выемка.
-    # Прежнее расположение почти на одной линии со скатом срезало концы.
-    barb_back = back * 0.55
-    barb_half = half * 1.35
-    notch_back = back * 0.86
+    # Острые зацепы направлены назад, к стержню стрелки, а не наружу.
+    # Вершина засечки находится дальше от острия, чем внутренняя выемка,
+    # при этом сохраняется достаточный боковой вынос для острого угла.
+    barb_back = back * 1.12
+    barb_half = half * 0.82
+    notch_back = back * 0.72
     notch_half = half * 0.06
     return QPolygonF([
         tip,
