@@ -129,7 +129,12 @@ class ArrowItem(QGraphicsItem):
             radius = max(3.0, arrow_size * .30)
             self._line_end = end - QPointF(math.cos(angle)*radius, math.sin(angle)*radius)
         else:
-            t = (length - arrow_size * math.cos(ar)) / length
+            # У наконечника с зацепами стержень должен заканчиваться
+            # в центральной выемке, а не заходить за неё и заливать её.
+            head_back = arrow_size * math.cos(ar)
+            if self._head_type == 'barbed':
+                head_back *= 0.72
+            t = (length - head_back) / length
             self._line_end = QPointF(start.x()+dx*t, start.y()+dy*t)
 
         shape = QPainterPath()
@@ -247,7 +252,8 @@ class CurvedArrowItem(QGraphicsPathItem):
         ar = math.radians(20)
 
         # Расстояние от острия до точки обрезки вдоль касательной
-        back_offset = asz * math.cos(ar) * self.TRIM_FACTOR
+        trim_factor = 0.72 if self._head_type == 'barbed' else self.TRIM_FACTOR
+        back_offset = asz * math.cos(ar) * trim_factor
 
         # Касательная в конце кривой (от ctrl к end)
         dx = end.x() - ctrl.x()
