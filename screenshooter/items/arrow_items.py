@@ -26,11 +26,11 @@ def _arrow_head_polygon(end, angle, arrow_size, head_type):
     if head_type != "barbed":
         return QPolygonF([left_shoulder, tip, right_shoulder])
 
-    # Компактные симметричные обратные зацепы. Их вершины слегка
-    # выходят за основание наконечника, а не в сторону острия — это
-    # предотвращает звездообразный силуэт на толстых стрелках.
-    barb_back = back * 1.14
-    barb_half = half * 0.58
+    # Острые симметричные обратные зацепы: внешние вершины вынесены
+    # в стороны, а соседние точки расположены заметно глубже внутри контура.
+    # Это формирует острый, а не тупой угол на концах засечек.
+    barb_back = back * 1.10
+    barb_half = half * 0.95
     notch_back = back * 0.72
     notch_half = half * 0.10
     return QPolygonF([
