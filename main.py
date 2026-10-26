@@ -11,7 +11,8 @@ import ctypes
 import tempfile
 import platform
 
-from PyQt5.QtCore import QLockFile, QLocalServer, QLocalSocket
+from PyQt5.QtCore import QLockFile
+from PyQt5.QtNetwork import QLocalServer, QLocalSocket
 from PyQt5.QtWidgets import QApplication, QMessageBox
 
 if platform.system() == "Windows":
@@ -71,8 +72,6 @@ def main():
 
     lock_file, success = try_acquire_lock()
     if not success:
-        # Контекстное меню должно передавать файл уже запущенному приложению,
-        # а не показывать пользователю ошибку о второй копии.
         app = QApplication(sys.argv)
         app.setApplicationName("Screenshooter")
         if _send_to_running_instance(image_path):
@@ -106,7 +105,6 @@ def main():
         if not window.open_image_path(path):
             window.close()
 
-    # Сокет позволяет Проводнику передать изображение уже работающему приложению.
     local_server = QLocalServer(app)
     QLocalServer.removeServer(LOCAL_SERVER_NAME)
     if not local_server.listen(LOCAL_SERVER_NAME):
@@ -115,14 +113,6 @@ def main():
             "Screenshooter",
             "Не удалось создать канал связи для открытия файлов.",
         )
-
-    def receive_connections():
-        while local_server.hasPendingConnections():
-            socket = local_server.nextPendingConnection()
-            socket.setParent(local_server)
-            socket.readyRead.connect(
-                lambda current_socket=socket: receive_payload(current_socket)
-            )
 
     def receive_payload(socket):
         data = bytes(socket.readAll())
@@ -135,12 +125,19 @@ def main():
                 open_image(path)
         socket.disconnectFromServer()
 
+    def receive_connections():
+        while local_server.hasPendingConnections():
+            socket = local_server.nextPendingConnection()
+            socket.setParent(local_server)
+            socket.readyRead.connect(
+                lambda current_socket=socket: receive_payload(current_socket)
+            )
+
     local_server.newConnection.connect(receive_connections)
 
     if image_path:
         open_image(image_path)
 
-    # Удерживаем блокировку и сервер до завершения приложения.
     app._lock_file = lock_file
     app._local_server = local_server
     sys.exit(app.exec_())
