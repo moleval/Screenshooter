@@ -633,6 +633,21 @@ class ScreenshotApp(QMainWindow):
     # --------------------------------------------------------------
     # Вставка изображений
     # --------------------------------------------------------------
+    def open_image_path(self, path):
+        """Открывает файл изображения, переданный из Проводника."""
+        pixmap = QPixmap(os.path.abspath(path))
+        if pixmap.isNull():
+            QMessageBox.warning(self, "Не удалось открыть изображение",
+                                f"Файл не поддерживается или недоступен:\n{path}")
+            return False
+        self.screenshot_pixmap = pixmap
+        self._captured_window_is_autocad = False
+        self.display_screenshot(source_is_autocad=False)
+        self.showNormal()
+        self.raise_()
+        self.activateWindow()
+        return True
+
     def insert_image_from_file(self):
         path, _ = QFileDialog.getOpenFileName(
             self,

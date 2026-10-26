@@ -56,6 +56,15 @@ class SettingsDialog(QDialog):
         self.autostart_check.setChecked(self.settings.is_autostart_enabled())
         general_layout.addRow("Автозагрузка:", self.autostart_check)
 
+        from .context_menu import is_context_menu_enabled
+        self.context_menu_check = QCheckBox("Добавить в контекстное меню Проводника")
+        self.context_menu_check.setChecked(is_context_menu_enabled())
+        self.context_menu_check.setToolTip(
+            "Добавляет пункт «Открыть в Скриншутере» для PNG, JPG, JPEG и BMP. "
+            "Снятие галочки удаляет только этот пункт."
+        )
+        general_layout.addRow("Контекстное меню:", self.context_menu_check)
+
         layout.addWidget(general_group)
 
         enhancer_group = QGroupBox("Адаптивный улучшайзер")
@@ -183,6 +192,16 @@ class SettingsDialog(QDialog):
         self.settings.enhancer_color_mode = self.enhancer_color_combo.currentData()
         self.settings.dwg_to_pdf = self.dwg_to_pdf_check.isChecked()
         self.settings.save()
+
+        from .context_menu import set_context_menu_enabled
+        if not set_context_menu_enabled(self.context_menu_check.isChecked()):
+            from PyQt5.QtWidgets import QMessageBox
+            QMessageBox.warning(
+                self,
+                "Контекстное меню",
+                "Не удалось изменить пункт контекстного меню Windows. "
+                "Проверьте, что приложение запущено в Windows."
+            )
 
         enabled = self.autostart_check.isChecked()
         if enabled != self.settings.is_autostart_enabled():

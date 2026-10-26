@@ -79,6 +79,9 @@ def main():
     # Окна редактора могут быть скрыты в трее во время захвата.
     app.setQuitOnLastWindowClosed(False)
 
+    # Путь к изображению может быть передан из контекстного меню Проводника.
+    image_path = next((arg for arg in sys.argv[1:] if not arg.startswith("--")), None)
+
     # Устанавливаем иконку приложения глобально
     app.setWindowIcon(load_app_icon())
 
@@ -92,6 +95,11 @@ def main():
     hotkey_manager = HotkeyManager(window_manager, app)
     window_manager.hotkey_manager = hotkey_manager
     app.aboutToQuit.connect(hotkey_manager.cleanup)
+
+    if image_path:
+        window = window_manager.create_editor_window(show=True)
+        if not window.open_image_path(image_path):
+            window.close()
 
     # lock_file должен оставаться в памяти до завершения приложения
     # Сохраняем ссылку в app для предотвращения сборки мусором
