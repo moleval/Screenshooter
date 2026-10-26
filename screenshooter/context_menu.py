@@ -1,7 +1,6 @@
 """Register/unregister the Screenshooter item in the current user's Explorer menu."""
 
 import os
-import shlex
 import subprocess
 import sys
 
