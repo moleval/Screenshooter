@@ -13,7 +13,17 @@ except ImportError:  # pragma: no cover - only available on Windows
 EXTENSIONS = (".png", ".jpg", ".jpeg", ".bmp")
 REGISTRY_ROOT = r"Software\Classes\SystemFileAssociations"
 MENU_KEY = r"shell\Screenshooter"
-MENU_LABEL = "Открыть в Скриншутере"
+MENU_LABEL = "Screenshooter"
+
+
+def _application_icon_path():
+    """Return the icon path used by Explorer for the context-menu item."""
+    if getattr(sys, "frozen", False):
+        # For a PyInstaller executable, Explorer can extract its embedded icon.
+        return f'"{sys.executable}",0'
+    return os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "resources", "icon.ico")
+    )
 
 
 def _command():
@@ -52,6 +62,7 @@ def set_context_menu_enabled(enabled):
     try:
         if enabled:
             command = _command()
+            icon_path = _application_icon_path()
             for extension in EXTENSIONS:
                 key_path = REGISTRY_ROOT + "\\" + extension + "\\" + MENU_KEY
                 with winreg.CreateKeyEx(
@@ -68,15 +79,21 @@ def set_context_menu_enabled(enabled):
                     winreg.KEY_SET_VALUE,
                 ) as key:
                     winreg.SetValueEx(key, "", 0, winreg.REG_SZ, command)
+                with winreg.CreateKeyEx(
+                    winreg.HKEY_CURRENT_USER,
+                    key_path + r"\DefaultIcon",
+                    0,
+                    winreg.KEY_SET_VALUE,
+                ) as key:
+                    winreg.SetValueEx(key, "", 0, winreg.REG_SZ, icon_path)
         else:
             for extension in EXTENSIONS:
                 key_path = REGISTRY_ROOT + "\\" + extension + "\\" + MENU_KEY
-                try:
-                    winreg.DeleteKey(
-                        winreg.HKEY_CURRENT_USER, key_path + r"\command"
-                    )
-                except FileNotFoundError:
-                    pass
+                for child_key in (r"\command", r"\DefaultIcon"):
+                    try:
+                        winreg.DeleteKey(winreg.HKEY_CURRENT_USER, key_path + child_key)
+                    except FileNotFoundError:
+                        pass
                 try:
                     winreg.DeleteKey(winreg.HKEY_CURRENT_USER, key_path)
                 except FileNotFoundError:
