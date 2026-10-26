@@ -34,6 +34,7 @@ def test_default_values(temp_config):
     assert settings.enhancer_ui is True
     assert settings.enhancer_geometry is True
     assert settings.enhancer_color_mode == "auto"
+    assert settings.dwg_to_pdf is False
 
 
 def test_save_and_load(temp_config):
@@ -48,6 +49,7 @@ def test_save_and_load(temp_config):
     assert settings2.enhancer_enabled is True
     assert settings2.enhancer_scale == "auto"
     assert settings2.enhancer_color_mode == "auto"
+    assert settings2.dwg_to_pdf is False
 
 
 def test_monochrome_color_mode_is_saved_and_legacy_invert_is_migrated(temp_config):
@@ -107,3 +109,11 @@ def test_autostart_shortcut_create_and_remove(temp_config, monkeypatch):
 
     assert settings.remove_autostart_shortcut() is True
     assert settings.is_autostart_enabled() is False
+
+def test_dwg_to_pdf_is_saved_and_loaded(temp_config):
+    settings = AppSettings()
+    settings.dwg_to_pdf = True
+    settings.save()
+
+    settings2 = AppSettings()
+    assert settings2.dwg_to_pdf is True

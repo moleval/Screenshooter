@@ -13,18 +13,59 @@ from PyQt5.QtWidgets import QGraphicsItem, QGraphicsPathItem, QStyle
 from ..constants import HIT_AREA_PADDING
 
 
+def _arrow_head_polygon(end, angle, arrow_size, head_type):
+    """Возвращает контур наконечника в локальном направлении стрелки."""
+    ar = math.radians(20)
+    ux, uy = math.cos(angle), math.sin(angle)
+    px, py = -uy, ux
+    back = arrow_size * math.cos(ar)
+    half = arrow_size * math.sin(ar)
+    tip = end
+    left_shoulder = end - QPointF(ux * back, uy * back) + QPointF(px * half, py * half)
+    right_shoulder = end - QPointF(ux * back, uy * back) - QPointF(px * half, py * half)
+    if head_type != "barbed":
+        return QPolygonF([left_shoulder, tip, right_shoulder])
+
+    # Острые зацепы направлены назад, к стержню стрелки, а не наружу.
+    # Вершина засечки находится дальше от острия, чем внутренняя выемка,
+    # при этом сохраняется достаточный боковой вынос для острого угла.
+    barb_back = back * 1.12
+    barb_half = half * 0.82
+    notch_back = back * 0.72
+    notch_half = half * 0.06
+    return QPolygonF([
+        tip,
+        left_shoulder,
+        end - QPointF(ux * barb_back, uy * barb_back) + QPointF(px * barb_half, py * barb_half),
+        end - QPointF(ux * notch_back, uy * notch_back) + QPointF(px * notch_half, py * notch_half),
+        end - QPointF(ux * notch_back, uy * notch_back) - QPointF(px * notch_half, py * notch_half),
+        end - QPointF(ux * barb_back, uy * barb_back) - QPointF(px * barb_half, py * barb_half),
+        right_shoulder,
+    ])
+
+
+def _arrow_shaft_width(width):
+    """Сдерживает рост визуальной толщины штриха на больших значениях."""
+    width = max(1.0, float(width))
+    if width <= 5.0:
+        return width
+    return 5.0 + 5.0 * math.log(width / 5.0)
+
+
 # ==================== ArrowItem ====================
 class ArrowItem(QGraphicsItem):
     """Прямая стрелка с наконечником."""
 
-    def __init__(self, start, end, pen):
+    def __init__(self, start, end, pen, head_type='triangle'):
         super().__init__()
+        self._head_type = head_type
         self._start = start
         self._end = end
         self._line_end = start
         self._p1 = end
         self._p2 = end
         self._p3 = end
+        self._head_path = QPainterPath()
         self._pen = QPen(pen)
         self._pen.setCapStyle(Qt.FlatCap)
         self._pen.setJoinStyle(Qt.MiterJoin)
@@ -32,6 +73,13 @@ class ArrowItem(QGraphicsItem):
         self.setFlags(QGraphicsItem.ItemIsMovable | QGraphicsItem.ItemIsSelectable)
         self.setCacheMode(QGraphicsItem.NoCache)
         self.set_line(start, end)
+
+    def set_head_type(self, head_type):
+        if head_type not in ('triangle','barbed','dot') or self._head_type == head_type: return
+        self.prepareGeometryChange()
+        self._head_type = head_type
+        self._update_geometry()
+        self.update()
 
     def set_line(self, start, end):
         self.prepareGeometryChange()
@@ -67,6 +115,7 @@ class ArrowItem(QGraphicsItem):
             return
 
         pw = self._pen.widthF()
+        shaft_width = _arrow_shaft_width(pw)
         arrow_size = max(8, 8 + pw * 3)
         angle = math.atan2(dy, dx)
         ar = math.radians(20)
@@ -76,32 +125,42 @@ class ArrowItem(QGraphicsItem):
                                  arrow_size * math.sin(angle - ar))
         self._p3 = end - QPointF(arrow_size * math.cos(angle + ar),
                                  arrow_size * math.sin(angle + ar))
-        t = (length - arrow_size * math.cos(ar)) / length
-        self._line_end = QPointF(start.x() + dx * t, start.y() + dy * t)
+        if self._head_type == 'dot':
+            radius = max(3.0, arrow_size * .30)
+            self._line_end = end - QPointF(math.cos(angle)*radius, math.sin(angle)*radius)
+        else:
+            # У наконечника с зацепами стержень должен заканчиваться
+            # в центральной выемке, а не заходить за неё и заливать её.
+            head_back = arrow_size * math.cos(ar)
+            if self._head_type == 'barbed':
+                head_back *= 0.72
+            t = (length - head_back) / length
+            self._line_end = QPointF(start.x()+dx*t, start.y()+dy*t)
 
         shape = QPainterPath()
+        self._head_path = QPainterPath()
+        if self._head_type == 'dot': self._head_path.addEllipse(end, max(3.0,arrow_size*.30), max(3.0,arrow_size*.30))
+        elif self._head_type == 'triangle':
+            self._head_path.moveTo(self._p2); self._head_path.lineTo(self._p1); self._head_path.lineTo(self._p3); self._head_path.closeSubpath()
+        else:
+            self._head_path.addPolygon(_arrow_head_polygon(end,angle,arrow_size,self._head_type)); self._head_path.closeSubpath()
 
         # Обводка линии с теми же Cap/Join, что в paint()
         line_path = QPainterPath(start)
         line_path.lineTo(self._line_end)
         line_stroker = QPainterPathStroker()
-        line_stroker.setWidth(pw)
+        line_stroker.setWidth(shaft_width)
         line_stroker.setCapStyle(Qt.RoundCap)
         line_stroker.setJoinStyle(Qt.RoundJoin)
         shape.addPath(line_stroker.createStroke(line_path))
 
         # Обводка наконечника (как в paint: FlatCap/MiterJoin)
-        head_path = QPainterPath()
-        head_path.moveTo(self._p2)
-        head_path.lineTo(self._p1)
-        head_path.lineTo(self._p3)
-        head_path.closeSubpath()
         head_stroker = QPainterPathStroker()
-        head_stroker.setWidth(pw)
+        head_stroker.setWidth(shaft_width)
         head_stroker.setCapStyle(Qt.FlatCap)
         head_stroker.setJoinStyle(Qt.MiterJoin)
-        shape.addPath(head_stroker.createStroke(head_path))
-        shape.addPath(head_path)
+        shape.addPath(head_stroker.createStroke(self._head_path))
+        shape.addPath(self._head_path)
 
         self._shape_path = shape
 
@@ -127,6 +186,7 @@ class ArrowItem(QGraphicsItem):
 
         # Линия
         lp = QPen(self._pen)
+        lp.setWidthF(_arrow_shaft_width(self._pen.widthF()))
         lp.setCapStyle(Qt.RoundCap)
         lp.setJoinStyle(Qt.RoundJoin)
         painter.setPen(lp)
@@ -134,11 +194,20 @@ class ArrowItem(QGraphicsItem):
 
         # Наконечник
         hp = QPen(self._pen)
+        hp.setWidthF(_arrow_shaft_width(self._pen.widthF()))
         hp.setCapStyle(Qt.FlatCap)
         hp.setJoinStyle(Qt.MiterJoin)
+        # У острых засечек стандартного miter limit Qt недостаточно:
+        # соединение обводки срезает вершины. Увеличиваем лимит, чтобы
+        # сохранять острые концы даже при толстой линии.
+        hp.setMiterLimit(20.0)
         painter.setPen(hp)
         painter.setBrush(self._brush)
-        painter.drawPolygon(QPolygonF([self._p2, self._p1, self._p3]))
+        if self._head_type == 'dot':
+            r=max(3.0,max(8,8+self._pen.widthF()*3)*.30); painter.setPen(Qt.NoPen); painter.drawEllipse(self._end,r,r)
+        elif self._head_type == 'triangle': painter.drawPolygon(QPolygonF([self._p2,self._p1,self._p3]))
+        else:
+            a=math.atan2(self._end.y()-self._start.y(),self._end.x()-self._start.x()); painter.drawPolygon(_arrow_head_polygon(self._end,a,max(8,8+self._pen.widthF()*3),self._head_type))
 
         # Рамка выделения
         if option.state & QStyle.State_Selected:
@@ -157,8 +226,9 @@ class CurvedArrowItem(QGraphicsPathItem):
     # Коэффициент притапливания: 1.0 = по основанию, <1.0 = глубже
     TRIM_FACTOR = 0.65
 
-    def __init__(self, start, end, ctrl, pen):
+    def __init__(self, start, end, ctrl, pen, head_type='triangle'):
         super().__init__()
+        self._head_type = head_type
         self._start = start
         self._end = end
         self._ctrl = ctrl
@@ -167,6 +237,10 @@ class CurvedArrowItem(QGraphicsPathItem):
         self.setCacheMode(QGraphicsItem.NoCache)
         self.setPen(pen)
         self.build_path(start, end, ctrl)
+
+    def set_head_type(self, head_type):
+        if head_type not in ('triangle','barbed','dot') or self._head_type == head_type: return
+        self.prepareGeometryChange(); self._head_type=head_type; self.build_path(self._start,self._end,self._ctrl); self.update()
 
     def set_curve(self, start, end, ctrl):
         self.prepareGeometryChange()
@@ -182,7 +256,8 @@ class CurvedArrowItem(QGraphicsPathItem):
         ar = math.radians(20)
 
         # Расстояние от острия до точки обрезки вдоль касательной
-        back_offset = asz * math.cos(ar) * self.TRIM_FACTOR
+        trim_factor = 0.72 if self._head_type == 'barbed' else self.TRIM_FACTOR
+        back_offset = asz * math.cos(ar) * trim_factor
 
         # Касательная в конце кривой (от ctrl к end)
         dx = end.x() - ctrl.x()
@@ -267,6 +342,7 @@ class CurvedArrowItem(QGraphicsPathItem):
     def paint(self, painter, option, widget):
         # Кривая — рисуем напрямую с RoundCap (как у прямой стрелки)
         lp = QPen(self._pen)
+        lp.setWidthF(_arrow_shaft_width(self._pen.widthF()))
         lp.setCapStyle(Qt.RoundCap)
         lp.setJoinStyle(Qt.RoundJoin)
         painter.setPen(lp)
@@ -293,11 +369,18 @@ class CurvedArrowItem(QGraphicsPathItem):
                                  asz * math.sin(angle + ar))
 
         hp = QPen(self._pen)
+        hp.setWidthF(_arrow_shaft_width(self._pen.widthF()))
         hp.setCapStyle(Qt.FlatCap)
         hp.setJoinStyle(Qt.MiterJoin)
+        # У острых засечек стандартного miter limit Qt недостаточно:
+        # соединение обводки срезает вершины. Увеличиваем лимит, чтобы
+        # сохранять острые концы даже при толстой линии.
+        hp.setMiterLimit(10.0)
         painter.setPen(hp)
         painter.setBrush(QColor(self._pen.color()))
-        painter.drawPolygon(QPolygonF([p2, p1, p3]))
+        if self._head_type == 'dot': painter.setPen(Qt.NoPen); painter.drawEllipse(end_point,max(3.0,asz*.30),max(3.0,asz*.30))
+        elif self._head_type == 'triangle': painter.drawPolygon(QPolygonF([p2,p1,p3]))
+        else: painter.drawPolygon(_arrow_head_polygon(end_point,angle,asz,self._head_type))
 
         # Рамка выделения
         if option.state & QStyle.State_Selected:
@@ -309,7 +392,7 @@ class CurvedArrowItem(QGraphicsPathItem):
     def boundingRect(self):
         pw = self._pen.widthF()
         arrow_size = max(8, 8 + pw * 3)
-        margin = arrow_size + pw / 2 + 5
+        margin = arrow_size * 2 + pw / 2 + 5
         return self.path().boundingRect().adjusted(-margin, -margin, margin, margin)
 
     def shape(self):
@@ -332,10 +415,10 @@ class CurvedArrowItem(QGraphicsPathItem):
             p3 = end_point - QPointF(asz * math.cos(angle + ar),
                                      asz * math.sin(angle + ar))
             head = QPainterPath()
-            head.moveTo(p2)
-            head.lineTo(p1)
-            head.lineTo(p3)
-            head.closeSubpath()
+            if self._head_type == 'dot': head.addEllipse(end_point,max(3.0,asz*.30),max(3.0,asz*.30))
+            elif self._head_type == 'triangle':
+                head.moveTo(p2); head.lineTo(p1); head.lineTo(p3); head.closeSubpath()
+            else: head.addPolygon(_arrow_head_polygon(end_point,angle,asz,self._head_type)); head.closeSubpath()
             path.addPath(head)
         return path
 

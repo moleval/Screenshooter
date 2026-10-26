@@ -26,6 +26,7 @@ def test_settings_dialog_uses_current_values(qapp, tmp_path):
     assert dialog.enhancer_enabled_check.isChecked() is True
     assert dialog.enhancer_scale_combo.currentData() == "auto"
     assert dialog.enhancer_color_combo.currentData() == "auto"
+    assert dialog.dwg_to_pdf_check.isChecked() is True
 
     dialog.reject()
 
@@ -67,3 +68,23 @@ def test_settings_dialog_uses_save_and_cancel_labels(qapp):
     assert buttons[0].button(QDialogButtonBox.Cancel).text() == "Отмена"
 
     dialog.reject()
+
+
+def test_settings_dialog_dwg_to_pdf_is_saved(qapp):
+    class FakeSettings:
+        theme = "system"
+        save_directory = ""
+        dwg_to_pdf = False
+
+        @staticmethod
+        def is_autostart_enabled():
+            return False
+
+        def save(self):
+            pass
+
+    dialog = SettingsDialog(FakeSettings())
+    assert dialog.dwg_to_pdf_check.isChecked() is False
+    dialog.dwg_to_pdf_check.setChecked(True)
+    dialog._accept()
+    assert dialog.settings.dwg_to_pdf is True

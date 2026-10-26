@@ -102,6 +102,9 @@ class AppSettings:
         self.enhancer_color_mode = self.config.get(
             'Enhancer', 'color_mode', fallback='auto'
         )
+        self.dwg_to_pdf = self.config.getboolean(
+            'AutoCAD', 'dwg_to_pdf', fallback=False
+        )
         # До введения монохромного режима использовалось значение
         # "invert". Мигрируем его в новое каноническое значение,
         # чтобы отображаемая в настройках схема совпадала с реально
@@ -132,6 +135,10 @@ class AppSettings:
         self.config.set('Enhancer', 'geometry', str(self.enhancer_geometry))
         self.config.set('Enhancer', 'color_mode', self.enhancer_color_mode)
 
+        if not self.config.has_section('AutoCAD'):
+            self.config.add_section('AutoCAD')
+        self.config.set('AutoCAD', 'dwg_to_pdf', str(self.dwg_to_pdf))
+
         with open(self.config_path, 'w', encoding='utf-8') as f:
             self.config.write(f)
 
@@ -142,6 +149,9 @@ class AppSettings:
         config = configparser.ConfigParser()
         config['General'] = {'save_directory': 'D:/YandexDisk/Скриншоты'}
         config['Theme'] = {'theme': 'system'}
+        config['AutoCAD'] = {
+            'dwg_to_pdf': 'False',
+        }
         config['Enhancer'] = {
             'enabled': 'True',
             'scale': 'auto',
