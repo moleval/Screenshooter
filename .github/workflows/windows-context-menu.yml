@@ -54,7 +54,7 @@ jobs:
             ) | Out-Null
             if ($errors.Count -gt 0) {
               $details = ($errors | ForEach-Object { "$($_.Extent): $($_.Message)" }) -join "`n"
-              throw "PowerShell syntax errors in $script:`n$details"
+              throw "PowerShell syntax errors in ${script}:`n$details"
             }
           }
 
