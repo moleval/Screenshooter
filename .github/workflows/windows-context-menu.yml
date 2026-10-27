@@ -1,0 +1,149 @@
+name: Windows context-menu extension
+
+on:
+  push:
+    branches:
+      - feature/windows11-modern-context-menu
+  pull_request:
+    branches:
+      - feature/windows11-modern-context-menu
+  workflow_dispatch:
+
+jobs:
+  build-native-extension:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate package manifest XML
+        shell: pwsh
+        run: |
+          [xml]$manifest = Get-Content windows_context_menu/Package.appxmanifest -Raw
+          $identity = $manifest.Package.Identity
+          if ($identity.Name -ne 'Moleval.Screenshooter.ContextMenu') {
+            throw 'Unexpected package identity.'
+          }
+          if ($identity.Publisher -ne 'CN=Screenshooter Developer') {
+            throw 'Package publisher must match the installer validation.'
+          }
+          if ($identity.ProcessorArchitecture -ne 'x64') {
+            throw 'The current native extension supports x64 only.'
+          }
+          $class = $manifest.Package.Applications.Application.Extensions.Extension.ComServer.SurrogateServer.Class
+          if (-not $class -or $class.Id -ne '2E50E830-88F2-4A3A-9A6C-6A318C724410' -or $class.Path -ne 'ScreenshooterContextMenu.dll') {
+            throw 'COM class registration does not match the native extension.'
+          }
+          if (-not $manifest.Package.Dependencies.TargetDeviceFamily -or
+              [version]$manifest.Package.Dependencies.TargetDeviceFamily.MinVersion -lt [version]'10.0.22000.0') {
+            throw 'The package must target Windows 11 build 22000 or newer.'
+          }
+
+      - name: Validate PowerShell script syntax
+        shell: pwsh
+        run: |
+          $scripts = @(
+            'windows_context_menu/Build-SparsePackage.ps1',
+            'windows_context_menu/Build-ModernMenuPackage.ps1',
+            'windows_context_menu/Install-ModernMenu.ps1',
+            'windows_context_menu/Uninstall-ModernMenu.ps1'
+          )
+          foreach ($script in $scripts) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              (Join-Path $PWD $script), [ref]$tokens, [ref]$errors
+            ) | Out-Null
+            if ($errors.Count -gt 0) {
+              $details = ($errors | ForEach-Object { "$($_.Extent): $($_.Message)" }) -join [Environment]::NewLine
+              throw "PowerShell syntax errors in ${script}: $details"
+            }
+          }
+
+      - name: Configure native extension
+        run: cmake -S windows_context_menu -B build/windows-context-menu -A x64
+
+      - name: Build native extension
+        run: cmake --build build/windows-context-menu --config Release
+
+      - name: Set up Python for package assets
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Generate package icons
+        shell: pwsh
+        run: |
+          python -m pip install --disable-pip-version-check Pillow
+          python windows_context_menu/prepare_package_assets.py
+
+      - name: Assemble installation toolkit
+        shell: pwsh
+        run: |
+          $kit = Join-Path $PWD 'build\ScreenshooterModernMenu-x64'
+          $assets = Join-Path $kit 'Assets'
+          New-Item -ItemType Directory -Path $assets -Force | Out-Null
+          Copy-Item 'build\windows-context-menu\Release\ScreenshooterContextMenu.dll' $kit
+          Copy-Item 'windows_context_menu\Package.appxmanifest' $kit
+          Copy-Item 'windows_context_menu\Build-ModernMenuPackage.ps1' $kit
+          Copy-Item 'windows_context_menu\Install-ModernMenu.ps1' $kit
+          Copy-Item 'windows_context_menu\Uninstall-ModernMenu.ps1' $kit
+          Copy-Item 'windows_context_menu\package_assets\Assets\*' $assets
+          @'
+          Screenshooter — современное контекстное меню Windows 11 (x64)
+
+          СОСТАВ
+          - ScreenshooterContextMenu.dll: собранное расширение Проводника
+          - Package.appxmanifest и Assets\: манифест и изображения пакета
+          - Build-ModernMenuPackage.ps1: собирает MSIX и копирует приложение с DLL во внешнюю папку
+          - Install-ModernMenu.ps1 / Uninstall-ModernMenu.ps1: установка и удаление для текущего пользователя
+
+          ПЕРЕД НАЧАЛОМ
+          1. Этот комплект предназначен для Windows 11 x64 (сборка 22000 или новее).
+          2. На компьютере должны быть Windows 10/11 SDK (MakeAppx.exe, SignTool.exe при подписи) и уже собранный Screenshooter.exe.
+          3. Для установки MSIX требуется действительная подпись сертификатом с издателем CN=Screenshooter Developer, которому Windows доверяет. Комплект не содержит приватного ключа и не меняет хранилища доверия автоматически.
+          4. Не запускайте DLL напрямую и не используйте regsvr32.
+
+          СБОРКА
+          Откройте PowerShell в папке распакованного комплекта. Укажите путь к вашему Screenshooter.exe:
+            .\Build-ModernMenuPackage.ps1 -AppExe 'C:\путь\к\Screenshooter.exe' -CertificateThumbprint 'ОТПЕЧАТОК'
+          Сертификат должен находиться в Cert:\CurrentUser\My и иметь Subject ровно CN=Screenshooter Developer. Без -CertificateThumbprint будет создан неподписанный MSIX, который установочный скрипт намеренно отклонит.
+
+          УСТАНОВКА
+          Сначала проверьте команду без изменений:
+            .\Install-ModernMenu.ps1 -MsixPath .\output\ScreenshooterModernMenu.msix -ExternalLocation .\output\ScreenshooterModernMenu -WhatIf
+          После проверки и подтверждения доверия к сертификату выполните ту же команду без -WhatIf.
+
+          УДАЛЕНИЕ
+            .\Uninstall-ModernMenu.ps1 -WhatIf
+            .\Uninstall-ModernMenu.ps1
+
+          Установка затрагивает только пакет современного меню для текущего пользователя. Существующая интеграция Windows 10 не изменяется. Сначала проверьте новое меню; только затем при необходимости отключайте старый пункт через настройки Screenshooter.
+          '@ | Set-Content -LiteralPath (Join-Path $kit 'README.txt') -Encoding utf8
+
+      - name: Validate installation toolkit contents
+        shell: pwsh
+        run: |
+          $required = @(
+            'ScreenshooterContextMenu.dll',
+            'Package.appxmanifest',
+            'Build-ModernMenuPackage.ps1',
+            'Install-ModernMenu.ps1',
+            'Uninstall-ModernMenu.ps1',
+            'README.txt',
+            'Assets\StoreLogo.png',
+            'Assets\Square150x150Logo.png',
+            'Assets\Square44x44Logo.png'
+          )
+          foreach ($relativePath in $required) {
+            $path = Join-Path 'build\ScreenshooterModernMenu-x64' $relativePath
+            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+              throw "Installation toolkit is missing required file: $relativePath"
+            }
+          }
+
+      - name: Upload Windows 11 installation toolkit
+        uses: actions/upload-artifact@v4
+        with:
+          name: ScreenshooterModernMenu-x64
+          path: build/ScreenshooterModernMenu-x64/
+          if-no-files-found: error

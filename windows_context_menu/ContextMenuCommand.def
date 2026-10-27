@@ -1,0 +1,4 @@
+LIBRARY "ScreenshooterContextMenu"
+EXPORTS
+    DllGetClassObject PRIVATE
+    DllCanUnloadNow PRIVATE
