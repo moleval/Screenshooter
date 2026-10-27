@@ -8,16 +8,16 @@
   xmlns:com="http://schemas.microsoft.com/appx/manifest/com/windows10"
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
   IgnorableNamespaces="uap uap10 desktop4 desktop5 com rescap">
-  <!-- Replace Identity values with values matching the package signing certificate. -->
+  <!-- Publisher must match the certificate used to sign the sparse MSIX. -->
   <Identity
-    Name="Moleval.Screenshooter"
+    Name="Moleval.Screenshooter.ContextMenu"
     Publisher="CN=Screenshooter Developer"
     Version="1.0.0.0"
     ProcessorArchitecture="x64" />
   <Properties>
-    <DisplayName>Screenshooter</DisplayName>
+    <DisplayName>Screenshooter Context Menu</DisplayName>
     <PublisherDisplayName>Screenshooter</PublisherDisplayName>
-    <Description>Screenshooter Explorer context-menu integration</Description>
+    <Description>Modern File Explorer context menu integration for Screenshooter</Description>
     <Logo>Assets\StoreLogo.png</Logo>
     <uap10:AllowExternalContent>true</uap10:AllowExternalContent>
   </Properties>
@@ -29,13 +29,13 @@
   </Dependencies>
   <Applications>
     <Application
-      Id="Screenshooter"
+      Id="ScreenshooterContextMenu"
       Executable="Screenshooter.exe"
       EntryPoint="Windows.FullTrustApplication"
       uap10:TrustLevel="mediumIL"
       uap10:RuntimeBehavior="win32App">
       <uap:VisualElements
-        DisplayName="Screenshooter"
+        DisplayName="Screenshooter Context Menu"
         Description="Screenshooter"
         BackgroundColor="transparent"
         Square150x150Logo="Assets\Square150x150Logo.png"
@@ -43,15 +43,20 @@
       <Extensions>
         <com:Extension Category="windows.comServer">
           <com:ComServer>
-            <com:InProcessServer Path="ScreenshooterContextMenu.dll">
-              <com:Class Id="2E50E830-88F2-4A3A-9A6C-6A318C724410" ThreadingModel="STA" />
-            </com:InProcessServer>
+            <com:SurrogateServer DisplayName="Screenshooter context menu">
+              <com:Class
+                Id="2E50E830-88F2-4A3A-9A6C-6A318C724410"
+                Path="ScreenshooterContextMenu.dll"
+                ThreadingModel="STA" />
+            </com:SurrogateServer>
           </com:ComServer>
         </com:Extension>
         <desktop4:Extension Category="windows.fileExplorerContextMenus">
           <desktop4:FileExplorerContextMenus>
             <desktop5:ItemType Type="*">
-              <desktop5:Verb Id="Screenshooter.OpenImage" Clsid="2E50E830-88F2-4A3A-9A6C-6A318C724410" />
+              <desktop5:Verb
+                Id="Screenshooter.OpenImage"
+                Clsid="2E50E830-88F2-4A3A-9A6C-6A318C724410" />
             </desktop5:ItemType>
           </desktop4:FileExplorerContextMenus>
         </desktop4:Extension>
