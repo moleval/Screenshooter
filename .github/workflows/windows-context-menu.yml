@@ -23,6 +23,40 @@ jobs:
           if ($identity.Name -ne 'Moleval.Screenshooter.ContextMenu') {
             throw 'Unexpected package identity.'
           }
+          if ($identity.Publisher -ne 'CN=Screenshooter Developer') {
+            throw 'Package publisher must match the installer validation.'
+          }
+          if ($identity.ProcessorArchitecture -ne 'x64') {
+            throw 'The current native extension supports x64 only.'
+          }
+          $class = $manifest.Package.Applications.Application.Extensions.Extension.ComServer.SurrogateServer.Class
+          if (-not $class -or $class.Id -ne '2E50E830-88F2-4A3A-9A6C-6A318C724410' -or $class.Path -ne 'ScreenshooterContextMenu.dll') {
+            throw 'COM class registration does not match the native extension.'
+          }
+          if (-not $manifest.Package.Dependencies.TargetDeviceFamily -or
+              [version]$manifest.Package.Dependencies.TargetDeviceFamily.MinVersion -lt [version]'10.0.22000.0') {
+            throw 'The package must target Windows 11 build 22000 or newer.'
+          }
+
+      - name: Validate PowerShell script syntax
+        shell: pwsh
+        run: |
+          $scripts = @(
+            'windows_context_menu/Build-SparsePackage.ps1',
+            'windows_context_menu/Install-ModernMenu.ps1',
+            'windows_context_menu/Uninstall-ModernMenu.ps1'
+          )
+          foreach ($script in $scripts) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              (Join-Path $PWD $script), [ref]$tokens, [ref]$errors
+            ) | Out-Null
+            if ($errors.Count -gt 0) {
+              $details = ($errors | ForEach-Object { "$($_.Extent): $($_.Message)" }) -join "`n"
+              throw "PowerShell syntax errors in $script:`n$details"
+            }
+          }
 
       - name: Configure native extension
         run: cmake -S windows_context_menu -B build/windows-context-menu -A x64
