@@ -254,7 +254,7 @@ extern "C" BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID)
     return TRUE;
 }
 
-extern "C" __declspec(dllexport) HRESULT __stdcall DllGetClassObject(
+STDAPI DllGetClassObject(
     REFCLSID clsid, REFIID riid, void** object)
 {
     if (!IsEqualCLSID(clsid, CLSID_ScreenshooterExplorerCommand))
@@ -267,7 +267,7 @@ extern "C" __declspec(dllexport) HRESULT __stdcall DllGetClassObject(
     return hr;
 }
 
-extern "C" __declspec(dllexport) HRESULT __stdcall DllCanUnloadNow()
+STDAPI DllCanUnloadNow()
 {
     return InterlockedCompareExchange(&g_objectCount, 0, 0) == 0 ? S_OK : S_FALSE;
 }
