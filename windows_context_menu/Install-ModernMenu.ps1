@@ -32,10 +32,23 @@ $signature = Get-AuthenticodeSignature -LiteralPath $MsixPath
 if ($signature.Status -ne [System.Management.Automation.SignatureStatus]::Valid) {
     throw "The MSIX signature is not valid ($($signature.Status)). Sign and trust the package before installing it. No changes were made."
 }
+if (-not $signature.SignerCertificate -or $signature.SignerCertificate.Subject -ne 'CN=Screenshooter Developer') {
+    throw "The MSIX signer does not match the expected publisher CN=Screenshooter Developer. No changes were made."
+}
 
-$manifestText = Get-Content -LiteralPath (Join-Path (Split-Path -Parent $MsixPath) 'AppxManifest.xml') -Raw -ErrorAction SilentlyContinue
-if ($manifestText -and $manifestText -notmatch [regex]::Escape($packageName)) {
-    throw "Package manifest identity does not match the expected package name. No changes were made."
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$archive = [System.IO.Compression.ZipFile]::OpenRead($MsixPath)
+try {
+    $manifestEntry = $archive.GetEntry('AppxManifest.xml')
+    if (-not $manifestEntry) { throw 'MSIX has no AppxManifest.xml. No changes were made.' }
+    $reader = [System.IO.StreamReader]::new($manifestEntry.Open())
+    try { [xml]$packageManifest = $reader.ReadToEnd() } finally { $reader.Dispose() }
+    if ($packageManifest.Package.Identity.Name -ne $packageName -or
+        $packageManifest.Package.Identity.Publisher -ne 'CN=Screenshooter Developer') {
+        throw 'MSIX package identity or publisher does not match the expected values. No changes were made.'
+    }
+} finally {
+    $archive.Dispose()
 }
 
 if ($PSCmdlet.ShouldProcess("$packageName for current user", "Register sparse MSIX with external location '$ExternalLocation'")) {
