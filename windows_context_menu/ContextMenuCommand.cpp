@@ -5,10 +5,12 @@
 #include <shellapi.h>
 #include <new>
 #include <string>
+#include <cstring>
+#include <cwchar>
 
 #pragma comment(lib, "shlwapi.lib")
+#pragma comment(lib, "shell32.lib")
 
-// Keep this CLSID in sync with Package.appxmanifest.
 static const CLSID CLSID_ScreenshooterExplorerCommand =
 { 0x2e50e830, 0x88f2, 0x4a3a, { 0x9a, 0x6c, 0x6a, 0x31, 0x8c, 0x72, 0x44, 0x10 } };
 
@@ -33,7 +35,7 @@ static HRESULT GetSelectedPath(IShellItemArray* items, std::wstring& path)
 
     DWORD count = 0;
     HRESULT hr = items->GetCount(&count);
-    if (FAILED(hr) || count == 0) return E_INVALIDARG;
+    if (FAILED(hr) || count != 1) return E_INVALIDARG;
 
     IShellItem* item = nullptr;
     hr = items->GetItemAt(0, &item);
@@ -49,13 +51,24 @@ static HRESULT GetSelectedPath(IShellItemArray* items, std::wstring& path)
     return S_OK;
 }
 
+static bool IsSupportedImage(const std::wstring& path)
+{
+    const wchar_t* extension = PathFindExtensionW(path.c_str());
+    if (!extension) return false;
+    return _wcsicmp(extension, L".png") == 0 ||
+           _wcsicmp(extension, L".jpg") == 0 ||
+           _wcsicmp(extension, L".jpeg") == 0 ||
+           _wcsicmp(extension, L".bmp") == 0;
+}
+
 static HRESULT LaunchScreenshooter(const std::wstring& imagePath)
 {
     wchar_t modulePath[MAX_PATH] = {};
-    if (!GetModuleFileNameW(g_module, modulePath, MAX_PATH))
-        return HRESULT_FROM_WIN32(GetLastError());
+    const DWORD length = GetModuleFileNameW(g_module, modulePath, MAX_PATH);
+    if (!length || length >= MAX_PATH)
+        return HRESULT_FROM_WIN32(length ? ERROR_INSUFFICIENT_BUFFER : GetLastError());
 
-    if (PathRemoveFileSpecW(modulePath) == FALSE)
+    if (!PathRemoveFileSpecW(modulePath))
         return HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND);
 
     if (!PathAppendW(modulePath, L"Screenshooter.exe"))
@@ -64,12 +77,16 @@ static HRESULT LaunchScreenshooter(const std::wstring& imagePath)
     if (GetFileAttributesW(modulePath) == INVALID_FILE_ATTRIBUTES)
         return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
 
+    // ShellExecuteEx parses lpParameters as a command line; quote the full path
+    // so files in directories containing spaces are passed as one argument.
+    std::wstring parameters = L"\"" + imagePath + L"\"";
+
     SHELLEXECUTEINFOW info = {};
     info.cbSize = sizeof(info);
     info.fMask = SEE_MASK_FLAG_NO_UI;
     info.lpVerb = L"open";
     info.lpFile = modulePath;
-    info.lpParameters = imagePath.c_str();
+    info.lpParameters = parameters.c_str();
     info.nShow = SW_SHOWNORMAL;
 
     if (!ShellExecuteExW(&info))
@@ -114,20 +131,22 @@ public:
 
     IFACEMETHODIMP GetIcon(IShellItemArray*, PWSTR* icon) override
     {
-        // The app icon is shipped beside the command DLL.
+        // PyInstaller embeds the application icon in Screenshooter.exe.
         wchar_t modulePath[MAX_PATH] = {};
-        if (!GetModuleFileNameW(g_module, modulePath, MAX_PATH))
-            return HRESULT_FROM_WIN32(GetLastError());
-        if (PathRemoveFileSpecW(modulePath) == FALSE)
+        const DWORD length = GetModuleFileNameW(g_module, modulePath, MAX_PATH);
+        if (!length || length >= MAX_PATH)
+            return HRESULT_FROM_WIN32(length ? ERROR_INSUFFICIENT_BUFFER : GetLastError());
+        if (!PathRemoveFileSpecW(modulePath))
             return HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND);
-        if (!PathAppendW(modulePath, L"icon.ico"))
+        if (!PathAppendW(modulePath, L"Screenshooter.exe"))
             return HRESULT_FROM_WIN32(ERROR_BUFFER_OVERFLOW);
         return CopyString(modulePath, icon);
     }
 
     IFACEMETHODIMP GetToolTip(IShellItemArray*, PWSTR* tooltip) override
     {
-        if (tooltip) *tooltip = nullptr;
+        if (!tooltip) return E_POINTER;
+        *tooltip = nullptr;
         return E_NOTIMPL;
     }
 
@@ -142,18 +161,9 @@ public:
     {
         if (!state) return E_POINTER;
         *state = ECS_HIDDEN;
-
         std::wstring path;
-        if (FAILED(GetSelectedPath(items, path))) return S_OK;
-
-        const wchar_t* extension = PathFindExtensionW(path.c_str());
-        if (!extension) return S_OK;
-        if (_wcsicmp(extension, L".png") == 0 ||
-            _wcsicmp(extension, L".jpg") == 0 ||
-            _wcsicmp(extension, L".jpeg") == 0 ||
-            _wcsicmp(extension, L".bmp") == 0)
+        if (SUCCEEDED(GetSelectedPath(items, path)) && IsSupportedImage(path))
             *state = ECS_ENABLED;
-
         return S_OK;
     }
 
@@ -162,6 +172,7 @@ public:
         std::wstring path;
         HRESULT hr = GetSelectedPath(items, path);
         if (FAILED(hr)) return hr;
+        if (!IsSupportedImage(path)) return E_INVALIDARG;
         return LaunchScreenshooter(path);
     }
 
@@ -186,6 +197,9 @@ private:
 class ScreenshooterClassFactory final : public IClassFactory
 {
 public:
+    ScreenshooterClassFactory() { InterlockedIncrement(&g_objectCount); }
+    ~ScreenshooterClassFactory() { InterlockedDecrement(&g_objectCount); }
+
     IFACEMETHODIMP QueryInterface(REFIID riid, void** object) override
     {
         if (!object) return E_POINTER;
@@ -227,7 +241,6 @@ public:
     }
 
 private:
-    ~ScreenshooterClassFactory() = default;
     long references_ = 1;
 };
 
