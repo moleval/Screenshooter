@@ -8,14 +8,13 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$repoRoot = Split-Path -Parent $PSScriptRoot
-
 if (-not (Test-Path -LiteralPath $AppExe -PathType Leaf)) {
     throw "Application executable not found: $AppExe. Build Screenshooter first. Nothing was installed or registered."
 }
 
 $cmake = Get-Command cmake -ErrorAction Stop
-$makeAppx = Get-ChildItem "\${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter MakeAppx.exe -Recurse -ErrorAction SilentlyContinue |
+$sdkBin = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Windows Kits\10\bin'
+$makeAppx = Get-ChildItem $sdkBin -Filter MakeAppx.exe -Recurse -ErrorAction SilentlyContinue |
     Where-Object { $_.FullName -match '\\x64\\MakeAppx\.exe$' } |
     Sort-Object FullName -Descending |
     Select-Object -First 1
@@ -26,12 +25,9 @@ if (-not $makeAppx) {
 $null = New-Item -ItemType Directory -Path $ExternalLocation -Force
 $null = New-Item -ItemType Directory -Path (Split-Path -Parent $OutputMsix) -Force
 
-$buildPath = (Resolve-Path -LiteralPath $BuildDirectory -ErrorAction SilentlyContinue).Path
-if (-not $buildPath) {
-    & $cmake.Source -S (Join-Path $PSScriptRoot '.') -B $BuildDirectory -A x64
-    if ($LASTEXITCODE -ne 0) { throw "CMake configure failed with exit code $LASTEXITCODE." }
-    $buildPath = $BuildDirectory
-}
+& $cmake.Source -S $PSScriptRoot -B $BuildDirectory -A x64
+if ($LASTEXITCODE -ne 0) { throw "CMake configure failed with exit code $LASTEXITCODE." }
+$buildPath = $BuildDirectory
 & $cmake.Source --build $buildPath --config Release
 if ($LASTEXITCODE -ne 0) { throw "Native extension build failed with exit code $LASTEXITCODE." }
 
@@ -64,7 +60,7 @@ if (Test-Path -LiteralPath $OutputMsix) { Remove-Item -LiteralPath $OutputMsix -
 if ($LASTEXITCODE -ne 0) { throw "MakeAppx failed with exit code $LASTEXITCODE." }
 
 if ($CertificateThumbprint) {
-    $signTool = Get-ChildItem "\${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter SignTool.exe -Recurse -ErrorAction SilentlyContinue |
+    $signTool = Get-ChildItem $sdkBin -Filter SignTool.exe -Recurse -ErrorAction SilentlyContinue |
         Where-Object { $_.FullName -match '\\x64\\SignTool\.exe$' } |
         Sort-Object FullName -Descending |
         Select-Object -First 1
