@@ -54,7 +54,7 @@
           <desktop4:FileExplorerContextMenus>
             <desktop5:ItemType Type="*">
               <desktop5:Verb
-                Id="Screenshooter.OpenImage"
+                Id="ScreenshooterOpenImage"
                 Clsid="2E50E830-88F2-4A3A-9A6C-6A318C724410" />
             </desktop5:ItemType>
           </desktop4:FileExplorerContextMenus>

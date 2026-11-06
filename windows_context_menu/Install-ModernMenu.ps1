@@ -13,7 +13,7 @@ $ErrorActionPreference = 'Stop'
 $packageName = 'Moleval.Screenshooter.ContextMenu'
 
 $os = Get-CimInstance Win32_OperatingSystem
-$build = [int]([version]$os.Version).BuildNumber
+$build = [int]$os.BuildNumber
 if ($build -lt 22000) {
     throw "Modern context menu registration requires Windows 11 (build 22000+). No changes were made."
 }
