@@ -81,6 +81,14 @@ class AppSettings:
         )
         self.theme = self.config.get('Theme', 'theme', fallback='system')
 
+        # Намерения пользователя хранятся отдельно от фактической регистрации.
+        self.classic_menu_enabled = self.config.getboolean(
+            'Integration', 'classic_menu_enabled', fallback=False
+        )
+        self.modern_menu_enabled = self.config.getboolean(
+            'Integration', 'modern_menu_enabled', fallback=False
+        )
+
         # Настройки адаптивного улучшайзера.
         self.enhancer_enabled = self.config.getboolean(
             'Enhancer', 'enabled', fallback=True
@@ -122,6 +130,17 @@ class AppSettings:
         self.config.set('General', 'save_directory', self.save_directory)
         self.config.set('Theme', 'theme', self.theme)
 
+        if not self.config.has_section('Integration'):
+            self.config.add_section('Integration')
+        self.config.set(
+            'Integration', 'classic_menu_enabled',
+            str(self.classic_menu_enabled)
+        )
+        self.config.set(
+            'Integration', 'modern_menu_enabled',
+            str(self.modern_menu_enabled)
+        )
+
         if not self.config.has_section('Enhancer'):
             self.config.add_section('Enhancer')
         self.config.set('Enhancer', 'enabled', str(self.enhancer_enabled))
@@ -142,6 +161,10 @@ class AppSettings:
         config = configparser.ConfigParser()
         config['General'] = {'save_directory': 'D:/YandexDisk/Скриншоты'}
         config['Theme'] = {'theme': 'system'}
+        config['Integration'] = {
+            'classic_menu_enabled': 'False',
+            'modern_menu_enabled': 'False',
+        }
         config['Enhancer'] = {
             'enabled': 'True',
             'scale': 'auto',
