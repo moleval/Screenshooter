@@ -15,13 +15,18 @@ from .settings_dialog import SettingsDialog
 
 
 class TrayManager(QObject):
-    def __init__(self, window_manager):
+    def __init__(self, window_manager, settings=None):
         super().__init__(window_manager)
         self.window_manager = window_manager
         self.window_manager.tray_manager = self
         # Настройки принадлежат приложению, а не конкретному окну.
         # Это позволяет управлять ими даже когда все редакторы закрыты.
-        self.settings = AppSettings()
+        self.settings = (
+            settings
+            if settings is not None
+            else getattr(window_manager, "settings", None) or AppSettings()
+        )
+        self.window_manager.settings = self.settings
 
         current_window = self._current_window()
         icon = current_window.windowIcon() if current_window is not None else load_app_icon()
