@@ -57,8 +57,13 @@ class SettingsDialog(QDialog):
         general_layout.addRow("Автозагрузка:", self.autostart_check)
 
         from .context_menu import is_context_menu_enabled
-        self.context_menu_check = QCheckBox("Добавить в контекстное меню Проводника")
-        self.context_menu_check.setChecked(is_context_menu_enabled())
+        self.context_menu_check = QCheckBox("Классическое контекстное меню")
+        self.context_menu_check.setChecked(
+            getattr(
+                self.settings, "classic_menu_enabled",
+                is_context_menu_enabled(),
+            )
+        )
         self.context_menu_check.setToolTip(
             "Добавляет пункт «Открыть в Скриншутере» для PNG, JPG, JPEG и BMP. "
             "Снятие галочки удаляет только этот пункт."
@@ -159,10 +164,11 @@ class SettingsDialog(QDialog):
         self.settings.enhancer_ui = self.enhancer_ui_check.isChecked()
         self.settings.enhancer_geometry = self.enhancer_geometry_check.isChecked()
         self.settings.enhancer_color_mode = self.enhancer_color_combo.currentData()
+        self.settings.classic_menu_enabled = self.context_menu_check.isChecked()
         self.settings.save()
 
         from .context_menu import set_context_menu_enabled
-        if not set_context_menu_enabled(self.context_menu_check.isChecked()):
+        if not set_context_menu_enabled(self.settings.classic_menu_enabled):
             from PyQt5.QtWidgets import QMessageBox
             QMessageBox.warning(
                 self,
