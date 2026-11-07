@@ -25,6 +25,7 @@ from screenshooter.window_manager import WindowManager
 from screenshooter.hotkey_manager import HotkeyManager
 from screenshooter.tray import TrayManager
 from screenshooter.utils import load_app_icon
+from screenshooter.settings import AppSettings
 
 
 LOCAL_SERVER_NAME = "Screenshooter.App.1.0"
@@ -89,8 +90,9 @@ def main():
     app.setQuitOnLastWindowClosed(False)
     app.setWindowIcon(load_app_icon())
 
-    window_manager = WindowManager(app)
-    tray_manager = TrayManager(window_manager)
+    settings = AppSettings()
+    window_manager = WindowManager(app, settings=settings)
+    tray_manager = TrayManager(window_manager, settings=settings)
     window_manager.tray_manager = tray_manager
 
     hotkey_manager = HotkeyManager(window_manager, app)
