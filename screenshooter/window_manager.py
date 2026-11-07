@@ -20,8 +20,12 @@ class WindowManager(QObject):
     MIN_WINDOW_W = 650
     MIN_WINDOW_H = 400
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, settings=None):
         super().__init__(parent)
+        if settings is None:
+            from .settings import AppSettings
+            settings = AppSettings()
+        self.settings = settings
         self._windows = []
         self._active_window = None
         self._next_window_number = 1
@@ -423,7 +427,7 @@ class WindowManager(QObject):
 
     def create_editor_window(self, reusable=True, show=True):
         from .app import ScreenshotApp
-        window = ScreenshotApp()
+        window = ScreenshotApp(settings=self.settings)
         window._window_manager = self
         if hasattr(self, "hotkey_manager"):
             window._hotkey_manager = self.hotkey_manager
