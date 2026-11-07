@@ -57,13 +57,13 @@ class ScreenshotApp(QMainWindow):
     # Нативное сообщение Windows: двойной клик по заголовку окна
     WM_NCLBUTTONDBLCLK = 0x00A3
 
-    def __init__(self):
+    def __init__(self, settings=None):
         super().__init__()
         self.setWindowTitle("Скриншотер с редактором")
         self.setGeometry(100, 100, WINDOW_INITIAL_WIDTH, WINDOW_MIN_HEIGHT)
         self.setMinimumHeight(WINDOW_MIN_HEIGHT)
 
-        self.settings = AppSettings()
+        self.settings = settings if settings is not None else AppSettings()
         self.tray_manager = None
 
         theme_manager.set_theme(self.settings.theme)
