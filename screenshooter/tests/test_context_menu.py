@@ -148,3 +148,15 @@ def test_status_is_unavailable_when_registry_access_is_denied(monkeypatch):
 
     assert result["status"] == context_menu.STATUS_UNAVAILABLE
     assert result["enabled"] is False
+
+def test_status_is_broken_when_command_subkey_is_missing(registry):
+    registry.values = make_registry(missing_command=True)
+
+    result = context_menu.get_classic_menu_status()
+
+    assert result["status"] == context_menu.STATUS_BROKEN
+    assert result["extensions"][".png"]["command_exists"] is False
+    assert any(
+        "подраздел command" in issue
+        for issue in result["extensions"][".png"]["issues"]
+    )
