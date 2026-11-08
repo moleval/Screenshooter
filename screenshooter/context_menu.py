@@ -10,10 +10,10 @@ except ImportError:  # pragma: no cover - only available on Windows
 
 
 EXTENSIONS = (".png", ".jpg", ".jpeg", ".bmp")
-REGISTRY_ROOT = r"Software\\Classes\\SystemFileAssociations"
-MENU_KEY = r"shell\\Screenshooter"
+REGISTRY_ROOT = r"Software\Classes\SystemFileAssociations"
+MENU_KEY = r"shell\Screenshooter"
 MENU_LABEL = "Screenshooter"
-EXPECTED_EXECUTABLE = r"D:\\Screenshooter\\Screenshooter.exe"
+EXPECTED_EXECUTABLE = r"D:\Screenshooter\Screenshooter.exe"
 EXPECTED_COMMAND = f'"{EXPECTED_EXECUTABLE}" "%1"'
 EXPECTED_ICON = f'"{EXPECTED_EXECUTABLE}",0'
 
@@ -91,7 +91,7 @@ def get_classic_menu_status(executable_path=EXPECTED_EXECUTABLE):
 
             try:
                 with winreg.OpenKey(
-                    winreg.HKEY_CURRENT_USER, key_path + r"\\command"
+                    winreg.HKEY_CURRENT_USER, key_path + r"\command"
                 ) as command_key:
                     details["command_exists"] = True
                     details["command"] = _read_default_value(command_key)
@@ -181,7 +181,7 @@ def set_context_menu_enabled(enabled):
                     winreg.SetValueEx(key, "Icon", 0, winreg.REG_SZ, EXPECTED_ICON)
                 with winreg.CreateKeyEx(
                     winreg.HKEY_CURRENT_USER,
-                    key_path + r"\\command",
+                    key_path + r"\command",
                     0,
                     winreg.KEY_SET_VALUE,
                 ) as key:
@@ -206,7 +206,7 @@ def set_context_menu_enabled(enabled):
                 try:
                     with winreg.OpenKey(
                         winreg.HKEY_CURRENT_USER,
-                        key_path + r"\\command",
+                        key_path + r"\command",
                         0,
                         winreg.KEY_SET_VALUE,
                     ) as key:
