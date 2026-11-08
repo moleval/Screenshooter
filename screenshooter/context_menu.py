@@ -2,8 +2,6 @@
 
 import ntpath
 import os
-import subprocess
-import sys
 
 try:
     import winreg
@@ -12,10 +10,12 @@ except ImportError:  # pragma: no cover - only available on Windows
 
 
 EXTENSIONS = (".png", ".jpg", ".jpeg", ".bmp")
-REGISTRY_ROOT = r"Software\Classes\SystemFileAssociations"
-MENU_KEY = r"shell\Screenshooter"
+REGISTRY_ROOT = r"Software\\Classes\\SystemFileAssociations"
+MENU_KEY = r"shell\\Screenshooter"
 MENU_LABEL = "Screenshooter"
-EXPECTED_EXECUTABLE = r"D:\Screenshooter\Screenshooter.exe"
+EXPECTED_EXECUTABLE = r"D:\\Screenshooter\\Screenshooter.exe"
+EXPECTED_COMMAND = f'"{EXPECTED_EXECUTABLE}" "%1"'
+EXPECTED_ICON = f'"{EXPECTED_EXECUTABLE}",0'
 
 STATUS_NOT_INSTALLED = "NOT_INSTALLED"
 STATUS_INSTALLED = "INSTALLED"
@@ -24,30 +24,8 @@ STATUS_BROKEN = "BROKEN"
 STATUS_UNAVAILABLE = "UNAVAILABLE"
 
 
-def _application_icon_path():
-    """Return the icon path used by Explorer for the context-menu item."""
-    if getattr(sys, "frozen", False):
-        return f'"{sys.executable}",0'
-    return os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "resources", "icon.ico")
-    )
-
-
-def _command():
-    """Build a quoted command that also works when running from source."""
-    if getattr(sys, "frozen", False):
-        executable = sys.executable
-        arguments = ['"%1"']
-    else:
-        executable = sys.executable
-        main_script = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), os.pardir, "main.py")
-        )
-        arguments = [subprocess.list2cmdline([main_script]), '"%1"']
-    return subprocess.list2cmdline([executable]) + " " + " ".join(arguments)
-
-
 def _normalize_windows_path(path):
+    """Normalize a Windows path for case-insensitive comparison."""
     return ntpath.normcase(ntpath.normpath(path.strip().strip('"')))
 
 
@@ -55,13 +33,12 @@ def _read_default_value(key):
     return winreg.QueryValueEx(key, "")[0]
 
 
-def get_classic_menu_status(executable_path=EXPECTED_EXECUTABLE):
-    """Inspect the current user's classic menu registration without modifying it.
+def _registry_key_path(extension):
+    return REGISTRY_ROOT + "\\" + extension + "\\" + MENU_KEY
 
-    The returned dictionary contains an overall status, per-extension details,
-    and human-readable issues. Registry access errors are reported as
-    UNAVAILABLE; missing keys and values are treated as registration findings.
-    """
+
+def get_classic_menu_status(executable_path=EXPECTED_EXECUTABLE):
+    """Inspect the current user's classic menu registration without modifying it."""
     report = {
         "status": STATUS_UNAVAILABLE,
         "enabled": False,
@@ -79,7 +56,7 @@ def get_classic_menu_status(executable_path=EXPECTED_EXECUTABLE):
     all_valid = True
 
     for extension in EXTENSIONS:
-        key_path = REGISTRY_ROOT + "\\" + extension + "\\" + MENU_KEY
+        key_path = _registry_key_path(extension)
         details = {
             "registered": False,
             "command_exists": False,
@@ -114,7 +91,7 @@ def get_classic_menu_status(executable_path=EXPECTED_EXECUTABLE):
 
             try:
                 with winreg.OpenKey(
-                    winreg.HKEY_CURRENT_USER, key_path + r"\command"
+                    winreg.HKEY_CURRENT_USER, key_path + r"\\command"
                 ) as command_key:
                     details["command_exists"] = True
                     details["command"] = _read_default_value(command_key)
@@ -134,7 +111,6 @@ def get_classic_menu_status(executable_path=EXPECTED_EXECUTABLE):
             report["issues"].append(
                 f"Не удалось прочитать реестр для {extension}: {error}"
             )
-            report["status"] = STATUS_UNAVAILABLE
             return report
 
         if details["registered"]:
@@ -171,17 +147,30 @@ def is_context_menu_enabled():
     return get_classic_menu_status()["status"] == STATUS_INSTALLED
 
 
+def _delete_value_if_owned(key, name, expected):
+    """Delete a value only when it still contains the exact value we own."""
+    try:
+        current = winreg.QueryValueEx(key, name)[0]
+    except FileNotFoundError:
+        return
+    if current == expected:
+        winreg.DeleteValue(key, name)
+
+
 def set_context_menu_enabled(enabled):
-    """Register or remove the menu item for the current Windows user only."""
+    """Register or remove only our known values for the current Windows user.
+
+    Registration is idempotent. If a write fails partway through, already
+    completed entries are left in place and can be repaired by retrying.
+    Removal never deletes a registry key or an unknown value/subkey.
+    """
     if winreg is None:
         return False
 
     try:
         if enabled:
-            command = _command()
-            icon_path = _application_icon_path()
             for extension in EXTENSIONS:
-                key_path = REGISTRY_ROOT + "\\" + extension + "\\" + MENU_KEY
+                key_path = _registry_key_path(extension)
                 with winreg.CreateKeyEx(
                     winreg.HKEY_CURRENT_USER,
                     key_path,
@@ -189,43 +178,39 @@ def set_context_menu_enabled(enabled):
                     winreg.KEY_SET_VALUE,
                 ) as key:
                     winreg.SetValueEx(key, "", 0, winreg.REG_SZ, MENU_LABEL)
-                    # Explorer reads a verb's icon from the "Icon" value on the
-                    # verb key; a nested "DefaultIcon" key is not the right form.
-                    winreg.SetValueEx(key, "Icon", 0, winreg.REG_SZ, icon_path)
+                    winreg.SetValueEx(key, "Icon", 0, winreg.REG_SZ, EXPECTED_ICON)
                 with winreg.CreateKeyEx(
                     winreg.HKEY_CURRENT_USER,
-                    key_path + r"\command",
+                    key_path + r"\\command",
                     0,
                     winreg.KEY_SET_VALUE,
                 ) as key:
-                    winreg.SetValueEx(key, "", 0, winreg.REG_SZ, command)
-                # Remove the legacy misplaced icon subkey if an older version made it.
-                try:
-                    winreg.DeleteKey(
-                        winreg.HKEY_CURRENT_USER, key_path + r"\DefaultIcon"
+                    winreg.SetValueEx(
+                        key, "", 0, winreg.REG_SZ, EXPECTED_COMMAND
                     )
-                except FileNotFoundError:
-                    pass
         else:
             for extension in EXTENSIONS:
-                key_path = REGISTRY_ROOT + "\\" + extension + "\\" + MENU_KEY
-                for child_key in (r"\command", r"\DefaultIcon"):
-                    try:
-                        winreg.DeleteKey(winreg.HKEY_CURRENT_USER, key_path + child_key)
-                    except FileNotFoundError:
-                        pass
+                key_path = _registry_key_path(extension)
                 try:
                     with winreg.OpenKey(
-                        winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_SET_VALUE
+                        winreg.HKEY_CURRENT_USER,
+                        key_path,
+                        0,
+                        winreg.KEY_SET_VALUE,
                     ) as key:
-                        try:
-                            winreg.DeleteValue(key, "Icon")
-                        except FileNotFoundError:
-                            pass
+                        _delete_value_if_owned(key, "", MENU_LABEL)
+                        _delete_value_if_owned(key, "Icon", EXPECTED_ICON)
                 except FileNotFoundError:
                     pass
+
                 try:
-                    winreg.DeleteKey(winreg.HKEY_CURRENT_USER, key_path)
+                    with winreg.OpenKey(
+                        winreg.HKEY_CURRENT_USER,
+                        key_path + r"\\command",
+                        0,
+                        winreg.KEY_SET_VALUE,
+                    ) as key:
+                        _delete_value_if_owned(key, "", EXPECTED_COMMAND)
                 except FileNotFoundError:
                     pass
         return True
