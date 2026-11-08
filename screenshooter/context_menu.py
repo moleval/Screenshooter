@@ -12,10 +12,10 @@ except ImportError:  # pragma: no cover - only available on Windows
 
 
 EXTENSIONS = (".png", ".jpg", ".jpeg", ".bmp")
-REGISTRY_ROOT = r"Software\\Classes\\SystemFileAssociations"
-MENU_KEY = r"shell\\Screenshooter"
+REGISTRY_ROOT = r"Software\Classes\SystemFileAssociations"
+MENU_KEY = r"shell\Screenshooter"
 MENU_LABEL = "Screenshooter"
-EXPECTED_EXECUTABLE = r"D:\\Screenshooter\\Screenshooter.exe"
+EXPECTED_EXECUTABLE = r"D:\Screenshooter\Screenshooter.exe"
 
 STATUS_NOT_INSTALLED = "NOT_INSTALLED"
 STATUS_INSTALLED = "INSTALLED"
@@ -79,7 +79,7 @@ def get_classic_menu_status(executable_path=EXPECTED_EXECUTABLE):
     all_valid = True
 
     for extension in EXTENSIONS:
-        key_path = REGISTRY_ROOT + "\\\\" + extension + "\\\\" + MENU_KEY
+        key_path = REGISTRY_ROOT + "\\" + extension + "\\" + MENU_KEY
         details = {
             "registered": False,
             "command_exists": False,
@@ -114,7 +114,7 @@ def get_classic_menu_status(executable_path=EXPECTED_EXECUTABLE):
 
             try:
                 with winreg.OpenKey(
-                    winreg.HKEY_CURRENT_USER, key_path + r"\\command"
+                    winreg.HKEY_CURRENT_USER, key_path + r"\command"
                 ) as command_key:
                     details["command_exists"] = True
                     details["command"] = _read_default_value(command_key)
@@ -181,7 +181,7 @@ def set_context_menu_enabled(enabled):
             command = _command()
             icon_path = _application_icon_path()
             for extension in EXTENSIONS:
-                key_path = REGISTRY_ROOT + "\\\\" + extension + "\\\\" + MENU_KEY
+                key_path = REGISTRY_ROOT + "\\" + extension + "\\" + MENU_KEY
                 with winreg.CreateKeyEx(
                     winreg.HKEY_CURRENT_USER,
                     key_path,
@@ -194,7 +194,7 @@ def set_context_menu_enabled(enabled):
                     winreg.SetValueEx(key, "Icon", 0, winreg.REG_SZ, icon_path)
                 with winreg.CreateKeyEx(
                     winreg.HKEY_CURRENT_USER,
-                    key_path + r"\\command",
+                    key_path + r"\command",
                     0,
                     winreg.KEY_SET_VALUE,
                 ) as key:
@@ -202,14 +202,14 @@ def set_context_menu_enabled(enabled):
                 # Remove the legacy misplaced icon subkey if an older version made it.
                 try:
                     winreg.DeleteKey(
-                        winreg.HKEY_CURRENT_USER, key_path + r"\\DefaultIcon"
+                        winreg.HKEY_CURRENT_USER, key_path + r"\DefaultIcon"
                     )
                 except FileNotFoundError:
                     pass
         else:
             for extension in EXTENSIONS:
-                key_path = REGISTRY_ROOT + "\\\\" + extension + "\\\\" + MENU_KEY
-                for child_key in (r"\\command", r"\\DefaultIcon"):
+                key_path = REGISTRY_ROOT + "\\" + extension + "\\" + MENU_KEY
+                for child_key in (r"\command", r"\DefaultIcon"):
                     try:
                         winreg.DeleteKey(winreg.HKEY_CURRENT_USER, key_path + child_key)
                     except FileNotFoundError:
