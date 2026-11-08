@@ -1,7 +1,5 @@
 """Tests for read-only classic Explorer menu diagnostics."""
 
-from types import SimpleNamespace
-
 import pytest
 
 from screenshooter import context_menu
@@ -60,7 +58,7 @@ def make_registry(*, missing_extension=None, bad_command=False, missing_command=
             "Icon": f'"{context_menu.EXPECTED_EXECUTABLE}",0',
         }
         if not (missing_command and extension == context_menu.EXTENSIONS[0]):
-            values[menu_path + r"\\command"] = {"": command}
+            values[menu_path + r"\command"] = {"": command}
     return values
 
 
@@ -148,6 +146,7 @@ def test_status_is_unavailable_when_registry_access_is_denied(monkeypatch):
 
     assert result["status"] == context_menu.STATUS_UNAVAILABLE
     assert result["enabled"] is False
+
 
 def test_status_is_broken_when_command_subkey_is_missing(registry):
     registry.values = make_registry(missing_command=True)
