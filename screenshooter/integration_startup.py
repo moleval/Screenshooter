@@ -57,7 +57,7 @@ try {
     foreach ($package in $packages) {
         if ($package.Publisher -ne 'CN=Screenshooter Developer') { $issues.Add('Издатель установленного пакета не совпадает с ожидаемым.') }
         if ($package.Architecture -ne 'X64') { $issues.Add('Архитектура пакета не x64.') }
-        [xml]$manifest = Get-AppxPackageManifest -Package $package.PackageFullName
+        [xml]$manifest = Get-AppxPackageManifest -Package $package
         $identity = $manifest.Package.Identity
         if ($identity.Name -ne 'Moleval.Screenshooter.ContextMenu' -or $identity.Publisher -ne 'CN=Screenshooter Developer') {
             $issues.Add('Identity или Publisher манифеста не соответствует ожидаемым значениям.')
