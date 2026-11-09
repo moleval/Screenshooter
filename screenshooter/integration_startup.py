@@ -41,6 +41,8 @@ try {
     }
     $exe = 'D:\Screenshooter\Screenshooter.exe'
     $dll = 'D:\Screenshooter\ContextMenu\ScreenshooterContextMenu.dll'
+    $logo150 = 'D:\Screenshooter\ContextMenu\Assets\Square150x150Logo.png'
+    $logo44 = 'D:\Screenshooter\ContextMenu\Assets\Square44x44Logo.png'
     $packages = @(Get-AppxPackage -Name 'Moleval.Screenshooter.ContextMenu' -ErrorAction Stop)
     if ($packages.Count -eq 0) {
         [pscustomobject]@{ status = 'NOT_INSTALLED'; issues = @('Пакет MSIX не зарегистрирован для текущего пользователя.') } | ConvertTo-Json -Compress
@@ -49,6 +51,8 @@ try {
     $issues = [System.Collections.Generic.List[string]]::new()
     if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { $issues.Add("Не найден $exe") }
     if (-not (Test-Path -LiteralPath $dll -PathType Leaf)) { $issues.Add("Не найдена $dll") }
+    if (-not (Test-Path -LiteralPath $logo150 -PathType Leaf)) { $issues.Add("Не найден ресурс $logo150") }
+    if (-not (Test-Path -LiteralPath $logo44 -PathType Leaf)) { $issues.Add("Не найден ресурс $logo44") }
 
     foreach ($package in $packages) {
         if ($package.Publisher -ne 'CN=Screenshooter Developer') { $issues.Add('Издатель установленного пакета не совпадает с ожидаемым.') }
@@ -60,6 +64,10 @@ try {
         }
         $application = $manifest.Package.Applications.Application
         if ($application.Executable -ne 'Screenshooter.exe') { $issues.Add('Application Executable должен быть Screenshooter.exe в корне ExternalLocation.') }
+        $visual = $application.SelectSingleNode("*[local-name()='VisualElements']")
+        if (-not $visual -or $visual.Square150x150Logo -ne 'ContextMenu\\Assets\\Square150x150Logo.png' -or $visual.Square44x44Logo -ne 'ContextMenu\\Assets\\Square44x44Logo.png') {
+            $issues.Add('Пути к визуальным ресурсам не соответствуют ExternalLocation.')
+        }
         $classes = @($manifest.Package.Applications.Application.Extensions.Extension |
             Where-Object { $_.ComServer } | ForEach-Object { $_.ComServer.SurrogateServer.Class })
         $class = $classes | Where-Object { $_.Id -eq '2E50E830-88F2-4A3A-9A6C-6A318C724410' } | Select-Object -First 1
