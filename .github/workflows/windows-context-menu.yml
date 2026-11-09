@@ -109,12 +109,16 @@ jobs:
           Set-Content -LiteralPath (Join-Path $external 'Screenshooter.exe') -Value 'CI placeholder; never executed.'
           & (Join-Path $kit 'Install-ModernMenu.ps1') -MsixPath (Join-Path $kit 'output\ScreenshooterModernMenu.msix') -PayloadDirectory (Join-Path $kit 'output\Payload\ContextMenu') -WhatIf
           if ($LASTEXITCODE -ne 0) { throw 'Installer preflight failed.' }
+          if (Test-Path -LiteralPath (Join-Path $external 'ContextMenu')) { throw 'Installer -WhatIf modified the ExternalLocation.' }
+          if ((Get-Content -LiteralPath (Join-Path $external 'Screenshooter.exe') -Raw) -ne 'CI placeholder; never executed.') { throw 'Installer -WhatIf modified Screenshooter.exe.' }
 
           Add-Type -AssemblyName System.IO.Compression.FileSystem
           $archive = [System.IO.Compression.ZipFile]::OpenRead((Join-Path $kit 'output\ScreenshooterModernMenu.msix'))
           try {
             $entries = @($archive.Entries | ForEach-Object FullName)
             if ($entries -contains 'Screenshooter.exe' -or $entries -contains 'ScreenshooterContextMenu.dll') { throw 'Sparse MSIX must not contain a second copy of the application or COM DLL.' }
+            if (-not ($entries -contains 'Assets/StoreLogo.png' -or $entries -contains 'Assets\\StoreLogo.png')) { throw 'MSIX StoreLogo resource missing.' }
+            if (@($entries | Where-Object { $_ -match '^Assets[/\\]Square' }).Count -gt 0) { throw 'VisualElements tile images must remain in ExternalLocation, not MSIX.' }
             if (-not ($entries -contains 'AppxManifest.xml')) { throw 'MSIX manifest missing.' }
           } finally { $archive.Dispose() }
 
