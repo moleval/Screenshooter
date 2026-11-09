@@ -78,10 +78,10 @@ jobs:
             .\Build-ModernMenuPackage.ps1 -CertificateThumbprint '<thumbprint>'
 
           Проверка установки:
-            .\Install-ModernMenu.ps1 -MsixPath .\output\ScreenshooterModernMenu.msix -DllPath .\output\Payload\ContextMenu\ScreenshooterContextMenu.dll -WhatIf
+            .\Install-ModernMenu.ps1 -MsixPath .\output\ScreenshooterModernMenu.msix -PayloadDirectory .\output\Payload\ContextMenu -WhatIf
 
           Установка после проверки:
-            .\Install-ModernMenu.ps1 -MsixPath .\output\ScreenshooterModernMenu.msix -DllPath .\output\Payload\ContextMenu\ScreenshooterContextMenu.dll
+            .\Install-ModernMenu.ps1 -MsixPath .\output\ScreenshooterModernMenu.msix -PayloadDirectory .\output\Payload\ContextMenu -WhatIf
 
           Удаление регистрации:
             .\Uninstall-ModernMenu.ps1
@@ -107,7 +107,7 @@ jobs:
           $external = 'D:\Screenshooter'
           New-Item -ItemType Directory -Path $external -Force | Out-Null
           Set-Content -LiteralPath (Join-Path $external 'Screenshooter.exe') -Value 'CI placeholder; never executed.'
-          & (Join-Path $kit 'Install-ModernMenu.ps1') -MsixPath (Join-Path $kit 'output\ScreenshooterModernMenu.msix') -DllPath (Join-Path $kit 'output\Payload\ContextMenu\ScreenshooterContextMenu.dll') -WhatIf
+          & (Join-Path $kit 'Install-ModernMenu.ps1') -MsixPath (Join-Path $kit 'output\ScreenshooterModernMenu.msix') -PayloadDirectory (Join-Path $kit 'output\Payload\ContextMenu') -WhatIf
           if ($LASTEXITCODE -ne 0) { throw 'Installer preflight failed.' }
 
           Add-Type -AssemblyName System.IO.Compression.FileSystem
