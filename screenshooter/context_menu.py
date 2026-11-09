@@ -187,7 +187,7 @@ def set_context_menu_enabled(enabled):
                     _registration_has_conflict(key_path, "", MENU_LABEL)
                     or _registration_has_conflict(key_path, "Icon", EXPECTED_ICON)
                     or _registration_has_conflict(
-                        key_path + r"\\command", "", EXPECTED_COMMAND
+                        key_path + r"\command", "", EXPECTED_COMMAND
                     )
                 ):
                     return False
