@@ -43,7 +43,7 @@ $null = New-Item -ItemType Directory -Path $payloadContextMenu -Force
 Copy-Item -LiteralPath $dll -Destination (Join-Path $payloadContextMenu 'ScreenshooterContextMenu.dll') -Force
 $payloadAssets = Join-Path $payloadContextMenu 'Assets'
 $null = New-Item -ItemType Directory -Path $payloadAssets -Force
-Copy-Item -Path (Join-Path $PSScriptRoot 'package_assets\\Assets\\*') -Destination $payloadAssets -Force
+Copy-Item -Path (Join-Path $PSScriptRoot 'package_assets\Assets\*') -Destination $payloadAssets -Force
 
 $packageStage = Join-Path $BuildDirectory 'sparse-package'
 if (Test-Path -LiteralPath $packageStage) { Remove-Item -LiteralPath $packageStage -Recurse -Force }
