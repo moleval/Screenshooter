@@ -211,3 +211,34 @@ def test_enable_reports_partial_write_failure(registry):
     assert context_menu.set_context_menu_enabled(True) is False
     assert menu_path(context_menu.EXTENSIONS[0]) in registry.values
     assert menu_path(failing_extension) not in registry.values
+
+
+
+def test_enable_refuses_to_overwrite_foreign_command(registry):
+    path = menu_path(context_menu.EXTENSIONS[0])
+    registry.values[path] = {
+        "": context_menu.MENU_LABEL,
+        "Icon": context_menu.EXPECTED_ICON,
+    }
+    registry.values[path + r"\\command"] = {
+        "": '"C:\\Other\\Application.exe" "%1"'
+    }
+
+    assert context_menu.set_context_menu_enabled(True) is False
+    assert registry.values[path + r"\\command"][""] == (
+        '"C:\\Other\\Application.exe" "%1"'
+    )
+    # Preflight happens before writes, so other extensions remain untouched.
+    assert menu_path(context_menu.EXTENSIONS[1]) not in registry.values
+
+
+def test_enable_refuses_to_overwrite_foreign_menu_metadata(registry):
+    path = menu_path(context_menu.EXTENSIONS[0])
+    registry.values[path] = {
+        "": "Another application",
+        "Icon": context_menu.EXPECTED_ICON,
+    }
+
+    assert context_menu.set_context_menu_enabled(True) is False
+    assert registry.values[path][""] == "Another application"
+    assert menu_path(context_menu.EXTENSIONS[1]) not in registry.values
