@@ -4,30 +4,34 @@
 
 ## Фиксированная архитектура
 
-Единственный исполняемый файл приложения остаётся в `D:\Screenshooter\Screenshooter.exe`.
+Единственный EXE приложения: `D:\Screenshooter\Screenshooter.exe`. Он не входит в MSIX и не копируется сборщиком.
 
-Структура после установки:
+Структура внешнего каталога после установки:
 
 ```text
 D:\Screenshooter\
   Screenshooter.exe
   ContextMenu\
     ScreenshooterContextMenu.dll
+    Assets\
+      Square150x150Logo.png
+      Square44x44Logo.png
 ```
 
 - `D:\Screenshooter` используется как ExternalLocation sparse MSIX.
 - Манифест указывает `Screenshooter.exe` в корне ExternalLocation.
-- COM-сервер находится по относительному пути `ContextMenu\ScreenshooterContextMenu.dll`.
+- COM-сервер расположен по относительному пути `ContextMenu\ScreenshooterContextMenu.dll`.
+- Визуальные ресурсы `VisualElements` также должны быть во внешнем каталоге: `ContextMenu\Assets`. `StoreLogo.png` остаётся ресурсом самого MSIX.
 - DLL запускает строго `D:\Screenshooter\Screenshooter.exe`.
 - Сборка не копирует и не заменяет EXE приложения.
-- Установщик развёртывает только DLL после явного подтверждения и регистрирует MSIX для текущего пользователя.
-- Удаление пакета не удаляет Screenshooter.exe, DLL или классическую регистрацию Windows.
+- Установщик развёртывает только DLL и управляемые PNG-файлы после явного подтверждения.
+- Удаление пакета не удаляет приложение, DLL, PNG или классическую регистрацию Windows.
 
 Современное меню поддерживается на Windows 11 build 22000+ x64. Классическая интеграция остаётся независимой.
 
 ## Сборка из репозитория
 
-Требуются Visual Studio Build Tools с C++ workload, CMake, Windows 10/11 SDK и Python с Pillow. Перед сборкой должен существовать установленный `D:\Screenshooter\Screenshooter.exe`.
+Требуются Visual Studio Build Tools с C++ workload, CMake, Windows 10/11 SDK и Python с Pillow. Перед сборкой должен существовать `D:\Screenshooter\Screenshooter.exe`.
 
 Создайте сертификат с Subject ровно `CN=Screenshooter Developer` в `Cert:\CurrentUser\My`, затем из корня репозитория выполните:
 
@@ -40,17 +44,23 @@ if (-not $cert) { throw 'Сертификат подписи не найден.'
 .\windows_context_menu\Build-SparsePackage.ps1 -CertificateThumbprint $cert.Thumbprint
 ```
 
-Скрипт создаёт MSIX и DLL payload в `dist\ScreenshooterModernMenu`. Он не меняет `D:\Screenshooter` и не регистрирует пакет.
+Скрипт создаёт MSIX и внешний payload в `dist\ScreenshooterModernMenu`. Он не меняет `D:\Screenshooter` и не регистрирует пакет.
 
 ## Установка
 
 Убедитесь, что Windows доверяет сертификату. Сначала выполните проверку без изменений:
 
 ```powershell
-.\windows_context_menu\Install-ModernMenu.ps1 -MsixPath .\dist\ScreenshooterModernMenu\ScreenshooterModernMenu.msix -DllPath .\dist\ScreenshooterModernMenu\Payload\ContextMenu\ScreenshooterContextMenu.dll -WhatIf
+.\windows_context_menu\Install-ModernMenu.ps1 -MsixPath .\dist\ScreenshooterModernMenu\ScreenshooterModernMenu.msix -PayloadDirectory .\dist\ScreenshooterModernMenu\Payload\ContextMenu -WhatIf
 ```
 
-После проверки выполните ту же команду без `-WhatIf`. Установщик проверяет Windows, EXE, подпись, издателя, Identity и пути манифеста; сохраняет резервную копию DLL; развёртывает DLL; регистрирует MSIX с ExternalLocation `D:\Screenshooter`. При ошибке регистрации прежняя DLL восстанавливается.
+После проверки выполните ту же команду без `-WhatIf`. Установщик:
+- проверяет Windows 11 build 22000+, наличие EXE, подпись, Publisher, Identity и пути манифеста;
+- проверяет наличие DLL и двух внешних PNG-ресурсов;
+- сохраняет резервные копии заменяемых файлов;
+- копирует DLL и PNG-ресурсы в `D:\Screenshooter\ContextMenu`;
+- регистрирует MSIX с ExternalLocation `D:\Screenshooter`;
+- при ошибке развёртывания или регистрации восстанавливает прежние файлы.
 
 `Screenshooter.exe` не копируется и не заменяется.
 
@@ -61,14 +71,14 @@ if (-not $cert) { throw 'Сертификат подписи не найден.'
 .\windows_context_menu\Uninstall-ModernMenu.ps1
 ```
 
-Удаляется только MSIX-регистрация текущего пользователя. DLL остаётся в каталоге приложения и может быть удалена отдельно после удаления пакета.
+Удаляется только MSIX-регистрация текущего пользователя. DLL и PNG остаются в каталоге приложения; они не удаляются автоматически.
 
 ## Диагностика
 
-Read-only аудит проверяет Windows build, регистрацию пакета, Publisher, архитектуру, Identity, COM CLSID, относительный путь DLL, File Explorer Verb и наличие EXE/DLL по фиксированным путям.
+Read-only аудит проверяет Windows build, регистрацию пакета, Publisher, архитектуру, Identity, COM CLSID, путь DLL, File Explorer Verb, пути `VisualElements` и наличие EXE/DLL/PNG по фиксированным путям.
 
-Аудит не активирует COM-сервер и не проверяет визуальное отображение пункта в Проводнике. Функциональная проверка на целевой Windows 11 машине обязательна. Установка и восстановление автоматически не выполняются.
+Аудит не активирует COM-сервер и не проверяет фактическое отображение пункта в интерактивном Проводнике. Поэтому функциональная проверка на целевой Windows 11 машине обязательна. Установка и восстановление автоматически не выполняются.
 
 ## CI
 
-GitHub Actions собирает DLL, формирует и подписывает тестовый MSIX, проверяет структуру пакета и выполняет установочный preflight через `-WhatIf`. Это не заменяет реальную регистрацию и проверку COM-активации в интерактивном Проводнике.
+GitHub Actions собирает DLL, формирует и подписывает тестовый MSIX, проверяет структуру пакета и выполняет установочный preflight через `-WhatIf`. Это проверяет сборку и входные условия установщика, но не заменяет реальную регистрацию и проверку COM-активации в интерактивном Проводнике.
