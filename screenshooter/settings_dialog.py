@@ -70,6 +70,17 @@ class SettingsDialog(QDialog):
         )
         general_layout.addRow("Контекстное меню:", self.context_menu_check)
 
+        self.modern_menu_check = QCheckBox("Современное контекстное меню Windows 11")
+        self.modern_menu_check.setChecked(
+            getattr(self.settings, "modern_menu_enabled", False)
+        )
+        self.modern_menu_check.setToolTip(
+            "Сохраняет намерение использовать современное меню Windows 11. "
+            "Регистрация выполняется отдельным подписанным установочным комплектом; "
+            "изменение этой настройки само по себе не устанавливает и не удаляет MSIX."
+        )
+        general_layout.addRow("Интеграция Windows 11:", self.modern_menu_check)
+
         layout.addWidget(general_group)
 
         enhancer_group = QGroupBox("Адаптивный улучшайзер")
@@ -165,6 +176,7 @@ class SettingsDialog(QDialog):
         self.settings.enhancer_geometry = self.enhancer_geometry_check.isChecked()
         self.settings.enhancer_color_mode = self.enhancer_color_combo.currentData()
         self.settings.classic_menu_enabled = self.context_menu_check.isChecked()
+        self.settings.modern_menu_enabled = self.modern_menu_check.isChecked()
         self.settings.save()
 
         from .context_menu import set_context_menu_enabled
