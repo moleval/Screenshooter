@@ -26,6 +26,7 @@ from screenshooter.hotkey_manager import HotkeyManager
 from screenshooter.tray import TrayManager
 from screenshooter.utils import load_app_icon
 from screenshooter.settings import AppSettings
+from screenshooter.integration_startup import IntegrationStartupAudit
 
 
 LOCAL_SERVER_NAME = "Screenshooter.App.1.0"
@@ -95,6 +96,10 @@ def main():
     tray_manager = TrayManager(window_manager, settings=settings)
     window_manager.tray_manager = tray_manager
 
+    # Read-only audit is deferred until the application and tray are initialized.
+    integration_audit = IntegrationStartupAudit(settings, parent=None)
+    integration_audit.schedule()
+
     hotkey_manager = HotkeyManager(window_manager, app)
     window_manager.hotkey_manager = hotkey_manager
     app.aboutToQuit.connect(hotkey_manager.cleanup)
@@ -142,6 +147,7 @@ def main():
 
     app._lock_file = lock_file
     app._local_server = local_server
+    app._integration_audit = integration_audit
     sys.exit(app.exec_())
 
 
