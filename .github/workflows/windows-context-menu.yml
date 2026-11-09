@@ -123,7 +123,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Sparse MSIX unregistration failed.' }
           if (@(Get-AppxPackage -Name 'Moleval.Screenshooter.ContextMenu').Count -ne 0) { throw 'Package remains registered after uninstall.' }
           if (-not (Test-Path -LiteralPath (Join-Path $external 'Screenshooter.exe') -PathType Leaf)) { throw 'Uninstall removed the application EXE.' }
-          foreach ($relative in @('ScreenshooterContextMenu.dll', 'Assets\\Square150x150Logo.png', 'Assets\\Square44x44Logo.png')) {
+          foreach ($relative in @('ScreenshooterContextMenu.dll', 'Assets\Square150x150Logo.png', 'Assets\Square44x44Logo.png')) {
             if (-not (Test-Path -LiteralPath (Join-Path (Join-Path $external 'ContextMenu') $relative) -PathType Leaf)) { throw "Uninstall removed an externally managed file: $relative" }
           }
 
