@@ -27,6 +27,8 @@ jobs:
           if ($application.Executable -ne 'Screenshooter.exe') { throw 'Application executable must resolve at ExternalLocation root.' }
           $class = $application.Extensions.Extension | Where-Object { $_.ComServer } | ForEach-Object { $_.ComServer.SurrogateServer.Class } | Where-Object { $_.Id -eq '2E50E830-88F2-4A3A-9A6C-6A318C724410' }
           if (-not $class -or $class.Path -ne 'ContextMenu\ScreenshooterContextMenu.dll') { throw 'COM DLL path must match D:\Screenshooter\ContextMenu.' }
+          $visual = $application.SelectSingleNode("*[local-name()='VisualElements']")
+          if (-not $visual -or $visual.Square150x150Logo -ne 'ContextMenu\Assets\Square150x150Logo.png' -or $visual.Square44x44Logo -ne 'ContextMenu\Assets\Square44x44Logo.png') { throw 'Visual assets must resolve under the external ContextMenu folder.' }
           $verb = $application.Extensions.Extension | Where-Object { $_.FileExplorerContextMenus } | ForEach-Object { $_.FileExplorerContextMenus.ItemType.Verb } | Where-Object { $_.Id -eq 'ScreenshooterOpenImage' -and $_.Clsid -eq $class.Id }
           if (-not $verb) { throw 'File Explorer verb does not reference the COM class.' }
           if ([version]$manifest.Package.Dependencies.TargetDeviceFamily.MinVersion -lt [version]'10.0.22000.0') { throw 'Modern menu requires Windows 11 build 22000+.' }
