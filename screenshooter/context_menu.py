@@ -157,6 +157,16 @@ def _delete_value_if_owned(key, name, expected):
         winreg.DeleteValue(key, name)
 
 
+def _registration_has_conflict(key_path, value_name, expected):
+    """Return True if an existing value is not one of our expected values."""
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path) as key:
+            current = winreg.QueryValueEx(key, value_name)[0]
+    except FileNotFoundError:
+        return False
+    return current != expected
+
+
 def set_context_menu_enabled(enabled):
     """Register or remove only our known values for the current Windows user.
 
@@ -169,6 +179,19 @@ def set_context_menu_enabled(enabled):
 
     try:
         if enabled:
+            # Preflight every target before the first write. Never overwrite an
+            # existing value whose ownership cannot be established.
+            for extension in EXTENSIONS:
+                key_path = _registry_key_path(extension)
+                if (
+                    _registration_has_conflict(key_path, "", MENU_LABEL)
+                    or _registration_has_conflict(key_path, "Icon", EXPECTED_ICON)
+                    or _registration_has_conflict(
+                        key_path + r"\\command", "", EXPECTED_COMMAND
+                    )
+                ):
+                    return False
+
             for extension in EXTENSIONS:
                 key_path = _registry_key_path(extension)
                 with winreg.CreateKeyEx(
