@@ -1,63 +1,74 @@
 # Современное контекстное меню Windows 11
 
-Цель этого компонента — добавить Screenshooter в современное контекстное меню Windows 11, не меняя работающую интеграцию Windows 10.
+Компонент добавляет Screenshooter в современное контекстное меню Проводника Windows 11 через packaged COM extension (`IExplorerCommand`) и sparse MSIX.
 
-## Защита основной системы
+## Фиксированная архитектура
 
-- COM-команда размещается в отдельной DLL и объявлена как com:SurrogateServer: сбой расширения не должен выполняться внутри процесса Проводника.
-- Сборка не устанавливает пакет и не меняет системные настройки.
-- Регистрация выполняется отдельным PowerShell-скриптом для текущего пользователя; он проверяет Windows 11, наличие файлов и валидную подпись MSIX.
-- Удаление современного пункта удаляет только пакет Moleval.Screenshooter.ContextMenu. Сам Screenshooter и существующая регистрация классического меню не удаляются.
-- Не запускайте неизвестные DLL и не устанавливайте пакет с неподтверждённой подписью.
+Единственный исполняемый файл приложения остаётся в `D:\Screenshooter\Screenshooter.exe`.
 
-## Что реализовано в native-команде
+Структура после установки:
 
-- ContextMenuCommand.cpp реализует IExplorerCommand.
-- Команда появляется только при выборе ровно одного файла формата PNG, JPG, JPEG или BMP.
-- Полный путь к файлу передаётся в кавычках, поэтому пробелы в пути не разделяют аргумент.
-- Используется иконка из Screenshooter.exe.
-- DLL и приложение должны быть одной архитектуры; сейчас сборка настроена на x64.
+```text
+D:\Screenshooter\
+  Screenshooter.exe
+  ContextMenu\
+    ScreenshooterContextMenu.dll
+```
 
-## Автоматическая проверка сборки
+- `D:\Screenshooter` используется как ExternalLocation sparse MSIX.
+- Манифест указывает `Screenshooter.exe` в корне ExternalLocation.
+- COM-сервер находится по относительному пути `ContextMenu\ScreenshooterContextMenu.dll`.
+- DLL запускает строго `D:\Screenshooter\Screenshooter.exe`.
+- Сборка не копирует и не заменяет EXE приложения.
+- Установщик развёртывает только DLL после явного подтверждения и регистрирует MSIX для текущего пользователя.
+- Удаление пакета не удаляет Screenshooter.exe, DLL или классическую регистрацию Windows.
 
-GitHub Actions собирает DLL в изолированной Windows-среде и проверяет XML манифеста. Это проверяет компиляцию, но не заменяет реальную проверку контекстного меню на Windows 11.
+Современное меню поддерживается на Windows 11 build 22000+ x64. Классическая интеграция остаётся независимой.
 
-## Сборка пакета на Windows 11
+## Сборка из репозитория
 
-Предварительно нужны Visual Studio Build Tools с C++ workload, CMake, Windows 10/11 SDK и Python с Pillow (в проекте Pillow уже указан в requirements.txt). Сначала соберите приложение обычным способом, чтобы существовал dist\Screenshooter.exe.
+Требуются Visual Studio Build Tools с C++ workload, CMake, Windows 10/11 SDK и Python с Pillow. Перед сборкой должен существовать установленный `D:\Screenshooter\Screenshooter.exe`.
 
-1. Создайте или получите сертификат подписи, чей Subject точно равен CN=Screenshooter Developer. Издатель должен совпадать с Publisher в Package.appxmanifest.
-2. Убедитесь, что сертификат находится в хранилище текущего пользователя Cert:\CurrentUser\My. Не импортируйте сертификат в доверенные хранилища, пока не убедитесь, что это именно ваш сертификат.
-3. В PowerShell из корня репозитория выполните:
+Создайте сертификат с Subject ровно `CN=Screenshooter Developer` в `Cert:\CurrentUser\My`, затем из корня репозитория выполните:
 
-    $cert = Get-ChildItem Cert:\CurrentUser\My |
-        Where-Object Subject -eq 'CN=Screenshooter Developer' |
-        Select-Object -First 1
-    if (-not $cert) { throw 'Сертификат подписи не найден.' }
+```powershell
+$cert = Get-ChildItem Cert:\CurrentUser\My |
+    Where-Object Subject -eq 'CN=Screenshooter Developer' |
+    Select-Object -First 1
+if (-not $cert) { throw 'Сертификат подписи не найден.' }
 
-    .\windows_context_menu\Build-SparsePackage.ps1 -CertificateThumbprint $cert.Thumbprint
+.\windows_context_menu\Build-SparsePackage.ps1 -CertificateThumbprint $cert.Thumbprint
+```
 
-Скрипт создаёт DLL, копирует приложение в dist\ScreenshooterModernMenu, формирует MSIX и подписывает его указанным сертификатом. Он не регистрирует пакет и не меняет настройки Windows. Если подпись не указана, будет создан только неподписанный пакет, который скрипт установки отклонит.
+Скрипт создаёт MSIX и DLL payload в `dist\ScreenshooterModernMenu`. Он не меняет `D:\Screenshooter` и не регистрирует пакет.
 
-### Доверие сертификату и установка
+## Установка
 
-Windows должна доверять сертификату, которым подписан MSIX. Для личного тестового сертификата проверьте его отпечаток и издателя через оснастку сертификатов Windows, прежде чем вручную добавлять его в подходящее хранилище доверия. Скрипты проекта не добавляют сертификаты в хранилища автоматически.
+Убедитесь, что Windows доверяет сертификату. Сначала выполните проверку без изменений:
 
-После того как Windows доверяет подписи, сначала можно выполнить безопасную проверку без изменений:
+```powershell
+.\windows_context_menu\Install-ModernMenu.ps1 -MsixPath .\dist\ScreenshooterModernMenu\ScreenshooterModernMenu.msix -DllPath .\dist\ScreenshooterModernMenu\Payload\ContextMenu\ScreenshooterContextMenu.dll -WhatIf
+```
 
-    .\windows_context_menu\Install-ModernMenu.ps1 -MsixPath .\dist\ScreenshooterModernMenu.msix -ExternalLocation .\dist\ScreenshooterModernMenu -WhatIf
+После проверки выполните ту же команду без `-WhatIf`. Установщик проверяет Windows, EXE, подпись, издателя, Identity и пути манифеста; сохраняет резервную копию DLL; развёртывает DLL; регистрирует MSIX с ExternalLocation `D:\Screenshooter`. При ошибке регистрации прежняя DLL восстанавливается.
 
-Если пути верны и предупреждений нет, повторите команду без -WhatIf. Это регистрирует пакет только для текущего пользователя. Чтобы отменить регистрацию:
+`Screenshooter.exe` не копируется и не заменяется.
 
-    .\windows_context_menu\Uninstall-ModernMenu.ps1 -WhatIf
-    .\windows_context_menu\Uninstall-ModernMenu.ps1
+## Удаление
 
-## Дублирование пунктов меню
+```powershell
+.\windows_context_menu\Uninstall-ModernMenu.ps1 -WhatIf
+.\windows_context_menu\Uninstall-ModernMenu.ps1
+```
 
-Пока старый пункт включён в настройках Screenshooter, Windows 11 может показывать его в «Показать дополнительные параметры», а новый — в современном меню. Сначала проверьте современный пункт. Только после успешной проверки отключите старый пункт через настройки Screenshooter. Скрипт установки намеренно не удаляет старую регистрацию автоматически.
+Удаляется только MSIX-регистрация текущего пользователя. DLL остаётся в каталоге приложения и может быть удалена отдельно после удаления пакета.
 
-## Ограничения текущего этапа
+## Диагностика
 
-- Минимальная версия для современного пункта — Windows 11 build 22000. На Windows 10 остаётся текущая регистрация через пользовательский реестр.
-- Не выполняйте ручную регистрацию COM через regsvr32: эта DLL предназначена для пакетной регистрации.
-- Реальная работа меню, подпись и установка должны быть проверены на целевой машине перед тем, как считать функцию готовой.
+Read-only аудит проверяет Windows build, регистрацию пакета, Publisher, архитектуру, Identity, COM CLSID, относительный путь DLL, File Explorer Verb и наличие EXE/DLL по фиксированным путям.
+
+Аудит не активирует COM-сервер и не проверяет визуальное отображение пункта в Проводнике. Функциональная проверка на целевой Windows 11 машине обязательна. Установка и восстановление автоматически не выполняются.
+
+## CI
+
+GitHub Actions собирает DLL, формирует и подписывает тестовый MSIX, проверяет структуру пакета и выполняет установочный preflight через `-WhatIf`. Это не заменяет реальную регистрацию и проверку COM-активации в интерактивном Проводнике.
