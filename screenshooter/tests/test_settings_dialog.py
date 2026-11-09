@@ -26,6 +26,7 @@ def test_settings_dialog_uses_current_values(qapp, tmp_path):
     assert dialog.save_directory_edit.text() == str(tmp_path)
     assert dialog.autostart_check.isChecked() is False
     assert dialog.context_menu_check.isChecked() is True
+    assert dialog.modern_menu_check.isChecked() is False
     assert dialog.enhancer_enabled_check.isChecked() is True
     assert dialog.enhancer_scale_combo.currentData() == "auto"
     assert dialog.enhancer_color_combo.currentData() == "auto"
