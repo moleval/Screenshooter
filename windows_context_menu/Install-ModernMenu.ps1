@@ -101,7 +101,7 @@ try {
         $copiedFiles += $relative
     }
 
-    Add-AppxPackage -Path $MsixPath -ExternalLocation $ApplicationRoot -ErrorAction Stop
+    Add-AppxPackage -Path $MsixPath -ExternalLocation $ApplicationRoot -Confirm:$false -ErrorAction Stop
     $registered = @(Get-AppxPackage -Name $packageName -ErrorAction Stop)
     if ($registered.Count -eq 0) {
         throw 'Add-AppxPackage returned without an error, but the package is not registered for the current user.'
