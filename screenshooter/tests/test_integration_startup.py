@@ -62,7 +62,7 @@ def test_startup_audit_does_not_repair_when_user_declines(monkeypatch):
 def test_modern_menu_status_reports_broken_registration(monkeypatch):
     class Result:
         returncode = 0
-        stdout = "BROKEN\\n"
+        stdout = "BROKEN\n"
         stderr = ""
 
     monkeypatch.setattr(integration_startup.os, "name", "nt")
