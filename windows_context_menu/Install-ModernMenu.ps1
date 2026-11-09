@@ -54,6 +54,9 @@ try {
     if ($manifest.Package.Applications.Application.Executable -ne 'Screenshooter.exe') {
         throw 'MSIX application executable must be Screenshooter.exe at ExternalLocation root.'
     }
+    if ([version]$manifest.Package.Dependencies.TargetDeviceFamily.MinVersion -lt [version]'10.0.22000.0') {
+        throw 'MSIX manifest minimum version must be Windows 11 build 22000 or newer.'
+    }
 } finally { $archive.Dispose() }
 
 if (-not $PSCmdlet.ShouldProcess("$ApplicationRoot (EXE remains untouched)", "Deploy context-menu DLL and register sparse MSIX")) {
@@ -70,7 +73,11 @@ if ($hadExistingDll) {
 try {
     Copy-Item -LiteralPath $DllPath -Destination $targetDll -Force
     Add-AppxPackage -Path $MsixPath -ExternalLocation $ApplicationRoot -ErrorAction Stop
-    if ($backupDll) { Remove-Item -LiteralPath $backupDll -Force }
+    $registered = @(Get-AppxPackage -Name $packageName -ErrorAction Stop)
+    if ($registered.Count -eq 0) {
+        throw 'Add-AppxPackage returned without an error, but the package is not registered for the current user.'
+    }
+    if ($backupDll) { Remove-Item -LiteralPath $backupDll -Force -ErrorAction SilentlyContinue }
     Write-Host "Modern context menu registered for current user."
     Write-Host "Application executable was not copied or modified: $applicationExe"
 } catch {
