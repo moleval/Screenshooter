@@ -12,7 +12,7 @@ if ($packages.Count -eq 0) {
 
 foreach ($package in $packages) {
     if ($PSCmdlet.ShouldProcess("$($package.Name) version $($package.Version)", "Unregister modern context-menu package for current user")) {
-        Remove-AppxPackage -Package $package.PackageFullName -ErrorAction Stop
+        Remove-AppxPackage -Package $package.PackageFullName -Confirm:$false -ErrorAction Stop
     }
 }
 
