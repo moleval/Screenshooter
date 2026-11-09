@@ -76,6 +76,26 @@ try {
     }
 } finally { $archive.Dispose() }
 
+$registrationAlreadyCurrent = $false
+$existingPackages = @(Get-AppxPackage -Name $packageName -ErrorAction Stop)
+if ($existingPackages.Count -gt 0) {
+    [xml]$existingManifest = Get-AppxPackageManifest -Package $existingPackages[0].PackageFullName
+    $existingApplication = $existingManifest.Package.Applications.Application
+    $existingClass = $existingApplication.Extensions.Extension |
+        Where-Object { $_.ComServer } | ForEach-Object { $_.ComServer.SurrogateServer.Class } |
+        Where-Object { $_.Id -eq $clsid } | Select-Object -First 1
+    $existingVisual = $existingApplication.SelectSingleNode("*[local-name()='VisualElements']")
+    $registrationAlreadyCurrent = (
+        $existingManifest.Package.Identity.Name -eq $packageName -and
+        $existingManifest.Package.Identity.Publisher -eq $expectedPublisher -and
+        $existingApplication.Executable -eq 'Screenshooter.exe' -and
+        $existingClass -and $existingClass.Path -eq 'ContextMenu\\ScreenshooterContextMenu.dll' -and
+        $existingVisual -and
+        $existingVisual.Square150x150Logo -eq 'ContextMenu\\Assets\\Square150x150Logo.png' -and
+        $existingVisual.Square44x44Logo -eq 'ContextMenu\\Assets\\Square44x44Logo.png'
+    )
+}
+
 if (-not $PSCmdlet.ShouldProcess("$ApplicationRoot (EXE remains untouched)", "Deploy COM DLL/assets and register sparse MSIX")) {
     return
 }
@@ -101,7 +121,9 @@ try {
         $copiedFiles += $relative
     }
 
-    Add-AppxPackage -Path $MsixPath -ExternalLocation $ApplicationRoot -Confirm:$false -ErrorAction Stop
+    if (-not $registrationAlreadyCurrent) {
+        Add-AppxPackage -Path $MsixPath -ExternalLocation $ApplicationRoot -Confirm:$false -ErrorAction Stop
+    }
     $registered = @(Get-AppxPackage -Name $packageName -ErrorAction Stop)
     if ($registered.Count -eq 0) {
         throw 'Add-AppxPackage returned without an error, but the package is not registered for the current user.'
