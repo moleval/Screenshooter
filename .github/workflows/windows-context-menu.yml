@@ -85,7 +85,7 @@ jobs:
             .\Uninstall-ModernMenu.ps1
 
           ExternalLocation фиксирован: D:\Screenshooter. Screenshooter.exe не копируется и не заменяется.
-          DLL развёртывается в D:\Screenshooter\ContextMenu только установочным скриптом после подтверждения.
+          DLL и PNG-ресурсы развёртываются в D:\Screenshooter\ContextMenu только установочным скриптом после подтверждения.
           Требуется Windows 11 build 22000+, x64 и доверенный сертификат CN=Screenshooter Developer.
           '@ | Set-Content -LiteralPath (Join-Path $kit 'README.txt') -Encoding utf8
 
@@ -103,10 +103,8 @@ jobs:
           } finally { Pop-Location }
 
           $external = 'D:\Screenshooter'
-          $context = Join-Path $external 'ContextMenu'
-          New-Item -ItemType Directory -Path $context -Force | Out-Null
+          New-Item -ItemType Directory -Path $external -Force | Out-Null
           Set-Content -LiteralPath (Join-Path $external 'Screenshooter.exe') -Value 'CI placeholder; never executed.'
-          Copy-Item (Join-Path $kit 'output\Payload\ContextMenu\ScreenshooterContextMenu.dll') (Join-Path $context 'ScreenshooterContextMenu.dll')
           & (Join-Path $kit 'Install-ModernMenu.ps1') -MsixPath (Join-Path $kit 'output\ScreenshooterModernMenu.msix') -DllPath (Join-Path $kit 'output\Payload\ContextMenu\ScreenshooterContextMenu.dll') -WhatIf
           if ($LASTEXITCODE -ne 0) { throw 'Installer preflight failed.' }
 
@@ -121,7 +119,7 @@ jobs:
       - name: Validate installation kit
         shell: pwsh
         run: |
-          $required = @('ScreenshooterContextMenu.dll', 'Package.appxmanifest', 'Build-ModernMenuPackage.ps1', 'Install-ModernMenu.ps1', 'Uninstall-ModernMenu.ps1', 'README.txt', 'Assets\StoreLogo.png', 'Assets\Square150x150Logo.png', 'Assets\Square44x44Logo.png')
+          $required = @('ScreenshooterContextMenu.dll', 'Package.appxmanifest', 'Build-ModernMenuPackage.ps1', 'Install-ModernMenu.ps1', 'Uninstall-ModernMenu.ps1', 'README.txt', 'Assets\StoreLogo.png', 'Assets\Square150x150Logo.png', 'Assets\Square44x44Logo.png', 'output\Payload\ContextMenu\ScreenshooterContextMenu.dll', 'output\Payload\ContextMenu\Assets\Square150x150Logo.png', 'output\Payload\ContextMenu\Assets\Square44x44Logo.png')
           foreach ($relative in $required) {
             if (-not (Test-Path -LiteralPath (Join-Path 'build\ScreenshooterModernMenu-x64' $relative) -PathType Leaf)) { throw "Installer kit missing: $relative" }
           }
