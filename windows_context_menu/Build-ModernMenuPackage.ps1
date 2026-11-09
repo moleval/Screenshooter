@@ -41,7 +41,7 @@ $null = New-Item -ItemType Directory -Path (Join-Path $packageStage 'Assets') -F
 Copy-Item -LiteralPath (Join-Path $assetsSource 'StoreLogo.png') -Destination (Join-Path $packageStage 'Assets') -Force
 Copy-Item -LiteralPath $manifestSource -Destination (Join-Path $packageStage 'AppxManifest.xml') -Force
 if (Test-Path -LiteralPath $outputMsix) { Remove-Item -LiteralPath $outputMsix -Force }
-& $makeAppx.FullName pack /d $packageStage /p $outputMsix /o
+& $makeAppx.FullName pack /d $packageStage /p $outputMsix /o /nv
 if ($LASTEXITCODE -ne 0) { throw "MakeAppx failed: $LASTEXITCODE" }
 
 if ($CertificateThumbprint) {
