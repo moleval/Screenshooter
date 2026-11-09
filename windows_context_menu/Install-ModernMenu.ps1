@@ -79,7 +79,7 @@ try {
 $registrationAlreadyCurrent = $false
 $existingPackages = @(Get-AppxPackage -Name $packageName -ErrorAction Stop)
 if ($existingPackages.Count -gt 0) {
-    [xml]$existingManifest = Get-AppxPackageManifest -Package $existingPackages[0].PackageFullName
+    [xml]$existingManifest = Get-AppxPackageManifest -Package $existingPackages[0]
     $existingApplication = $existingManifest.Package.Applications.Application
     $existingClass = $existingApplication.Extensions.Extension |
         Where-Object { $_.ComServer } | ForEach-Object { $_.ComServer.SurrogateServer.Class } |
