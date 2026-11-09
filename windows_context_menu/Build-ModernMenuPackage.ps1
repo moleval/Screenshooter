@@ -33,11 +33,12 @@ $null = New-Item -ItemType Directory -Path $payloadContextMenu -Force
 Copy-Item -LiteralPath $dllSource -Destination (Join-Path $payloadContextMenu 'ScreenshooterContextMenu.dll') -Force
 $payloadAssets = Join-Path $payloadContextMenu 'Assets'
 $null = New-Item -ItemType Directory -Path $payloadAssets -Force
-Copy-Item -Path (Join-Path $assetsSource '*') -Destination $payloadAssets -Force
+Copy-Item -LiteralPath (Join-Path $assetsSource 'Square150x150Logo.png') -Destination $payloadAssets -Force
+Copy-Item -LiteralPath (Join-Path $assetsSource 'Square44x44Logo.png') -Destination $payloadAssets -Force
 
 if (Test-Path -LiteralPath $packageStage) { Remove-Item -LiteralPath $packageStage -Recurse -Force }
 $null = New-Item -ItemType Directory -Path (Join-Path $packageStage 'Assets') -Force
-Copy-Item -Path (Join-Path $assetsSource '*') -Destination (Join-Path $packageStage 'Assets') -Force
+Copy-Item -LiteralPath (Join-Path $assetsSource 'StoreLogo.png') -Destination (Join-Path $packageStage 'Assets') -Force
 Copy-Item -LiteralPath $manifestSource -Destination (Join-Path $packageStage 'AppxManifest.xml') -Force
 if (Test-Path -LiteralPath $outputMsix) { Remove-Item -LiteralPath $outputMsix -Force }
 & $makeAppx.FullName pack /d $packageStage /p $outputMsix /o
