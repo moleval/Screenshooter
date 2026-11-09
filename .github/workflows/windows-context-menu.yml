@@ -106,17 +106,17 @@ jobs:
 
           $external = 'D:\Screenshooter'
           New-Item -ItemType Directory -Path $external -Force | Out-Null
-          Copy-Item (Join-Path $env:WINDIR 'System32\\notepad.exe') (Join-Path $external 'Screenshooter.exe')
+          Copy-Item (Join-Path $env:WINDIR 'System32\notepad.exe') (Join-Path $external 'Screenshooter.exe')
           & (Join-Path $kit 'Install-ModernMenu.ps1') -MsixPath (Join-Path $kit 'output\ScreenshooterModernMenu.msix') -PayloadDirectory (Join-Path $kit 'output\Payload\ContextMenu') -WhatIf
           if ($LASTEXITCODE -ne 0) { throw 'Installer preflight failed.' }
           if (Test-Path -LiteralPath (Join-Path $external 'ContextMenu')) { throw 'Installer -WhatIf modified the ExternalLocation.' }
           if (-not (Test-Path -LiteralPath (Join-Path $external 'Screenshooter.exe') -PathType Leaf)) { throw 'Installer -WhatIf modified or removed Screenshooter.exe.' }
 
-          & (Join-Path $kit 'Install-ModernMenu.ps1') -MsixPath (Join-Path $kit 'output\\ScreenshooterModernMenu.msix') -PayloadDirectory (Join-Path $kit 'output\\Payload\\ContextMenu') -Confirm:$false
+          & (Join-Path $kit 'Install-ModernMenu.ps1') -MsixPath (Join-Path $kit 'output\ScreenshooterModernMenu.msix') -PayloadDirectory (Join-Path $kit 'output\Payload\ContextMenu') -Confirm:$false
           if ($LASTEXITCODE -ne 0) { throw 'Real sparse MSIX registration failed.' }
           $installed = @(Get-AppxPackage -Name 'Moleval.Screenshooter.ContextMenu')
           if ($installed.Count -ne 1) { throw 'Package was not registered for the CI user.' }
-          foreach ($relative in @('ScreenshooterContextMenu.dll', 'Assets\\Square150x150Logo.png', 'Assets\\Square44x44Logo.png')) {
+          foreach ($relative in @('ScreenshooterContextMenu.dll', 'Assets\Square150x150Logo.png', 'Assets\Square44x44Logo.png')) {
             if (-not (Test-Path -LiteralPath (Join-Path (Join-Path $external 'ContextMenu') $relative) -PathType Leaf)) { throw "External payload missing after install: $relative" }
           }
           & (Join-Path $kit 'Uninstall-ModernMenu.ps1') -Confirm:$false
