@@ -34,16 +34,16 @@ $dllCandidates = @(
 $dll = $dllCandidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
 if (-not $dll) { throw 'Native extension DLL was not produced.' }
 
+$python = Get-Command python -ErrorAction Stop
+& $python.Source (Join-Path $PSScriptRoot 'prepare_package_assets.py')
+if ($LASTEXITCODE -ne 0) { throw "Manifest asset generation failed: $LASTEXITCODE" }
+
 $payloadContextMenu = Join-Path $OutputDirectory 'Payload\ContextMenu'
 $null = New-Item -ItemType Directory -Path $payloadContextMenu -Force
 Copy-Item -LiteralPath $dll -Destination (Join-Path $payloadContextMenu 'ScreenshooterContextMenu.dll') -Force
 $payloadAssets = Join-Path $payloadContextMenu 'Assets'
 $null = New-Item -ItemType Directory -Path $payloadAssets -Force
 Copy-Item -Path (Join-Path $PSScriptRoot 'package_assets\\Assets\\*') -Destination $payloadAssets -Force
-
-$python = Get-Command python -ErrorAction Stop
-& $python.Source (Join-Path $PSScriptRoot 'prepare_package_assets.py')
-if ($LASTEXITCODE -ne 0) { throw "Manifest asset generation failed: $LASTEXITCODE" }
 
 $packageStage = Join-Path $BuildDirectory 'sparse-package'
 if (Test-Path -LiteralPath $packageStage) { Remove-Item -LiteralPath $packageStage -Recurse -Force }
