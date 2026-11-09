@@ -37,6 +37,9 @@ if (-not $dll) { throw 'Native extension DLL was not produced.' }
 $payloadContextMenu = Join-Path $OutputDirectory 'Payload\ContextMenu'
 $null = New-Item -ItemType Directory -Path $payloadContextMenu -Force
 Copy-Item -LiteralPath $dll -Destination (Join-Path $payloadContextMenu 'ScreenshooterContextMenu.dll') -Force
+$payloadAssets = Join-Path $payloadContextMenu 'Assets'
+$null = New-Item -ItemType Directory -Path $payloadAssets -Force
+Copy-Item -Path (Join-Path $PSScriptRoot 'package_assets\\Assets\\*') -Destination $payloadAssets -Force
 
 $python = Get-Command python -ErrorAction Stop
 & $python.Source (Join-Path $PSScriptRoot 'prepare_package_assets.py')
