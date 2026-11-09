@@ -65,7 +65,7 @@ try {
     if (-not $class -or $class.Path -ne 'ContextMenu\ScreenshooterContextMenu.dll') {
         throw 'MSIX COM server path does not match the fixed ExternalLocation layout.'
     }
-    $visualElements = $application.'{http://schemas.microsoft.com/appx/manifest/uap/windows10}VisualElements'
+    $visualElements = $application.SelectSingleNode("*[local-name()='VisualElements']")
     if (-not $visualElements -or
         $visualElements.Square150x150Logo -ne 'ContextMenu\Assets\Square150x150Logo.png' -or
         $visualElements.Square44x44Logo -ne 'ContextMenu\Assets\Square44x44Logo.png') {
