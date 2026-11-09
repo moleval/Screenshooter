@@ -220,12 +220,12 @@ def test_enable_refuses_to_overwrite_foreign_command(registry):
         "": context_menu.MENU_LABEL,
         "Icon": context_menu.EXPECTED_ICON,
     }
-    registry.values[path + r"\\command"] = {
+    registry.values[path + r"\command"] = {
         "": '"C:\\Other\\Application.exe" "%1"'
     }
 
     assert context_menu.set_context_menu_enabled(True) is False
-    assert registry.values[path + r"\\command"][""] == (
+    assert registry.values[path + r"\command"][""] == (
         '"C:\\Other\\Application.exe" "%1"'
     )
     # Preflight happens before writes, so other extensions remain untouched.
