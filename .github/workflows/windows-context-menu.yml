@@ -81,7 +81,7 @@ jobs:
             .\Install-ModernMenu.ps1 -MsixPath .\output\ScreenshooterModernMenu.msix -PayloadDirectory .\output\Payload\ContextMenu -WhatIf
 
           Установка после проверки:
-            .\Install-ModernMenu.ps1 -MsixPath .\output\ScreenshooterModernMenu.msix -PayloadDirectory .\output\Payload\ContextMenu -WhatIf
+            .\Install-ModernMenu.ps1 -MsixPath .\output\ScreenshooterModernMenu.msix -PayloadDirectory .\output\Payload\ContextMenu
 
           Удаление регистрации:
             .\Uninstall-ModernMenu.ps1
