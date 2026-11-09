@@ -56,7 +56,7 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Package.appxmanifest') -Destina
 
 $outputMsix = Join-Path $OutputDirectory 'ScreenshooterModernMenu.msix'
 if (Test-Path -LiteralPath $outputMsix) { Remove-Item -LiteralPath $outputMsix -Force }
-& $makeAppx.FullName pack /d $packageStage /p $outputMsix /o
+& $makeAppx.FullName pack /d $packageStage /p $outputMsix /o /nv
 if ($LASTEXITCODE -ne 0) { throw "MakeAppx failed: $LASTEXITCODE" }
 
 if ($CertificateThumbprint) {
