@@ -31,6 +31,9 @@ $packageStage = Join-Path $OutputDirectory 'sparse-package'
 $outputMsix = Join-Path $OutputDirectory 'ScreenshooterModernMenu.msix'
 $null = New-Item -ItemType Directory -Path $payloadContextMenu -Force
 Copy-Item -LiteralPath $dllSource -Destination (Join-Path $payloadContextMenu 'ScreenshooterContextMenu.dll') -Force
+$payloadAssets = Join-Path $payloadContextMenu 'Assets'
+$null = New-Item -ItemType Directory -Path $payloadAssets -Force
+Copy-Item -Path (Join-Path $assetsSource '*') -Destination $payloadAssets -Force
 
 if (Test-Path -LiteralPath $packageStage) { Remove-Item -LiteralPath $packageStage -Recurse -Force }
 $null = New-Item -ItemType Directory -Path (Join-Path $packageStage 'Assets') -Force
