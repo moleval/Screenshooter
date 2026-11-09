@@ -56,3 +56,15 @@ def test_startup_audit_does_not_repair_when_user_declines(monkeypatch):
         lambda enabled: (_ for _ in ()).throw(AssertionError("must not write")),
     )
     integration_startup.IntegrationStartupAudit(Settings()).run()
+
+
+
+def test_modern_menu_status_reports_broken_registration(monkeypatch):
+    class Result:
+        returncode = 0
+        stdout = "BROKEN\\n"
+        stderr = ""
+
+    monkeypatch.setattr(integration_startup.os, "name", "nt")
+    monkeypatch.setattr(integration_startup.subprocess, "run", lambda *a, **k: Result())
+    assert integration_startup.get_modern_menu_status()["status"] == "BROKEN"
