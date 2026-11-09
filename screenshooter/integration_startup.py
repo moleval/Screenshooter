@@ -26,10 +26,16 @@ def get_modern_menu_status():
         result = subprocess.run(
             [
                 "powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
+                "$build = [int](Get-CimInstance Win32_OperatingSystem).BuildNumber; "
+                "if ($build -lt 22000) { 'UNAVAILABLE' } else { "
                 "$p = @(Get-AppxPackage -Name 'Moleval.Screenshooter.ContextMenu' "
                 "-ErrorAction SilentlyContinue); "
-                "if ($p.Count -eq 0) { 'NOT_INSTALLED' } "
-                "else { 'INSTALLED' }",
+                "if ($p.Count -eq 0) { 'NOT_INSTALLED' } else { "
+                "$exe = Test-Path -LiteralPath 'D:\\Screenshooter\\Screenshooter.exe' -PathType Leaf; "
+                "$m = Get-AppxPackageManifest -Package $p[0]; "
+                "$xml = $m.OuterXml; "
+                "if (-not $exe -or $xml -notmatch '2E50E830-88F2-4A3A-9A6C-6A318C724410' "
+                "-or $xml -notmatch 'ScreenshooterOpenImage') { 'BROKEN' } else { 'INSTALLED' } } }",
             ],
             capture_output=True,
             text=True,
@@ -45,7 +51,7 @@ def get_modern_menu_status():
             "issues": [result.stderr.strip() or "Не удалось проверить пакет MSIX."],
         }
     status = result.stdout.strip().splitlines()[-1] if result.stdout.strip() else STATUS_UNAVAILABLE
-    if status not in (STATUS_INSTALLED, STATUS_NOT_INSTALLED):
+    if status not in (STATUS_INSTALLED, STATUS_NOT_INSTALLED, "BROKEN"):
         status = STATUS_UNAVAILABLE
     return {
         "status": status,
