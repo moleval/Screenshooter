@@ -56,10 +56,10 @@ try {
     }
 } finally { $archive.Dispose() }
 
-$null = New-Item -ItemType Directory -Path $targetDirectory -Force
 if (-not $PSCmdlet.ShouldProcess("$ApplicationRoot (EXE remains untouched)", "Deploy context-menu DLL and register sparse MSIX")) {
     return
 }
+$null = New-Item -ItemType Directory -Path $targetDirectory -Force
 
 $backupDll = $null
 $hadExistingDll = Test-Path -LiteralPath $targetDll -PathType Leaf
