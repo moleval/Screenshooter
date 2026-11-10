@@ -107,6 +107,16 @@ jobs:
           $external = 'D:\Screenshooter'
           New-Item -ItemType Directory -Path $external -Force | Out-Null
           Copy-Item (Join-Path $env:WINDIR 'System32\notepad.exe') (Join-Path $external 'Screenshooter.exe')
+          $alternateRootRejected = $false
+          try {
+            & (Join-Path $kit 'Install-ModernMenu.ps1') -MsixPath (Join-Path $kit 'output\ScreenshooterModernMenu.msix') -PayloadDirectory (Join-Path $kit 'output\Payload\ContextMenu') -ApplicationRoot 'D:\Screenshooter-Alternate' -WhatIf
+          } catch {
+            $alternateRootRejected = $true
+          }
+          if (-not $alternateRootRejected) { throw 'Installer unexpectedly accepted an alternate ExternalLocation.' }
+          if (Test-Path -LiteralPath (Join-Path $external 'ContextMenu')) { throw 'Rejected alternate-root invocation modified the ExternalLocation.' }
+          if (-not (Test-Path -LiteralPath (Join-Path $external 'Screenshooter.exe') -PathType Leaf)) { throw 'Rejected alternate-root invocation modified or removed Screenshooter.exe.' }
+
           & (Join-Path $kit 'Install-ModernMenu.ps1') -MsixPath (Join-Path $kit 'output\ScreenshooterModernMenu.msix') -PayloadDirectory (Join-Path $kit 'output\Payload\ContextMenu') -WhatIf
           if ($LASTEXITCODE -ne 0) { throw 'Installer preflight failed.' }
           if (Test-Path -LiteralPath (Join-Path $external 'ContextMenu')) { throw 'Installer -WhatIf modified the ExternalLocation.' }
@@ -119,6 +129,12 @@ jobs:
           foreach ($relative in @('ScreenshooterContextMenu.dll', 'Assets\Square150x150Logo.png', 'Assets\Square44x44Logo.png')) {
             if (-not (Test-Path -LiteralPath (Join-Path (Join-Path $external 'ContextMenu') $relative) -PathType Leaf)) { throw "External payload missing after install: $relative" }
           }
+          # A second install must recognize the existing manifest paths and leave registration intact.
+          & (Join-Path $kit 'Install-ModernMenu.ps1') -MsixPath (Join-Path $kit 'output\ScreenshooterModernMenu.msix') -PayloadDirectory (Join-Path $kit 'output\Payload\ContextMenu') -Confirm:$false
+          if ($LASTEXITCODE -ne 0) { throw 'Idempotent installer rerun failed.' }
+          if (@(Get-AppxPackage -Name 'Moleval.Screenshooter.ContextMenu').Count -ne 1) { throw 'Idempotent installer rerun changed package registration unexpectedly.' }
+          if (-not (Test-Path -LiteralPath (Join-Path $external 'Screenshooter.exe') -PathType Leaf)) { throw 'Idempotent installer rerun modified or removed Screenshooter.exe.' }
+
           & (Join-Path $kit 'Uninstall-ModernMenu.ps1') -Confirm:$false
           if ($LASTEXITCODE -ne 0) { throw 'Sparse MSIX unregistration failed.' }
           if (@(Get-AppxPackage -Name 'Moleval.Screenshooter.ContextMenu').Count -ne 0) { throw 'Package remains registered after uninstall.' }
