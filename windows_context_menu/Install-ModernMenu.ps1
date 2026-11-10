@@ -8,14 +8,13 @@ param(
     [ValidateScript({ Test-Path -LiteralPath $_ -PathType Container })]
     [string]$PayloadDirectory,
 
-    [string]$ApplicationRoot = 'D:\Screenshooter'
 )
 
 $ErrorActionPreference = 'Stop'
 $packageName = 'Moleval.Screenshooter.ContextMenu'
 $expectedPublisher = 'CN=Screenshooter Developer'
 $clsid = '2E50E830-88F2-4A3A-9A6C-6A318C724410'
-$ApplicationRoot = [System.IO.Path]::GetFullPath($ApplicationRoot)
+$ApplicationRoot = 'D:\Screenshooter'
 $applicationExe = Join-Path $ApplicationRoot 'Screenshooter.exe'
 $targetDirectory = Join-Path $ApplicationRoot 'ContextMenu'
 $managedFiles = @(
@@ -89,10 +88,10 @@ if ($existingPackages.Count -gt 0) {
         $existingManifest.Package.Identity.Name -eq $packageName -and
         $existingManifest.Package.Identity.Publisher -eq $expectedPublisher -and
         $existingApplication.Executable -eq 'Screenshooter.exe' -and
-        $existingClass -and $existingClass.Path -eq 'ContextMenu\\ScreenshooterContextMenu.dll' -and
+        $existingClass -and $existingClass.Path -eq 'ContextMenu\ScreenshooterContextMenu.dll' -and
         $existingVisual -and
-        $existingVisual.Square150x150Logo -eq 'ContextMenu\\Assets\\Square150x150Logo.png' -and
-        $existingVisual.Square44x44Logo -eq 'ContextMenu\\Assets\\Square44x44Logo.png'
+        $existingVisual.Square150x150Logo -eq 'ContextMenu\Assets\Square150x150Logo.png' -and
+        $existingVisual.Square44x44Logo -eq 'ContextMenu\Assets\Square44x44Logo.png'
     )
 }
 
