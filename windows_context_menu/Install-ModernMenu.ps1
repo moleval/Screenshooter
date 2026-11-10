@@ -6,8 +6,7 @@ param(
 
     [Parameter(Mandatory = $true)]
     [ValidateScript({ Test-Path -LiteralPath $_ -PathType Container })]
-    [string]$PayloadDirectory,
-
+    [string]$PayloadDirectory
 )
 
 $ErrorActionPreference = 'Stop'
