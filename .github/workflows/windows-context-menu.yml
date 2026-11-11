@@ -14,11 +14,13 @@ on:
 jobs:
   build-and-validate:
     runs-on: windows-2022
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
 
       - name: Validate manifest contract
         shell: pwsh
+        timeout-minutes: 2
         run: |
           [xml]$manifest = Get-Content windows_context_menu/Package.appxmanifest -Raw
           $identity = $manifest.Package.Identity
@@ -35,6 +37,7 @@ jobs:
 
       - name: Validate PowerShell syntax
         shell: pwsh
+        timeout-minutes: 2
         run: |
           $scripts = @('windows_context_menu/Build-SparsePackage.ps1', 'windows_context_menu/Build-ModernMenuPackage.ps1', 'windows_context_menu/Install-ModernMenu.ps1', 'windows_context_menu/Uninstall-ModernMenu.ps1')
           foreach ($script in $scripts) {
@@ -45,6 +48,7 @@ jobs:
           }
 
       - name: Build native COM extension
+        timeout-minutes: 10
         run: |
           cmake -S windows_context_menu -B build/windows-context-menu -A x64
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -53,14 +57,18 @@ jobs:
 
       - name: Generate manifest assets
         shell: pwsh
+        timeout-minutes: 5
         run: |
+          Write-Host "[$(Get-Date -Format o)] Installing Pillow."
           python -m pip install --disable-pip-version-check Pillow
           if ($LASTEXITCODE -ne 0) { throw 'Pillow installation failed.' }
+          Write-Host "[$(Get-Date -Format o)] Generating package assets."
           python windows_context_menu/prepare_package_assets.py
           if ($LASTEXITCODE -ne 0) { throw 'Manifest asset generation failed.' }
 
       - name: Assemble standalone installer kit
         shell: pwsh
+        timeout-minutes: 2
         run: |
           $kit = Join-Path $PWD 'build\ScreenshooterModernMenu-x64'
           $assets = Join-Path $kit 'Assets'
@@ -91,50 +99,101 @@ jobs:
           Требуется Windows 11 build 22000+, x64 и доверенный сертификат CN=Screenshooter Developer.
           '@ | Set-Content -LiteralPath (Join-Path $kit 'README.txt') -Encoding utf8
 
-      - name: Build signed MSIX and validate installer preflight
+      - name: Create and trust ephemeral CI signing certificate
+        id: signing-certificate
         shell: pwsh
+        timeout-minutes: 3
+        run: |
+          Write-Host "[$(Get-Date -Format o)] Creating temporary code-signing certificate."
+          $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject 'CN=Screenshooter Developer' -CertStoreLocation 'Cert:\CurrentUser\My'
+          if (-not $cert) { throw 'Certificate creation returned no certificate.' }
+          $rootPath = Join-Path $env:RUNNER_TEMP 'screenshooter-test.cer'
+          Export-Certificate -Cert $cert -FilePath $rootPath | Out-Null
+          Write-Host "[$(Get-Date -Format o)] Trusting temporary certificate: $rootPath"
+          Import-Certificate -FilePath $rootPath -CertStoreLocation 'Cert:\CurrentUser\Root' | Out-Null
+          "thumbprint=$($cert.Thumbprint)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          Write-Host "[$(Get-Date -Format o)] Certificate ready: $($cert.Thumbprint)"
+
+      - name: Build and sign sparse MSIX
+        shell: pwsh
+        timeout-minutes: 10
+        env:
+          SIGNING_THUMBPRINT: ${{ steps.signing-certificate.outputs.thumbprint }}
         run: |
           $kit = Join-Path $PWD 'build\ScreenshooterModernMenu-x64'
-          $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject 'CN=Screenshooter Developer' -CertStoreLocation 'Cert:\CurrentUser\My'
-          $rootCert = Export-Certificate -Cert $cert -FilePath (Join-Path $env:RUNNER_TEMP 'screenshooter-test.cer')
-          Import-Certificate -FilePath $rootCert.FullName -CertStoreLocation 'Cert:\CurrentUser\Root' | Out-Null
+          Write-Host "[$(Get-Date -Format o)] Starting MSIX build/sign operation."
+          Write-Host "Kit: $kit"
           Push-Location $kit
           try {
-            .\Build-ModernMenuPackage.ps1 -CertificateThumbprint $cert.Thumbprint
-            if ($LASTEXITCODE -ne 0) { throw 'MSIX build/sign failed.' }
+            & .\Build-ModernMenuPackage.ps1 -CertificateThumbprint $env:SIGNING_THUMBPRINT
+            if ($LASTEXITCODE -ne 0) { throw "MSIX build/sign failed with exit code $LASTEXITCODE." }
           } finally { Pop-Location }
+          $msix = Join-Path $kit 'output\ScreenshooterModernMenu.msix'
+          if (-not (Test-Path -LiteralPath $msix -PathType Leaf)) { throw "MSIX output missing: $msix" }
+          Write-Host "[$(Get-Date -Format o)] Signed MSIX ready: $msix"
 
+      - name: Validate installer rejection and WhatIf preflight
+        shell: pwsh
+        timeout-minutes: 5
+        run: |
+          $kit = Join-Path $PWD 'build\ScreenshooterModernMenu-x64'
+          $installer = Join-Path $kit 'Install-ModernMenu.ps1'
+          $msix = Join-Path $kit 'output\ScreenshooterModernMenu.msix'
+          $payload = Join-Path $kit 'output\Payload\ContextMenu'
           $external = 'D:\Screenshooter'
+          Write-Host "[$(Get-Date -Format o)] Preparing isolated ExternalLocation test directory."
           New-Item -ItemType Directory -Path $external -Force | Out-Null
           Copy-Item (Join-Path $env:WINDIR 'System32\notepad.exe') (Join-Path $external 'Screenshooter.exe')
           $alternateRootRejected = $false
           try {
-            & (Join-Path $kit 'Install-ModernMenu.ps1') -MsixPath (Join-Path $kit 'output\ScreenshooterModernMenu.msix') -PayloadDirectory (Join-Path $kit 'output\Payload\ContextMenu') -ApplicationRoot 'D:\Screenshooter-Alternate' -WhatIf
+            & $installer -MsixPath $msix -PayloadDirectory $payload -ApplicationRoot 'D:\Screenshooter-Alternate' -WhatIf
           } catch {
+            Write-Host "[$(Get-Date -Format o)] Alternate root correctly rejected: $($_.Exception.Message)"
             $alternateRootRejected = $true
           }
           if (-not $alternateRootRejected) { throw 'Installer unexpectedly accepted an alternate ExternalLocation.' }
-          if (Test-Path -LiteralPath (Join-Path $external 'ContextMenu')) { throw 'Rejected alternate-root invocation modified the ExternalLocation.' }
+          if (Test-Path -LiteralPath (Join-Path $external 'ContextMenu')) { throw 'Rejected alternate-root invocation modified ExternalLocation.' }
           if (-not (Test-Path -LiteralPath (Join-Path $external 'Screenshooter.exe') -PathType Leaf)) { throw 'Rejected alternate-root invocation modified or removed Screenshooter.exe.' }
 
-          & (Join-Path $kit 'Install-ModernMenu.ps1') -MsixPath (Join-Path $kit 'output\ScreenshooterModernMenu.msix') -PayloadDirectory (Join-Path $kit 'output\Payload\ContextMenu') -WhatIf
-          if ($LASTEXITCODE -ne 0) { throw 'Installer preflight failed.' }
-          if (Test-Path -LiteralPath (Join-Path $external 'ContextMenu')) { throw 'Installer -WhatIf modified the ExternalLocation.' }
-          if (-not (Test-Path -LiteralPath (Join-Path $external 'Screenshooter.exe') -PathType Leaf)) { throw 'Installer -WhatIf modified or removed Screenshooter.exe.' }
+          Write-Host "[$(Get-Date -Format o)] Running installer WhatIf preflight."
+          & $installer -MsixPath $msix -PayloadDirectory $payload -WhatIf
+          if ($LASTEXITCODE -ne 0) { throw 'Installer WhatIf preflight failed.' }
+          if (Test-Path -LiteralPath (Join-Path $external 'ContextMenu')) { throw 'Installer WhatIf modified ExternalLocation.' }
+          if (-not (Test-Path -LiteralPath (Join-Path $external 'Screenshooter.exe') -PathType Leaf)) { throw 'Installer WhatIf modified or removed Screenshooter.exe.' }
+          Write-Host "[$(Get-Date -Format o)] Installer preflight passed."
 
-          & (Join-Path $kit 'Install-ModernMenu.ps1') -MsixPath (Join-Path $kit 'output\ScreenshooterModernMenu.msix') -PayloadDirectory (Join-Path $kit 'output\Payload\ContextMenu') -Confirm:$false
+      - name: Install sparse MSIX and verify idempotent rerun
+        shell: pwsh
+        timeout-minutes: 10
+        run: |
+          $kit = Join-Path $PWD 'build\ScreenshooterModernMenu-x64'
+          $installer = Join-Path $kit 'Install-ModernMenu.ps1'
+          $msix = Join-Path $kit 'output\ScreenshooterModernMenu.msix'
+          $payload = Join-Path $kit 'output\Payload\ContextMenu'
+          $external = 'D:\Screenshooter'
+          Write-Host "[$(Get-Date -Format o)] Registering sparse MSIX and deploying payload."
+          & $installer -MsixPath $msix -PayloadDirectory $payload -Confirm:$false
           if ($LASTEXITCODE -ne 0) { throw 'Real sparse MSIX registration failed.' }
           $installed = @(Get-AppxPackage -Name 'Moleval.Screenshooter.ContextMenu')
-          if ($installed.Count -ne 1) { throw 'Package was not registered for the CI user.' }
+          if ($installed.Count -ne 1) { throw "Expected one package registration, found $($installed.Count)." }
           foreach ($relative in @('ScreenshooterContextMenu.dll', 'Assets\Square150x150Logo.png', 'Assets\Square44x44Logo.png')) {
             if (-not (Test-Path -LiteralPath (Join-Path (Join-Path $external 'ContextMenu') $relative) -PathType Leaf)) { throw "External payload missing after install: $relative" }
           }
-          # A second install must recognize the existing manifest paths and leave registration intact.
-          & (Join-Path $kit 'Install-ModernMenu.ps1') -MsixPath (Join-Path $kit 'output\ScreenshooterModernMenu.msix') -PayloadDirectory (Join-Path $kit 'output\Payload\ContextMenu') -Confirm:$false
+
+          Write-Host "[$(Get-Date -Format o)] Verifying idempotent installer rerun."
+          & $installer -MsixPath $msix -PayloadDirectory $payload -Confirm:$false
           if ($LASTEXITCODE -ne 0) { throw 'Idempotent installer rerun failed.' }
           if (@(Get-AppxPackage -Name 'Moleval.Screenshooter.ContextMenu').Count -ne 1) { throw 'Idempotent installer rerun changed package registration unexpectedly.' }
           if (-not (Test-Path -LiteralPath (Join-Path $external 'Screenshooter.exe') -PathType Leaf)) { throw 'Idempotent installer rerun modified or removed Screenshooter.exe.' }
+          Write-Host "[$(Get-Date -Format o)] Installation and idempotency checks passed."
 
+      - name: Uninstall registration and validate sparse package contents
+        shell: pwsh
+        timeout-minutes: 5
+        run: |
+          $kit = Join-Path $PWD 'build\ScreenshooterModernMenu-x64'
+          $external = 'D:\Screenshooter'
+          Write-Host "[$(Get-Date -Format o)] Removing package registration."
           & (Join-Path $kit 'Uninstall-ModernMenu.ps1') -Confirm:$false
           if ($LASTEXITCODE -ne 0) { throw 'Sparse MSIX unregistration failed.' }
           if (@(Get-AppxPackage -Name 'Moleval.Screenshooter.ContextMenu').Count -ne 0) { throw 'Package remains registered after uninstall.' }
@@ -143,6 +202,7 @@ jobs:
             if (-not (Test-Path -LiteralPath (Join-Path (Join-Path $external 'ContextMenu') $relative) -PathType Leaf)) { throw "Uninstall removed an externally managed file: $relative" }
           }
 
+          Write-Host "[$(Get-Date -Format o)] Validating MSIX archive layout."
           Add-Type -AssemblyName System.IO.Compression.FileSystem
           $archive = [System.IO.Compression.ZipFile]::OpenRead((Join-Path $kit 'output\ScreenshooterModernMenu.msix'))
           try {
@@ -152,9 +212,11 @@ jobs:
             if (@($entries | Where-Object { $_ -match '^Assets[/\\]Square' }).Count -gt 0) { throw 'VisualElements tile images must remain in ExternalLocation, not MSIX.' }
             if (-not ($entries -contains 'AppxManifest.xml')) { throw 'MSIX manifest missing.' }
           } finally { $archive.Dispose() }
+          Write-Host "[$(Get-Date -Format o)] Uninstall and archive validation passed."
 
       - name: Validate installation kit
         shell: pwsh
+        timeout-minutes: 2
         run: |
           $required = @('ScreenshooterContextMenu.dll', 'Package.appxmanifest', 'Build-ModernMenuPackage.ps1', 'Install-ModernMenu.ps1', 'Uninstall-ModernMenu.ps1', 'README.txt', 'Assets\StoreLogo.png', 'Assets\Square150x150Logo.png', 'Assets\Square44x44Logo.png', 'output\Payload\ContextMenu\ScreenshooterContextMenu.dll', 'output\Payload\ContextMenu\Assets\Square150x150Logo.png', 'output\Payload\ContextMenu\Assets\Square44x44Logo.png')
           foreach ($relative in $required) {
@@ -162,6 +224,7 @@ jobs:
           }
 
       - uses: actions/upload-artifact@v4
+        timeout-minutes: 5
         with:
           name: ScreenshooterModernMenu-x64
           path: build/ScreenshooterModernMenu-x64/
