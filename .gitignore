@@ -1,12 +1,30 @@
+# Python environments
 venv/
 .venv/
 env/
 ENV/
+
+# Python bytecode and test/tool caches
 __pycache__/
-*.pyc
-# Исключаем скрипт результат экспорта
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local exports and temporary artifacts
 export/
-# PyInstaller
+*.log
+*.tmp
+*.bak
+*.zip
+
+# PyInstaller outputs and generated metadata
 build/
 dist/
 *.spec
+
+# Windows installer build outputs
+windows_context_menu/output/
+windows_context_menu/package_assets/Assets/
