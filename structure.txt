@@ -1,113 +1,41 @@
-D:\Screenshooter\
-│
-├── .gitignore
-├── LICENSES.txt
-├── REGRESSION_NOTES.md
-├── diagnose_geometry.py
-├── export_code.py
-├── main.py
-├── promt.txt
-├── pytest.ini
-├── requirements-dev.txt
-├── requirements.txt
-├── structure.txt
-├── Картинка.jpeg
-│
-├── screenshooter\
-│   ├── __init__.py
-│   ├── app.py
-│   ├── constants.py
-│   ├── export.py
-│   ├── image_edit_controller.py
-│   ├── screen_capture.py
-│   ├── screenshooter.ini
-│   ├── settings.py
-│   ├── theme.py
-│   ├── tray.py
-│   ├── utils.py
-│   ├── view.py
-│   │
-│   ├── capture\
-│   │   ├── __init__.py
-│   │   ├── region_overlay.py
-│   │   ├── screen_overlay.py
-│   │   ├── virtual_screen.py
-│   │   └── window_capture.py
-│   │
-│   ├── controllers\
-│   │   ├── __init__.py
-│   │   ├── blur_controller.py
-│   │   ├── clipboard_controller.py
-│   │   ├── crop_cursor_factory.py
-│   │   ├── crop_overlay_controller.py
-│   │   ├── floating_widget_manager.py
-│   │   ├── keyboard_manager.py
-│   │   ├── manipulation_controller.py
-│   │   ├── pasted_image_controller.py
-│   │   └── status_bar_manager.py
-│   │
-│   ├── history\
-│   │   ├── __init__.py
-│   │   ├── background_commands.py
-│   │   ├── blur_commands.py
-│   │   ├── composite_commands.py
-│   │   ├── image_commands.py
-│   │   └── item_commands.py
-│   │
-│   ├── image_processing\
-│   │   └── __init__.py
-│   │
-│   ├── items\
-│   │   ├── __init__.py
-│   │   ├── arrow_items.py
-│   │   ├── blur_region_item.py
-│   │   ├── crop_handles.py
-│   │   ├── line_items.py
-│   │   ├── pasted_image_item.py
-│   │   ├── shape_items.py
-│   │   └── text_item.py
-│   │
-│   ├── resources\
-│   │   ├── icon.ico
-│   │   └── icon.png
-│   │
-│   ├── tests\
-│   │   ├── conftest.py
-│   │   ├── test_app_settings.py
-│   │   ├── test_clipboard_controller.py
-│   │   ├── test_history.py
-│   │   ├── test_image_edit_controller.py
-│   │   ├── test_image_processing.py
-│   │   ├── test_smoke.py
-│   │   └── test_ui_geometry.py
-│   │
-│   ├── tools\
-│   │   ├── __init__.py
-│   │   ├── arrow_tool.py
-│   │   ├── base_tool.py
-│   │   ├── check_ui_consistency.py
-│   │   ├── ellipse_tool.py
-│   │   ├── line_tool.py
-│   │   ├── rect_tool.py
-│   │   ├── run_regression.py
-│   │   └── text_tool.py
-│   │
-│   ├── ui\
-│   │   ├── __init__.py
-│   │   ├── annotation_toolbar.py
-│   │   ├── editor_toolbar_strip.py
-│   │   ├── image_toolbar.py
-│   │   ├── layout_manager.py
-│   │   ├── layout_metrics.py
-│   │   ├── options_toolbar.py
-│   │   └── toolbar_separator.py
-│   │
-│   └── widgets\
-│       ├── __init__.py
-│       ├── color_palette.py
-│       ├── info_widget.py
-│       ├── mode_widgets.py
-│       ├── text_format_widget.py
-│       ├── thickness.py
-│       ├── tool_icons.py
-│       └── zoom_widget.py
+Screenshooter — структура проекта (обзор)
+
+Актуальная структура исходников определяется деревом Git. Этот файл намеренно содержит архитектурную карту, а не полный список файлов: полный перечень быстро устаревает.
+
+Корень:
+- main.py — запуск приложения.
+- build.py — сборка EXE через PyInstaller.
+- screenshooter/version.py — VERSION и BUILD.
+- requirements.txt / requirements-dev.txt — зависимости.
+- pytest.ini — конфигурация pytest.
+- README.md — обзор и быстрый старт.
+- promt.txt — подробное ТЗ/исторические требования; сверять с текущим кодом.
+- REGRESSION_NOTES.md — регрессии и технический долг.
+- docs/ — архитектурные документы и рабочий процесс.
+- .github/workflows/ — автоматизация CI.
+
+screenshooter/:
+- app.py — главное окно и координация.
+- view.py — графическая сцена и пользовательское взаимодействие.
+- window_manager.py — управление окном приложения.
+- settings.py — пользовательские настройки.
+- settings_dialog.py — диалог настроек.
+- tray.py — системный трей.
+- capture/ — захват экрана, области и окон.
+- controllers/ — обработчики манипуляций, обрезки, размытия, буфера обмена, клавиатуры и вспомогательной логики.
+- items/ — графические объекты и аннотации.
+- history/ — команды Undo/Redo.
+- image_processing/ — обработка изображений.
+- ui/ — компоненты панелей и компоновки.
+- widgets/ — плавающие виджеты и элементы управления.
+- tools/ — инструменты аннотаций и вспомогательные проверки.
+- resources/ — иконки и ресурсы приложения.
+- tests/ — основной набор тестов (pytest.ini указывает screenshooter/tests).
+
+windows_context_menu/:
+- нативная DLL, MSIX manifest, PowerShell build/install/uninstall scripts и подготовка ресурсов.
+- описание архитектуры и ограничений: docs/WINDOWS_INTEGRATION.md и windows_context_menu/README.md.
+
+Примечания:
+- В репозитории также есть корневая tests/ с историческими/дублирующими тестами. Основной актуальный testpaths — screenshooter/tests.
+- build/, dist/, виртуальные окружения и кэш — локальные артефакты, не исходники.
