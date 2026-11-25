@@ -49,6 +49,10 @@ def test_settings_dialog_prefills_custom_annotation_scale(qapp):
     dialog = SettingsDialog(FakeSettings())
     assert dialog.annotation_scale_combo.currentData() == "custom"
     assert dialog.annotation_scale_edit.text() == "3,5"
+    dialog.annotation_scale_combo.setCurrentIndex(
+        dialog.annotation_scale_combo.findData(5.0)
+    )
+    assert dialog.annotation_scale_edit.text() == ""
     dialog.reject()
 
 
