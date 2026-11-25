@@ -1,6 +1,7 @@
 """Диалог настроек Screenshooter."""
 
 import os
+import math
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
@@ -82,6 +83,27 @@ class SettingsDialog(QDialog):
         general_layout.addRow("Интеграция Windows 11:", self.modern_menu_check)
 
         layout.addWidget(general_group)
+
+        annotation_group = QGroupBox("Графические элементы")
+        annotation_layout = QFormLayout(annotation_group)
+        self.annotation_scale_combo = QComboBox()
+        for value in (1.0, 2.0, 5.0, 10.0):
+            self.annotation_scale_combo.addItem(f"×{int(value)}", value)
+        self.annotation_scale_combo.addItem("Своё значение", "custom")
+        current_scale = float(getattr(self.settings, 'annotation_scale', 1.0))
+        preset_index = self.annotation_scale_combo.findData(current_scale)
+        if preset_index >= 0:
+            self.annotation_scale_combo.setCurrentIndex(preset_index)
+            custom_text = ""
+        else:
+            self.annotation_scale_combo.setCurrentIndex(self.annotation_scale_combo.findData("custom"))
+            custom_text = format(current_scale, 'g').replace('.', ',')
+        self.annotation_scale_edit = QLineEdit(custom_text)
+        self.annotation_scale_edit.setPlaceholderText("Например, 2,5")
+        self.annotation_scale_edit.setToolTip("Непустое поле задаёт положительный коэффициент для новых аннотаций. Если оно пустое, используется выбранный пресет; для «Своё значение» — ×1.")
+        annotation_layout.addRow("Масштаб:", self.annotation_scale_combo)
+        annotation_layout.addRow("Коэффициент:", self.annotation_scale_edit)
+        layout.addWidget(annotation_group)
 
         enhancer_group = QGroupBox("Адаптивный улучшайзер")
         enhancer_layout = QFormLayout(enhancer_group)
@@ -165,7 +187,22 @@ class SettingsDialog(QDialog):
             self.save_directory_edit.setText(directory)
 
     def _accept(self):
+        custom_text = self.annotation_scale_edit.text().strip()
+        if custom_text:
+            try:
+                annotation_scale = float(custom_text.replace(',', '.'))
+            except ValueError:
+                annotation_scale = float('nan')
+            if not math.isfinite(annotation_scale) or annotation_scale <= 0:
+                from PyQt5.QtWidgets import QMessageBox
+                QMessageBox.warning(self, "Масштаб аннотаций", "Введите положительное конечное число, например 2,5.")
+                self.annotation_scale_edit.setFocus()
+                return
+        else:
+            chosen = self.annotation_scale_combo.currentData()
+            annotation_scale = 1.0 if chosen == 'custom' else float(chosen)
         theme = self.theme_combo.currentData()
+        self.settings.annotation_scale = annotation_scale
         self.settings.theme = theme
         self.settings.save_directory = self.save_directory_edit.text().strip()
         self.settings.enhancer_enabled = self.enhancer_enabled_check.isChecked()
@@ -178,6 +215,9 @@ class SettingsDialog(QDialog):
         self.settings.classic_menu_enabled = self.context_menu_check.isChecked()
         self.settings.modern_menu_enabled = self.modern_menu_check.isChecked()
         self.settings.save()
+        parent_view = getattr(self.parent(), 'view', None)
+        if parent_view is not None:
+            parent_view.annotation_scale = self.settings.annotation_scale
 
         from .context_menu import set_context_menu_enabled
         if not set_context_menu_enabled(self.settings.classic_menu_enabled):

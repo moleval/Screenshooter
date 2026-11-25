@@ -27,6 +27,7 @@ def test_default_values(temp_config):
     settings = AppSettings()
     assert settings.save_directory == "D:/YandexDisk/Скриншоты"
     assert settings.theme == "system"
+    assert settings.annotation_scale == 1.0
     assert settings.enhancer_enabled is True
     assert settings.enhancer_scale == "auto"
     assert settings.enhancer_text is True
@@ -42,6 +43,7 @@ def test_save_and_load(temp_config):
     settings = AppSettings()
     settings.save_directory = "C:/test"
     settings.theme = "dark"
+    settings.annotation_scale = 2.5
     settings.classic_menu_enabled = True
     settings.modern_menu_enabled = True
     settings.save()
@@ -49,6 +51,7 @@ def test_save_and_load(temp_config):
     settings2 = AppSettings()
     assert settings2.save_directory == "C:/test"
     assert settings2.theme == "dark"
+    assert settings2.annotation_scale == 2.5
     assert settings2.classic_menu_enabled is True
     assert settings2.modern_menu_enabled is True
     assert settings2.enhancer_enabled is True

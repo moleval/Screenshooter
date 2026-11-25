@@ -19,6 +19,7 @@ class TextItem(QGraphicsTextItem):
             bg = kwargs.pop('bg_color')
         super().__init__(*args, **kwargs)
         self.view = view
+        self.visual_scale = max(0.01, float(getattr(view, 'annotation_scale', 1.0)))
         self.bg_color = bg
         self._deleting = False
         self._editable = False
@@ -28,8 +29,9 @@ class TextItem(QGraphicsTextItem):
     def boundingRect(self):
         """Return the complete painted area, including the text background."""
         rect = super().boundingRect()
-        return rect.adjusted(self.PADDING_LEFT, self.PADDING_TOP,
-                             self.PADDING_RIGHT, self.PADDING_BOTTOM)
+        scale = self.visual_scale
+        return rect.adjusted(self.PADDING_LEFT * scale, self.PADDING_TOP * scale,
+                             self.PADDING_RIGHT * scale, self.PADDING_BOTTOM * scale)
 
     def rect(self):
         """Return the local geometry used by annotation resize handles."""
@@ -45,7 +47,7 @@ class TextItem(QGraphicsTextItem):
             painter.save()
             painter.setBrush(self.bg_color)
             painter.setPen(Qt.NoPen)
-            painter.drawRoundedRect(rect, 8, 8)
+            painter.drawRoundedRect(rect, 8 * self.visual_scale, 8 * self.visual_scale)
             painter.restore()
         super().paint(painter, option, widget)
 

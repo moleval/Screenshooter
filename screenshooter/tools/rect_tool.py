@@ -25,7 +25,7 @@ class RectTool(BaseTool):
             item = FilledRectItem(QRectF(scene_pos, scene_pos), QColor("#F9D556"))
         else:
             # Красный цвет (текущий цвет пера) для контура/квадрата
-            pen = QPen(self.view.current_pen_color, self.view.pen_width)
+            pen = QPen(self.view.current_pen_color, self.view.scaled_pen_width())
             item = RectangleItem(QRectF(scene_pos, scene_pos), pen)
         return item
 

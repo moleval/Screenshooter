@@ -10,6 +10,7 @@
 import os
 import sys
 import configparser
+import math
 
 # Импортируем Dispatch, чтобы сразу увидеть ошибку, если pywin32 нет
 try:
@@ -81,6 +82,12 @@ class AppSettings:
         )
         self.theme = self.config.get('Theme', 'theme', fallback='system')
 
+        try:
+            annotation_scale = float(self.config.get('Annotations', 'scale', fallback='1.0').replace(',', '.'))
+            self.annotation_scale = annotation_scale if math.isfinite(annotation_scale) and annotation_scale > 0 else 1.0
+        except (TypeError, ValueError):
+            self.annotation_scale = 1.0
+
         # Намерения пользователя хранятся отдельно от фактической регистрации.
         self.classic_menu_enabled = self.config.getboolean(
             'Integration', 'classic_menu_enabled', fallback=False
@@ -130,6 +137,10 @@ class AppSettings:
         self.config.set('General', 'save_directory', self.save_directory)
         self.config.set('Theme', 'theme', self.theme)
 
+        if not self.config.has_section('Annotations'):
+            self.config.add_section('Annotations')
+        self.config.set('Annotations', 'scale', str(self.annotation_scale))
+
         if not self.config.has_section('Integration'):
             self.config.add_section('Integration')
         self.config.set(
@@ -161,6 +172,7 @@ class AppSettings:
         config = configparser.ConfigParser()
         config['General'] = {'save_directory': 'D:/YandexDisk/Скриншоты'}
         config['Theme'] = {'theme': 'system'}
+        config['Annotations'] = {'scale': '1.0'}
         config['Integration'] = {
             'classic_menu_enabled': 'False',
             'modern_menu_enabled': 'False',

@@ -56,8 +56,9 @@ def _arrow_shaft_width(width):
 class ArrowItem(QGraphicsItem):
     """Прямая стрелка с наконечником."""
 
-    def __init__(self, start, end, pen, head_type='triangle'):
+    def __init__(self, start, end, pen, head_type='triangle', visual_scale=1.0):
         super().__init__()
+        self._visual_scale = max(0.01, float(visual_scale))
         self._head_type = head_type
         self._start = start
         self._end = end
@@ -116,7 +117,7 @@ class ArrowItem(QGraphicsItem):
 
         pw = self._pen.widthF()
         shaft_width = _arrow_shaft_width(pw)
-        arrow_size = max(8, 8 + pw * 3)
+        arrow_size = 8 * self._visual_scale + pw * 3
         angle = math.atan2(dy, dx)
         ar = math.radians(20)
 
@@ -126,7 +127,7 @@ class ArrowItem(QGraphicsItem):
         self._p3 = end - QPointF(arrow_size * math.cos(angle + ar),
                                  arrow_size * math.sin(angle + ar))
         if self._head_type == 'dot':
-            radius = max(3.0, arrow_size * .30)
+            radius = max(3.0 * self._visual_scale, arrow_size * .30)
             self._line_end = end - QPointF(math.cos(angle)*radius, math.sin(angle)*radius)
         else:
             # У наконечника с зацепами стержень должен заканчиваться
@@ -139,7 +140,7 @@ class ArrowItem(QGraphicsItem):
 
         shape = QPainterPath()
         self._head_path = QPainterPath()
-        if self._head_type == 'dot': self._head_path.addEllipse(end, max(3.0,arrow_size*.30), max(3.0,arrow_size*.30))
+        if self._head_type == 'dot': self._head_path.addEllipse(end, max(3.0*self._visual_scale,arrow_size*.30), max(3.0,arrow_size*.30))
         elif self._head_type == 'triangle':
             self._head_path.moveTo(self._p2); self._head_path.lineTo(self._p1); self._head_path.lineTo(self._p3); self._head_path.closeSubpath()
         else:
@@ -204,10 +205,10 @@ class ArrowItem(QGraphicsItem):
         painter.setPen(hp)
         painter.setBrush(self._brush)
         if self._head_type == 'dot':
-            r=max(3.0,max(8,8+self._pen.widthF()*3)*.30); painter.setPen(Qt.NoPen); painter.drawEllipse(self._end,r,r)
+            r=max(3.0*self._visual_scale,(8*self._visual_scale+self._pen.widthF()*3)*.30); painter.setPen(Qt.NoPen); painter.drawEllipse(self._end,r,r)
         elif self._head_type == 'triangle': painter.drawPolygon(QPolygonF([self._p2,self._p1,self._p3]))
         else:
-            a=math.atan2(self._end.y()-self._start.y(),self._end.x()-self._start.x()); painter.drawPolygon(_arrow_head_polygon(self._end,a,max(8,8+self._pen.widthF()*3),self._head_type))
+            a=math.atan2(self._end.y()-self._start.y(),self._end.x()-self._start.x()); painter.drawPolygon(_arrow_head_polygon(self._end,a,8*self._visual_scale+self._pen.widthF()*3,self._head_type))
 
         # Рамка выделения
         if option.state & QStyle.State_Selected:
@@ -226,8 +227,9 @@ class CurvedArrowItem(QGraphicsPathItem):
     # Коэффициент притапливания: 1.0 = по основанию, <1.0 = глубже
     TRIM_FACTOR = 0.65
 
-    def __init__(self, start, end, ctrl, pen, head_type='triangle'):
+    def __init__(self, start, end, ctrl, pen, head_type='triangle', visual_scale=1.0):
         super().__init__()
+        self._visual_scale = max(0.01, float(visual_scale))
         self._head_type = head_type
         self._start = start
         self._end = end
@@ -252,7 +254,7 @@ class CurvedArrowItem(QGraphicsPathItem):
     def build_path(self, start, end, ctrl):
         """Строит обрезанную кривую, заканчивающуюся внутри наконечника."""
         pw = self._pen.widthF()
-        asz = max(8, 8 + pw * 3)
+        asz = 8 * self._visual_scale + pw * 3
         ar = math.radians(20)
 
         # Расстояние от острия до точки обрезки вдоль касательной
@@ -378,7 +380,7 @@ class CurvedArrowItem(QGraphicsPathItem):
         hp.setMiterLimit(10.0)
         painter.setPen(hp)
         painter.setBrush(QColor(self._pen.color()))
-        if self._head_type == 'dot': painter.setPen(Qt.NoPen); painter.drawEllipse(end_point,max(3.0,asz*.30),max(3.0,asz*.30))
+        if self._head_type == 'dot': painter.setPen(Qt.NoPen); painter.drawEllipse(end_point,max(3.0*self._visual_scale,asz*.30),max(3.0,asz*.30))
         elif self._head_type == 'triangle': painter.drawPolygon(QPolygonF([p2,p1,p3]))
         else: painter.drawPolygon(_arrow_head_polygon(end_point,angle,asz,self._head_type))
 

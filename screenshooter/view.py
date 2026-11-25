@@ -72,6 +72,7 @@ class EditorView(QGraphicsView):
         self.current_pen_color = QColor("#D25145")   # красный из палитры
         self.pen_width = 2
         self.text_size = 10
+        self.annotation_scale = 1.0
         self.auto_fit = True
         self.normal_background_color = theme_manager.get_color('editor_bg')
         self.setRenderHint(QPainter.Antialiasing)
@@ -332,6 +333,14 @@ class EditorView(QGraphicsView):
     # ==============================================================
     # Свойства и делегаты
     # ==============================================================
+    def scaled_pen_width(self):
+        scale = max(0.01, float(getattr(self, 'annotation_scale', 1.0)))
+        return float(self.pen_width) * scale
+
+    def scaled_text_point_size(self):
+        scale = max(0.01, float(getattr(self, 'annotation_scale', 1.0)))
+        return max(1, int(round(self.text_size * 4 * scale)))
+
     @property
     def crop_mode(self):
         return self.image_editor.crop_mode
@@ -788,7 +797,7 @@ class EditorView(QGraphicsView):
             ti = TextItem(self, bg_color=self.current_text_bg)
             ti.setDefaultTextColor(QColor("#F9D556"))
             font = QFont()
-            font.setPointSize(self.text_size * 4)
+            font.setPointSize(self.scaled_text_point_size())
             ti.setFont(font)
             ti.setPos(sp)
             self.scene().addItem(ti)

@@ -27,7 +27,7 @@ class TextTool(BaseTool):
         # Жёлтый цвет, как жёлтый на палитре
         ti.setDefaultTextColor(QColor("#F9D556"))
         font = QFont()
-        font.setPointSize(self.view.text_size * 4)
+        font.setPointSize(self.view.scaled_text_point_size())
         ti.setFont(font)
         ti.setPos(scene_pos)
 

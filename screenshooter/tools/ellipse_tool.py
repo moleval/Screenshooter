@@ -19,7 +19,7 @@ class EllipseTool(BaseTool):
     def start_draw(self, scene_pos: QPointF):
         """Создаёт временный элемент в зависимости от режима ellipse_mode."""
         self.start_point = scene_pos
-        pen = QPen(self.view.current_pen_color, self.view.pen_width)
+        pen = QPen(self.view.current_pen_color, self.view.scaled_pen_width())
         if self.view.ellipse_mode == 'cloud':
             item = CloudItem(QRectF(scene_pos, scene_pos), pen)
         else:

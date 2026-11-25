@@ -23,13 +23,13 @@ class ArrowTool(BaseTool):
 
     def start_draw(self, scene_pos: QPointF):
         self.start_point = scene_pos
-        pen = QPen(self.view.current_pen_color, self.view.pen_width)
+        pen = QPen(self.view.current_pen_color, self.view.scaled_pen_width())
         mode = self.view.arrow_mode
 
         if mode == 'straight':
-            return ArrowItem(scene_pos, scene_pos, pen, head_type=self.view.arrow_head_type)
+            return ArrowItem(scene_pos, scene_pos, pen, head_type=self.view.arrow_head_type, visual_scale=self.view.annotation_scale)
         elif mode == 'curved':
-            return CurvedArrowItem(scene_pos, scene_pos, (scene_pos + scene_pos) / 2, pen, head_type=self.view.arrow_head_type)
+            return CurvedArrowItem(scene_pos, scene_pos, (scene_pos + scene_pos) / 2, pen, head_type=self.view.arrow_head_type, visual_scale=self.view.annotation_scale)
         elif mode == 'dimension':
             return DimensionItem(scene_pos, scene_pos, pen)
         return None
@@ -109,12 +109,12 @@ class ArrowTool(BaseTool):
         ti = TextItem(self.view, bg_color=self.view.current_text_bg)
         ti.setDefaultTextColor(QColor("#F9D556"))
         font = QFont()
-        font.setPointSize(self.view.text_size * 4)
+        font.setPointSize(self.view.scaled_text_point_size())
         ti.setFont(font)
         ti.setPlainText("")
 
         rect = ti.boundingRect()
-        gap = 8
+        gap = 8 * self.view.annotation_scale
         center = mid + normal * (gap + rect.height() / 2)
         ti.setPos(center - rect.center())
         ti.setTransformOriginPoint(rect.center())

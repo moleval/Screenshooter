@@ -19,7 +19,7 @@ class LineTool(BaseTool):
 
     def start_draw(self, scene_pos: QPointF):
         self.start_point = scene_pos
-        pen = QPen(self.view.current_pen_color, self.view.pen_width)
+        pen = QPen(self.view.current_pen_color, self.view.scaled_pen_width())
         mode = self.view.line_mode
 
         if mode == 'straight':

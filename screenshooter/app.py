@@ -131,6 +131,7 @@ class ScreenshotApp(QMainWindow):
 
         self.scene = QGraphicsScene()
         self.view = EditorView(self.scene)
+        self.view.annotation_scale = self.settings.annotation_scale
         self.view.zoomChangedByWheel.connect(self._on_view_zoom_changed)
         self.view.zoom_widget.zoomChanged.connect(self.set_zoom)
 

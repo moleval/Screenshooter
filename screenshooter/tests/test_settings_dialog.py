@@ -27,10 +27,28 @@ def test_settings_dialog_uses_current_values(qapp, tmp_path):
     assert dialog.autostart_check.isChecked() is False
     assert dialog.context_menu_check.isChecked() is True
     assert dialog.modern_menu_check.isChecked() is False
+    assert dialog.annotation_scale_combo.currentData() == 1.0
+    assert dialog.annotation_scale_edit.text() == ""
     assert dialog.enhancer_enabled_check.isChecked() is True
     assert dialog.enhancer_scale_combo.currentData() == "auto"
     assert dialog.enhancer_color_combo.currentData() == "auto"
 
+    dialog.reject()
+
+
+def test_settings_dialog_prefills_custom_annotation_scale(qapp):
+    class FakeSettings:
+        theme = "system"
+        save_directory = ""
+        annotation_scale = 3.5
+
+        @staticmethod
+        def is_autostart_enabled():
+            return False
+
+    dialog = SettingsDialog(FakeSettings())
+    assert dialog.annotation_scale_combo.currentData() == "custom"
+    assert dialog.annotation_scale_edit.text() == "3,5"
     dialog.reject()
 
 
