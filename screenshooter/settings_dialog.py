@@ -101,6 +101,9 @@ class SettingsDialog(QDialog):
         self.annotation_scale_edit = QLineEdit(custom_text)
         self.annotation_scale_edit.setPlaceholderText("Например, 2,5")
         self.annotation_scale_edit.setToolTip("Непустое поле задаёт положительный коэффициент для новых аннотаций. Если оно пустое, используется выбранный пресет; для «Своё значение» — ×1.")
+        self.annotation_scale_combo.currentIndexChanged.connect(
+            self._on_annotation_scale_choice_changed
+        )
         annotation_layout.addRow("Масштаб:", self.annotation_scale_combo)
         annotation_layout.addRow("Коэффициент:", self.annotation_scale_edit)
         layout.addWidget(annotation_group)
@@ -176,6 +179,10 @@ class SettingsDialog(QDialog):
         buttons.accepted.connect(self._accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+
+    def _on_annotation_scale_choice_changed(self, _index):
+        if self.annotation_scale_combo.currentData() != 'custom':
+            self.annotation_scale_edit.clear()
 
     def _choose_save_directory(self):
         directory = QFileDialog.getExistingDirectory(
