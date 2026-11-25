@@ -140,7 +140,7 @@ class ArrowItem(QGraphicsItem):
 
         shape = QPainterPath()
         self._head_path = QPainterPath()
-        if self._head_type == 'dot': self._head_path.addEllipse(end, max(3.0*self._visual_scale,arrow_size*.30), max(3.0,arrow_size*.30))
+        if self._head_type == 'dot': self._head_path.addEllipse(end, max(3.0*self._visual_scale,arrow_size*.30), max(3.0*self._visual_scale,arrow_size*.30))
         elif self._head_type == 'triangle':
             self._head_path.moveTo(self._p2); self._head_path.lineTo(self._p1); self._head_path.lineTo(self._p3); self._head_path.closeSubpath()
         else:
@@ -380,7 +380,7 @@ class CurvedArrowItem(QGraphicsPathItem):
         hp.setMiterLimit(10.0)
         painter.setPen(hp)
         painter.setBrush(QColor(self._pen.color()))
-        if self._head_type == 'dot': painter.setPen(Qt.NoPen); painter.drawEllipse(end_point,max(3.0*self._visual_scale,asz*.30),max(3.0,asz*.30))
+        if self._head_type == 'dot': painter.setPen(Qt.NoPen); painter.drawEllipse(end_point,max(3.0*self._visual_scale,asz*.30),max(3.0*self._visual_scale,asz*.30))
         elif self._head_type == 'triangle': painter.drawPolygon(QPolygonF([p2,p1,p3]))
         else: painter.drawPolygon(_arrow_head_polygon(end_point,angle,asz,self._head_type))
 
@@ -417,7 +417,7 @@ class CurvedArrowItem(QGraphicsPathItem):
             p3 = end_point - QPointF(asz * math.cos(angle + ar),
                                      asz * math.sin(angle + ar))
             head = QPainterPath()
-            if self._head_type == 'dot': head.addEllipse(end_point,max(3.0,asz*.30),max(3.0,asz*.30))
+            if self._head_type == 'dot': head.addEllipse(end_point,max(3.0*self._visual_scale,asz*.30),max(3.0*self._visual_scale,asz*.30))
             elif self._head_type == 'triangle':
                 head.moveTo(p2); head.lineTo(p1); head.lineTo(p3); head.closeSubpath()
             else: head.addPolygon(_arrow_head_polygon(end_point,angle,asz,self._head_type)); head.closeSubpath()
@@ -441,8 +441,9 @@ class DimensionItem(QGraphicsItem):
     TICK_GAP_FACTOR = -0.5
     # ----------------------------------------------
 
-    def __init__(self, start, end, pen, text_color=None):
+    def __init__(self, start, end, pen, text_color=None, visual_scale=1.0):
         super().__init__()
+        self._visual_scale = max(0.01, float(visual_scale))
         self._start = start
         self._end = end
         self._pen = QPen(pen)
@@ -469,7 +470,8 @@ class DimensionItem(QGraphicsItem):
         end = self._end
         if start == end:
             return QRectF(start, QPointF(1, 1))
-        margin = max(30, self._pen.widthF() * 5 + 20)
+        margin = max(30 * self._visual_scale,
+                     self._pen.widthF() * 5 + 20 * self._visual_scale)
         return QRectF(start, end).normalized().adjusted(-margin, -margin, margin, margin)
 
     def shape(self):
@@ -490,7 +492,7 @@ class DimensionItem(QGraphicsItem):
         angle = math.atan2(dy, dx)
         pen_color = self._pen.color()
         pen_width = self._pen.widthF()
-        arrow_size = max(8, 8 + pen_width * 3)
+        arrow_size = 8 * self._visual_scale + pen_width * 3
         ar = math.radians(20)
 
         # Единичные векторы
@@ -536,7 +538,7 @@ class DimensionItem(QGraphicsItem):
 
         # Стрелки
         painter.setBrush(pen_color)
-        painter.setPen(QPen(pen_color, 1))
+        painter.setPen(QPen(pen_color, max(1.0, self._visual_scale)))
         painter.drawPolygon(QPolygonF([p2_end, end, p3_end]))
         painter.drawPolygon(QPolygonF([p2_start, start, p3_start]))
 

@@ -31,7 +31,7 @@ class ArrowTool(BaseTool):
         elif mode == 'curved':
             return CurvedArrowItem(scene_pos, scene_pos, (scene_pos + scene_pos) / 2, pen, head_type=self.view.arrow_head_type, visual_scale=self.view.annotation_scale)
         elif mode == 'dimension':
-            return DimensionItem(scene_pos, scene_pos, pen)
+            return DimensionItem(scene_pos, scene_pos, pen, visual_scale=self.view.annotation_scale)
         return None
 
     def update_draw(self, temp_item, scene_pos: QPointF, modifiers):
